@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 export interface AuthPayload {
   userId: string;
-  role: 'STUDENT' | 'ADMIN';
+  role: 'STUDENT' | 'TUTOR' | 'ADMIN';
 }
 
 declare global {
@@ -16,9 +16,7 @@ declare global {
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'eduspark-secret') as AuthPayload;
     req.user = payload;
@@ -29,8 +27,13 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 }
 
 export function adminOnly(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' });
+  if (req.user?.role !== 'ADMIN') return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+export function adminOrTutorOnly(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'ADMIN' && req.user?.role !== 'TUTOR') {
+    return res.status(403).json({ error: 'Teacher or admin access required' });
   }
   next();
 }

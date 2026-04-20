@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, adminOrTutorOnly } from '../middleware/auth';
 
 const router = Router();
 
@@ -12,8 +12,15 @@ function generateParentPin(): string {
 }
 
 // POST /api/parent/pins — admin creates a parent access PIN
-router.post('/pins', authMiddleware, async (req: Request, res: Response) => {
-  if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admin only' });
+router.post('/pins', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  // Tutors can only create PINs for their own students
+  if (req.user!.role === 'TUTOR') {
+    const { studentId } = req.body;
+    const student = await prisma.user.findUnique({ where: { id: studentId } });
+    if (!student || student.teacherId !== req.user!.userId) {
+      return res.status(403).json({ error: 'This student is not in your class' });
+    }
+  }
   const { studentId, label } = req.body;
   if (!studentId) return res.status(400).json({ error: 'studentId required' });
 
@@ -42,10 +49,16 @@ router.post('/pins', authMiddleware, async (req: Request, res: Response) => {
 });
 
 // GET /api/parent/pins — admin lists all parent PINs (with expiry status)
-router.get('/pins', authMiddleware, async (req: Request, res: Response) => {
-  if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admin only' });
+router.get('/pins', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  const { role, userId } = req.user!;
+
+  // Tutors only see PINs for their own students
+  const tutorStudentIds = role === 'TUTOR'
+    ? (await prisma.user.findMany({ where: { teacherId: userId }, select: { id: true } })).map((s) => s.id)
+    : null;
 
   const pins = await prisma.parentAccess.findMany({
+    where: tutorStudentIds ? { studentId: { in: tutorStudentIds } } : {},
     include: { student: { select: { name: true, grade: true } } },
     orderBy: { createdAt: 'desc' },
   });
@@ -61,9 +74,14 @@ router.get('/pins', authMiddleware, async (req: Request, res: Response) => {
   return res.json(result);
 });
 
-// DELETE /api/parent/pins/:id — admin revokes a PIN
-router.delete('/pins/:id', authMiddleware, async (req: Request, res: Response) => {
-  if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admin only' });
+// DELETE /api/parent/pins/:id — admin or tutor (own students) revokes a PIN
+router.delete('/pins/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  if (req.user!.role === 'TUTOR') {
+    const pin = await prisma.parentAccess.findUnique({ where: { id: req.params.id }, include: { student: true } });
+    if (!pin || pin.student.teacherId !== req.user!.userId) {
+      return res.status(403).json({ error: 'Cannot revoke PIN for a student not in your class' });
+    }
+  }
   await prisma.parentAccess.delete({ where: { id: req.params.id } }).catch(() => {});
   return res.json({ success: true });
 });

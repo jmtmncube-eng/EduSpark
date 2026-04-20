@@ -15,7 +15,7 @@ const MOTIVATIONAL = [
 ];
 
 export default function Login() {
-  const [role, setRole] = useState<'student' | 'admin'>('student');
+  const [role, setRole] = useState<'student' | 'tutor' | 'admin'>('student');
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -91,13 +91,12 @@ export default function Login() {
     setNewPin('');
   }
 
-  const placeholder = role === 'student'
-    ? 'Enter your PIN (e.g. SPK-A1B2)'
-    : 'Enter your name';
-
+  const placeholder = role === 'student' ? 'Enter your PIN (e.g. SPK-A1B2)' : 'Enter your name';
   const hint = role === 'student'
     ? 'New student? Enter your name to create an account.'
-    : 'Enter your teacher name to access the dashboard.';
+    : role === 'tutor'
+    ? 'Enter your name to access your teacher dashboard.'
+    : 'Enter your name for full platform access.';
 
   return (
     <div id="login" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
@@ -116,16 +115,21 @@ export default function Login() {
           {quote}
         </div>
 
-        <div className="role-row">
+        <div className="role-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           <div className={`role-card ${role === 'student' ? 'active' : ''}`} onClick={() => { setRole('student'); setValue(''); }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🎒</div>
-            <div style={{ fontFamily: 'var(--fh)', fontSize: 16, fontWeight: 600 }}>Student</div>
-            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Sign in with your PIN</div>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>🎒</div>
+            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Student</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Sign in with PIN</div>
+          </div>
+          <div className={`role-card ${role === 'tutor' ? 'active' : ''}`} onClick={() => { setRole('tutor'); setValue(''); }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>👩‍🏫</div>
+            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Teacher</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Your class dashboard</div>
           </div>
           <div className={`role-card ${role === 'admin' ? 'active' : ''}`} onClick={() => { setRole('admin'); setValue(''); }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>👩‍🏫</div>
-            <div style={{ fontFamily: 'var(--fh)', fontSize: 16, fontWeight: 600 }}>Teacher</div>
-            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Manage &amp; Assign</div>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>👨‍💼</div>
+            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Admin</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Full platform control</div>
           </div>
         </div>
 

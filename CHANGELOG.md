@@ -56,3 +56,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 <!-- Add your next changes here before committing -->
+
+---
+
+## [1.1.0] — 2026-04-20 — Tutor Role & Multi-Class Support
+
+### Added — Backend
+- New `TUTOR` role in `Role` enum (between STUDENT and ADMIN)
+- `teacherId` field on User — links a student to their assigned tutor
+- Self-relation `TutorStudents` on User model (tutor ↔ students)
+- `tutorId` field on Assignment — `null` = global admin assignment; set = scoped to tutor's cohort
+- `adminOrTutorOnly` middleware for routes accessible to both roles
+- Auth route handles `role: 'tutor'` — find-or-create by name with TUTOR role
+- `GET /api/students/tutors` — lists all tutors with their allocated students (admin only)
+- `PATCH /api/students/:id/assign-tutor` — assign/unassign a student to a tutor (admin only)
+- `PATCH /api/students/tutors/:id/toggle-active` — activate/deactivate a tutor
+- All analytics routes scoped to tutor's student cohort when called by TUTOR role
+- Assignments: tutors can create/edit/delete only their own assignments (`tutorId` set on create)
+- Students: tutors see only their allocated students in list/search/report endpoints
+- Calendar: tutors can create/edit/delete notes and manage change requests
+- Parent PINs: tutors can create/revoke PINs for their own students only
+- Prisma migration `add_tutor_role` applied
+
+### Added — Frontend
+- Login page: three-tab role selector — Student 🎒 / Teacher 👩‍🏫 / Admin 👨‍💼
+- Sidebar: tutors get their own nav (`My Students`, `My Class` section labels, no Tutors management link)
+- Sidebar: role badge shows "Teacher" for TUTOR, "SuperAdmin" for ADMIN
+- New page `admin/Tutors.tsx` — admin-only; list all teachers, assign/unassign students, activate/deactivate
+- Students page: shows "Teacher" column for admin; heading adapts ("My Students" for tutors)
+- App shell: TUTOR role shares admin pages (server-side scoping handles data isolation)
+- New sidebar link "👩‍🏫 Teachers" for admin; tutors do not see this link
+- `tutors` API service: `list`, `toggleActive`, `assignStudent`

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
-import { authMiddleware, adminOnly } from '../middleware/auth';
+import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router.get('/notes', authMiddleware, async (_req: Request, res: Response) => {
 });
 
 // POST /api/calendar/notes
-router.post('/notes', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.post('/notes', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { date, title, content, color } = req.body as {
       date: string; title: string; content?: string; color?: string;
@@ -40,7 +40,7 @@ router.post('/notes', authMiddleware, adminOnly, async (req: Request, res: Respo
 });
 
 // PUT /api/calendar/notes/:id
-router.put('/notes/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.put('/notes/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { date, title, content, color } = req.body;
     const note = await prisma.calendarNote.update({
@@ -55,7 +55,7 @@ router.put('/notes/:id', authMiddleware, adminOnly, async (req: Request, res: Re
 });
 
 // DELETE /api/calendar/notes/:id
-router.delete('/notes/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.delete('/notes/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     await prisma.calendarNote.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
@@ -98,7 +98,7 @@ router.post('/requests', authMiddleware, async (req: Request, res: Response) => 
 });
 
 // GET /api/calendar/requests — admin gets all pending requests
-router.get('/requests', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+router.get('/requests', authMiddleware, adminOrTutorOnly, async (_req: Request, res: Response) => {
   try {
     const requests = await prisma.calendarRequest.findMany({
       where: { status: 'pending' },
@@ -116,7 +116,7 @@ router.get('/requests', authMiddleware, adminOnly, async (_req: Request, res: Re
 });
 
 // PATCH /api/calendar/requests/:id — admin approves/denies
-router.patch('/requests/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.patch('/requests/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { status } = req.body as { status: 'approved' | 'denied' };
     if (!['approved', 'denied'].includes(status)) {

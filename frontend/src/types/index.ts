@@ -1,4 +1,4 @@
-export type Role = 'STUDENT' | 'ADMIN';
+export type Role = 'STUDENT' | 'TUTOR' | 'ADMIN';
 export type Subject = 'MATHEMATICS' | 'PHYSICAL_SCIENCES';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export type Visibility = 'ALL' | 'GR10' | 'GR11' | 'GR12' | 'NONE';
@@ -13,6 +13,9 @@ export interface User {
   active: boolean;
   photo: string | null;
   createdAt: string;
+  teacherId?: string | null;
+  teacher?: { id: string; name: string } | null;
+  students?: { id: string; name: string; grade: number }[];
 }
 
 export interface Question {
@@ -48,7 +51,9 @@ export interface Assignment {
   dueDate: string;
   assignTo: string;
   maxAttempts: number;
+  tutorId: string | null;
   createdAt: string;
+  createdBy?: { id: string; name: string; role: Role };
   questions: { question: Question; order: number }[];
   documents: AssignmentDocument[];
   results?: QuizResult[];

@@ -15,6 +15,7 @@ import AdminAnalytics from './pages/admin/Analytics';
 import AdminCalendar from './pages/admin/Calendar';
 import AdminStudentReport from './pages/admin/StudentReport';
 import AdminParentPins from './pages/admin/ParentPins';
+import AdminTutors from './pages/admin/Tutors';
 import ParentView from './pages/ParentView';
 
 // Student pages
@@ -40,6 +41,7 @@ function AppShell() {
     '/app/analytics': '📈 Analytics',
     '/app/calendar': '📅 Calendar',
     '/app/parent-pins': '🔑 Parent Access',
+    '/app/tutors': '👩‍🏫 Teachers',
     '/app/progress': '📈 My Progress',
     '/app/history': '🗂 Quiz History',
     '/app/exam-readiness': '🎯 Exam Readiness',
@@ -53,6 +55,8 @@ function AppShell() {
   if (!user) return <Navigate to="/" replace />;
 
   const isAdmin = user.role === 'ADMIN';
+  const isTutor = user.role === 'TUTOR';
+  const isStaff = isAdmin || isTutor;
 
   return (
     <div id="app" style={{ display: 'flex', minHeight: '100vh', position: 'relative', zIndex: 2 }}>
@@ -72,7 +76,7 @@ function AppShell() {
 
         <div className="pg">
           <Routes>
-            {isAdmin ? (
+            {isStaff ? (
               <>
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="questions" element={<AdminQuestions />} />
@@ -82,6 +86,7 @@ function AppShell() {
                 <Route path="calendar" element={<AdminCalendar />} />
                 <Route path="report/:studentId" element={<AdminStudentReport />} />
                 <Route path="parent-pins" element={<AdminParentPins />} />
+                {isAdmin && <Route path="tutors" element={<AdminTutors />} />}
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </>
             ) : (

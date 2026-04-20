@@ -1,54 +1,66 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
-import { authMiddleware, adminOnly } from '../middleware/auth';
+import { authMiddleware, adminOrTutorOnly } from '../middleware/auth';
 
 const router = Router();
 
+// Helper: get student IDs for a tutor (or null = all students for admin)
+async function getScopeStudentIds(role: string, userId: string): Promise<string[] | null> {
+  if (role === 'ADMIN') return null;
+  const students = await prisma.user.findMany({
+    where: { role: 'STUDENT', teacherId: userId },
+    select: { id: true },
+  });
+  return students.map((s) => s.id);
+}
+
 // GET /api/analytics/overview
-router.get('/overview', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const [students, questions, assignments, results, resultDetails] = await Promise.all([
-      prisma.user.count({ where: { role: 'STUDENT', active: true } }),
-      prisma.question.count(),
-      prisma.assignment.count(),
+    const { role, userId } = req.user!;
+    const scopeIds = await getScopeStudentIds(role, userId);
+    const studentWhere = scopeIds ? { role: 'STUDENT' as const, id: { in: scopeIds } } : { role: 'STUDENT' as const };
+    const resultWhere = scopeIds ? { userId: { in: scopeIds } } : {};
+    const detailWhere = scopeIds
+      ? { result: { userId: { in: scopeIds } } }
+      : {};
+
+    const [studentCount, results, resultDetails] = await Promise.all([
+      prisma.user.count({ where: { ...studentWhere, active: true } }),
       prisma.quizResult.findMany({
+        where: resultWhere,
         select: { score: true, timeTaken: true, completedAt: true, userId: true },
         orderBy: { completedAt: 'asc' },
       }),
-      prisma.resultDetail.findMany({ select: { difficulty: true, isCorrect: true } }),
+      prisma.resultDetail.findMany({ where: detailWhere, select: { difficulty: true, isCorrect: true } }),
     ]);
 
+    const assignmentCount = await prisma.assignment.count(
+      scopeIds ? { where: { tutorId: userId } } : undefined
+    );
+
     const avgScore = results.length
-      ? (results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(1)
-      : '0';
+      ? (results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(1) : '0';
     const avgTime = results.length
-      ? (results.reduce((s, r) => s + r.timeTaken, 0) / results.length / 60).toFixed(1)
-      : '0';
-    const totalStudents = await prisma.user.count({ where: { role: 'STUDENT' } });
-    const completionRate = assignments && totalStudents
-      ? Math.min(100, Number(((results.length / (assignments * Math.max(totalStudents, 1))) * 100).toFixed(0)))
-      : 0;
-
-    // passRate — % of results with score >= 50
+      ? (results.reduce((s, r) => s + r.timeTaken, 0) / results.length / 60).toFixed(1) : '0';
+    const completionRate = assignmentCount && studentCount
+      ? Math.min(100, Number(((results.length / (assignmentCount * Math.max(studentCount, 1))) * 100).toFixed(0))) : 0;
     const passRate = results.length
-      ? Number(((results.filter((r) => r.score >= 50).length / results.length) * 100).toFixed(1))
-      : 0;
+      ? Number(((results.filter((r) => r.score >= 50).length / results.length) * 100).toFixed(1)) : 0;
 
-    // topicMastery — unique topics with avg score >= 70
     const topicResults = await prisma.quizResult.findMany({
+      where: resultWhere,
       include: { assignment: { select: { topic: true } } },
     });
     const topicScores: Record<string, number[]> = {};
     topicResults.forEach((r) => {
-      const t = r.assignment.topic;
-      if (!topicScores[t]) topicScores[t] = [];
-      topicScores[t].push(r.score);
+      if (!topicScores[r.assignment.topic]) topicScores[r.assignment.topic] = [];
+      topicScores[r.assignment.topic].push(r.score);
     });
     const topicMastery = Object.values(topicScores).filter(
       (scores) => scores.reduce((s, v) => s + v, 0) / scores.length >= 70
     ).length;
 
-    // improvementTrend — first half vs second half avg score
     let improvementTrend: { early: number; recent: number; direction: 'up' | 'down' | 'stable' };
     if (results.length < 2) {
       const only = results.length === 1 ? Number(results[0].score) : 0;
@@ -59,111 +71,124 @@ router.get('/overview', authMiddleware, adminOnly, async (_req: Request, res: Re
       const recentAvg = results.slice(mid).reduce((s, r) => s + r.score, 0) / (results.length - mid);
       const early = Number(earlyAvg.toFixed(1));
       const recent = Number(recentAvg.toFixed(1));
-      const direction: 'up' | 'down' | 'stable' =
-        recent > early + 1 ? 'up' : recent < early - 1 ? 'down' : 'stable';
-      improvementTrend = { early, recent, direction };
+      improvementTrend = { early, recent, direction: recent > early + 1 ? 'up' : recent < early - 1 ? 'down' : 'stable' };
     }
 
-    // difficultyInsight — EASY/MEDIUM/HARD from ResultDetail
     const difficultyInsight: Record<string, { correct: number; total: number; pct: number }> = {
-      EASY: { correct: 0, total: 0, pct: 0 },
-      MEDIUM: { correct: 0, total: 0, pct: 0 },
-      HARD: { correct: 0, total: 0, pct: 0 },
+      EASY: { correct: 0, total: 0, pct: 0 }, MEDIUM: { correct: 0, total: 0, pct: 0 }, HARD: { correct: 0, total: 0, pct: 0 },
     };
     resultDetails.forEach((d) => {
       const key = (d.difficulty || 'EASY').toUpperCase();
-      if (difficultyInsight[key]) {
-        difficultyInsight[key].total++;
-        if (d.isCorrect) difficultyInsight[key].correct++;
-      }
+      if (difficultyInsight[key]) { difficultyInsight[key].total++; if (d.isCorrect) difficultyInsight[key].correct++; }
     });
-    Object.values(difficultyInsight).forEach((v) => {
-      v.pct = v.total ? Number(((v.correct / v.total) * 100).toFixed(1)) : 0;
-    });
+    Object.values(difficultyInsight).forEach((v) => { v.pct = v.total ? Number(((v.correct / v.total) * 100).toFixed(1)) : 0; });
 
-    // engagementScore — avg quizzes per active student
     const activeStudentIds = new Set(results.map((r) => r.userId));
     const engagementScore = activeStudentIds.size
-      ? Number((results.length / activeStudentIds.size).toFixed(2))
-      : 0;
+      ? Number((results.length / activeStudentIds.size).toFixed(2)) : 0;
 
     return res.json({
-      students, questions, assignments, attempts: results.length, avgScore, avgTime, completionRate,
-      passRate, topicMastery, improvementTrend, difficultyInsight, engagementScore,
+      students: studentCount, assignments: assignmentCount, attempts: results.length,
+      avgScore, avgTime, completionRate, passRate, topicMastery, improvementTrend, difficultyInsight, engagementScore,
     });
-  } catch (err) {
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// GET /api/analytics/subject-performance
-router.get('/subject-performance', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
-  try {
-    const results = await prisma.quizResult.findMany({
-      include: { assignment: { select: { subject: true } } },
-    });
-    const bySubject: Record<string, { total: number; count: number }> = {};
-    results.forEach((r) => {
-      const s = r.assignment.subject;
-      if (!bySubject[s]) bySubject[s] = { total: 0, count: 0 };
-      bySubject[s].total += r.score;
-      bySubject[s].count++;
-    });
-    return res.json(Object.entries(bySubject).map(([subject, data]) => ({
-      subject, avgScore: data.count ? (data.total / data.count).toFixed(1) : '0', attempts: data.count,
-    })));
   } catch (err) {
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
 // GET /api/analytics/topic-performance
-router.get('/topic-performance', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+router.get('/topic-performance', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
+    const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const results = await prisma.quizResult.findMany({
+      where: scopeIds ? { userId: { in: scopeIds } } : {},
       include: { assignment: { select: { topic: true } } },
     });
     const byTopic: Record<string, { total: number; count: number }> = {};
     results.forEach((r) => {
       const t = r.assignment.topic;
       if (!byTopic[t]) byTopic[t] = { total: 0, count: 0 };
-      byTopic[t].total += r.score;
-      byTopic[t].count++;
+      byTopic[t].total += r.score; byTopic[t].count++;
     });
     return res.json(Object.entries(byTopic)
-      .map(([topic, data]) => ({ topic, avgScore: data.count ? (data.total / data.count).toFixed(1) : '0', attempts: data.count }))
+      .map(([topic, d]) => ({ topic, avgScore: d.count ? (d.total / d.count).toFixed(1) : '0', attempts: d.count }))
       .sort((a, b) => Number(a.avgScore) - Number(b.avgScore)));
   } catch (err) {
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// GET /api/analytics/weekly-activity
-router.get('/weekly-activity', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+// GET /api/analytics/subject-performance
+router.get('/subject-performance', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
+    const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const results = await prisma.quizResult.findMany({
-      where: { completedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
-      select: { completedAt: true },
+      where: scopeIds ? { userId: { in: scopeIds } } : {},
+      include: { assignment: { select: { subject: true } } },
     });
-    const days: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      days[d.toISOString().split('T')[0]] = 0;
-    }
+    const bySubject: Record<string, { total: number; count: number }> = {};
     results.forEach((r) => {
-      const d = r.completedAt.toISOString().split('T')[0];
-      if (days[d] !== undefined) days[d]++;
+      const s = r.assignment.subject;
+      if (!bySubject[s]) bySubject[s] = { total: 0, count: 0 };
+      bySubject[s].total += r.score; bySubject[s].count++;
     });
-    return res.json(Object.entries(days).map(([date, count]) => ({ date, count })));
+    return res.json(Object.entries(bySubject).map(([subject, d]) => ({
+      subject, avgScore: d.count ? (d.total / d.count).toFixed(1) : '0', attempts: d.count,
+    })));
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/analytics/weekly-activity
+router.get('/weekly-activity', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
+    const since = new Date(Date.now() - 12 * 7 * 86400000); // 12 weeks back
+    const results = await prisma.quizResult.findMany({
+      where: {
+        completedAt: { gte: since },
+        ...(scopeIds ? { userId: { in: scopeIds } } : {}),
+      },
+      select: { completedAt: true, score: true },
+      orderBy: { completedAt: 'asc' },
+    });
+
+    // Group by week (ISO week label)
+    const weekMap: Record<string, { attempts: number; totalScore: number }> = {};
+    results.forEach((r) => {
+      const d = new Date(r.completedAt);
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      const key = monday.toISOString().split('T')[0];
+      if (!weekMap[key]) weekMap[key] = { attempts: 0, totalScore: 0 };
+      weekMap[key].attempts++;
+      weekMap[key].totalScore += r.score;
+    });
+
+    const sorted = Object.entries(weekMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-8)
+      .map(([week, d]) => ({
+        week: new Date(week).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }),
+        attempts: d.attempts,
+        avgScore: d.attempts ? Math.round(d.totalScore / d.attempts) : 0,
+      }));
+
+    return res.json(sorted);
   } catch (err) {
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
 // GET /api/analytics/difficulty-breakdown
-router.get('/difficulty-breakdown', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+router.get('/difficulty-breakdown', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const details = await prisma.resultDetail.findMany({ select: { difficulty: true, isCorrect: true } });
+    const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
+    const details = await prisma.resultDetail.findMany({
+      where: scopeIds ? { result: { userId: { in: scopeIds } } } : {},
+      select: { difficulty: true, isCorrect: true },
+    });
     const breakdown: Record<string, { correct: number; total: number }> = {
       EASY: { correct: 0, total: 0 }, MEDIUM: { correct: 0, total: 0 }, HARD: { correct: 0, total: 0 },
     };
@@ -177,13 +202,17 @@ router.get('/difficulty-breakdown', authMiddleware, adminOnly, async (_req: Requ
   }
 });
 
-// GET /api/analytics/student-report/:id  — detailed per-student exam readiness report
+// GET /api/analytics/student-report/:id
 router.get('/student-report/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const targetId = req.params.id;
-    // Students can only see their own report; admins can see all
-    if (req.user!.role !== 'ADMIN' && req.user!.userId !== targetId) {
-      return res.status(403).json({ error: 'Forbidden' });
+    const { role, userId } = req.user!;
+
+    // Access control: student sees own; admin sees all; tutor sees only their students
+    if (role === 'STUDENT' && userId !== targetId) return res.status(403).json({ error: 'Forbidden' });
+    if (role === 'TUTOR') {
+      const student = await prisma.user.findUnique({ where: { id: targetId } });
+      if (!student || student.teacherId !== userId) return res.status(403).json({ error: 'This student is not in your class' });
     }
 
     const [student, results] = await Promise.all([
@@ -200,27 +229,26 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
 
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    // Topic breakdown
     const topicMap: Record<string, { scores: number[]; subject: string }> = {};
     results.forEach((r) => {
       const key = r.assignment.topic;
       if (!topicMap[key]) topicMap[key] = { scores: [], subject: r.assignment.subject };
       topicMap[key].scores.push(r.score);
     });
-
     const topicBreakdown = Object.entries(topicMap).map(([topic, data]) => {
       const avg = data.scores.reduce((s, v) => s + v, 0) / data.scores.length;
-      return { topic, subject: data.subject, avgScore: Math.round(avg), attempts: data.scores.length, trend: data.scores.length > 1 ? (data.scores[data.scores.length - 1] > data.scores[0] ? 'improving' : 'declining') : 'stable' };
+      return { topic, subject: data.subject, avgScore: Math.round(avg), attempts: data.scores.length,
+        trend: data.scores.length > 1 ? (data.scores[data.scores.length - 1] > data.scores[0] ? 'improving' : 'declining') : 'stable' };
     }).sort((a, b) => a.avgScore - b.avgScore);
 
-    // Difficulty performance
-    const diffMap: Record<string, { correct: number; total: number }> = { EASY: { correct: 0, total: 0 }, MEDIUM: { correct: 0, total: 0 }, HARD: { correct: 0, total: 0 } };
+    const diffMap: Record<string, { correct: number; total: number }> = {
+      EASY: { correct: 0, total: 0 }, MEDIUM: { correct: 0, total: 0 }, HARD: { correct: 0, total: 0 },
+    };
     results.forEach((r) => r.details.forEach((d) => {
       const k = d.difficulty || 'EASY';
       if (diffMap[k]) { diffMap[k].total++; if (d.isCorrect) diffMap[k].correct++; }
     }));
 
-    // Exam readiness: weighted average (EASY=30%, MEDIUM=40%, HARD=30%)
     const easyPct = diffMap.EASY.total ? (diffMap.EASY.correct / diffMap.EASY.total) * 100 : null;
     const medPct = diffMap.MEDIUM.total ? (diffMap.MEDIUM.correct / diffMap.MEDIUM.total) * 100 : null;
     const hardPct = diffMap.HARD.total ? (diffMap.HARD.correct / diffMap.HARD.total) * 100 : null;
@@ -230,41 +258,32 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
       ((easyPct || 0) * weights[0] + (medPct || 0) * weights[1] + (hardPct || 0) * weights[2]) / totalW
     ) : null;
 
-    // Overall stats
     const avgScore = results.length ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length) : 0;
     const bestScore = results.length ? Math.max(...results.map((r) => r.score)) : 0;
-    const totalXp = student.xp;
+    const passRate = results.length ? Math.round((results.filter((r) => r.score >= 50).length / results.length) * 100) : 0;
 
-    // Recommendations
-    const recommendations: { priority: 'urgent' | 'review' | 'maintain'; topic: string; avg: number; message: string }[] = [];
-    topicBreakdown.forEach(({ topic, avgScore: avg }) => {
-      if (avg < 50) recommendations.push({ priority: 'urgent', topic, avg, message: `Needs urgent attention — scoring ${avg}%. Focus on core concepts and practice daily.` });
-      else if (avg < 70) recommendations.push({ priority: 'review', topic, avg, message: `Good effort but needs revision — ${avg}%. Work through more practice problems.` });
-      else recommendations.push({ priority: 'maintain', topic, avg, message: `Strong performance at ${avg}%. Maintain consistency and tackle harder questions.` });
-    });
+    const recentResults = results.slice(-10).reverse().map((r) => ({
+      id: r.id, score: r.score, title: r.assignment.title, topic: r.assignment.topic, completedAt: r.completedAt,
+    }));
 
-    // Score trend (last 8 results)
-    const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment.topic }));
-
-    // attemptStats — per-assignment attempt summary
     const assignmentAttemptMap: Record<string, { assignmentTitle: string; scores: number[] }> = {};
     results.forEach((r) => {
-      const aid = r.assignment.id;
-      if (!assignmentAttemptMap[aid]) {
-        assignmentAttemptMap[aid] = { assignmentTitle: r.assignment.title, scores: [] };
+      if (!assignmentAttemptMap[r.assignmentId]) {
+        assignmentAttemptMap[r.assignmentId] = { assignmentTitle: r.assignment.title, scores: [] };
       }
-      assignmentAttemptMap[aid].scores.push(r.score);
+      assignmentAttemptMap[r.assignmentId].scores.push(r.score);
     });
     const attemptStats = Object.values(assignmentAttemptMap).map(({ assignmentTitle, scores }) => ({
-      assignmentTitle,
-      attempts: scores.length,
+      assignmentTitle, attempts: scores.length,
       avgScore: Number((scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1)),
       bestScore: Math.max(...scores),
     }));
 
+    const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment.topic }));
+
     return res.json({
-      student, totalQuizzes: results.length, avgScore, bestScore, totalXp,
-      examReadiness, topicBreakdown, difficultyBreakdown: diffMap, recommendations, trend, attemptStats,
+      student, totalQuizzes: results.length, avgScore, bestScore, passRate, totalXp: student.xp,
+      examReadiness, topicBreakdown, difficultyBreakdown: diffMap, recentResults, attemptStats, trend,
     });
   } catch (err) {
     console.error(err);

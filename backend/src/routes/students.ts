@@ -1,16 +1,18 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
-import { authMiddleware, adminOnly } from '../middleware/auth';
+import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 import { makeUniquePin } from '../utils/pinGenerator';
 
 const router = Router();
 
-// GET /api/students
-router.get('/', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+// GET /api/students — ADMIN: all students; TUTOR: only their allocated students
+router.get('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { search, grade } = req.query;
-    const where: Record<string, unknown> = { role: 'STUDENT' };
+    const isTutor = req.user!.role === 'TUTOR';
 
+    const where: Record<string, unknown> = { role: 'STUDENT' };
+    if (isTutor) where.teacherId = req.user!.userId;
     if (grade) where.grade = Number(grade);
     if (search) {
       where.OR = [
@@ -22,10 +24,8 @@ router.get('/', authMiddleware, adminOnly, async (req: Request, res: Response) =
     const students = await prisma.user.findMany({
       where,
       include: {
-        results: {
-          select: { score: true, completedAt: true, assignmentId: true },
-          orderBy: { completedAt: 'desc' },
-        },
+        results: { select: { score: true, completedAt: true, assignmentId: true }, orderBy: { completedAt: 'desc' } },
+        teacher: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -37,32 +37,68 @@ router.get('/', authMiddleware, adminOnly, async (req: Request, res: Response) =
   }
 });
 
-// GET /api/students/search?q=name — admin searches students by name
-router.get('/search', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+// GET /api/students/tutors — ADMIN only: list all tutors
+router.get('/tutors', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
+  try {
+    const tutors = await prisma.user.findMany({
+      where: { role: 'TUTOR' },
+      include: { students: { select: { id: true, name: true, grade: true } } },
+      orderBy: { name: 'asc' },
+    });
+    return res.json(tutors);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/students/search?q=name
+router.get('/search', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const q = (req.query.q as string) || '';
+    const isTutor = req.user!.role === 'TUTOR';
+
     const students = await prisma.user.findMany({
       where: {
         role: 'STUDENT',
         name: { contains: q, mode: 'insensitive' },
+        ...(isTutor ? { teacherId: req.user!.userId } : {}),
       },
-      select: {
-        id: true,
-        name: true,
-        grade: true,
-        pin: true,
-        xp: true,
-      },
+      select: { id: true, name: true, grade: true, pin: true, xp: true },
       take: 20,
       orderBy: { name: 'asc' },
     });
 
-    const result = students.map((s) => ({
-      ...s,
-      pin: s.pin ? s.pin.slice(0, 8) : null,
-    }));
+    return res.json(students.map((s) => ({ ...s, pin: s.pin ? s.pin.slice(0, 8) : null })));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
 
-    return res.json(result);
+// PATCH /api/students/:id/assign-tutor — ADMIN only: assign a student to a tutor
+router.patch('/:id/assign-tutor', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+  try {
+    const { tutorId } = req.body as { tutorId: string | null };
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { teacherId: tutorId ?? null },
+      include: { teacher: { select: { id: true, name: true } } },
+    });
+    return res.json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /api/students/tutors/:id/toggle-active — ADMIN only: activate/deactivate a tutor
+router.patch('/tutors/:id/toggle-active', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+  try {
+    const tutor = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!tutor || tutor.role !== 'TUTOR') return res.status(404).json({ error: 'Tutor not found' });
+    const updated = await prisma.user.update({ where: { id: req.params.id }, data: { active: !tutor.active } });
+    return res.json(updated);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -70,18 +106,19 @@ router.get('/search', authMiddleware, adminOnly, async (req: Request, res: Respo
 });
 
 // GET /api/students/:id
-router.get('/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const student = await prisma.user.findUnique({
       where: { id: req.params.id },
-      include: {
-        results: {
-          include: { details: true },
-          orderBy: { completedAt: 'desc' },
-        },
-      },
+      include: { results: { include: { details: true }, orderBy: { completedAt: 'desc' } } },
     });
     if (!student) return res.status(404).json({ error: 'Not found' });
+
+    // Tutors can only access their own students
+    if (req.user!.role === 'TUTOR' && student.teacherId !== req.user!.userId) {
+      return res.status(403).json({ error: 'This student is not in your class' });
+    }
+
     return res.json(student);
   } catch (err) {
     console.error(err);
@@ -94,12 +131,7 @@ router.patch('/:id/toggle-active', authMiddleware, adminOnly, async (req: Reques
   try {
     const student = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!student) return res.status(404).json({ error: 'Not found' });
-
-    const updated = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { active: !student.active },
-    });
-
+    const updated = await prisma.user.update({ where: { id: req.params.id }, data: { active: !student.active } });
     return res.json(updated);
   } catch (err) {
     console.error(err);
@@ -108,17 +140,22 @@ router.patch('/:id/toggle-active', authMiddleware, adminOnly, async (req: Reques
 });
 
 // POST /api/students/:id/reset-pin
-router.post('/:id/reset-pin', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.post('/:id/reset-pin', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const { customSuffix } = req.body as { customSuffix?: string };
+    // Tutors can only reset PINs for their students
+    if (req.user!.role === 'TUTOR') {
+      const student = await prisma.user.findUnique({ where: { id: req.params.id } });
+      if (!student || student.teacherId !== req.user!.userId) {
+        return res.status(403).json({ error: 'This student is not in your class' });
+      }
+    }
 
+    const { customSuffix } = req.body as { customSuffix?: string };
     let newPin: string;
     if (customSuffix && /^[A-Z0-9]{4}$/i.test(customSuffix)) {
       newPin = 'SPK-' + customSuffix.toUpperCase();
       const exists = await prisma.user.findUnique({ where: { pin: newPin } });
-      if (exists && exists.id !== req.params.id) {
-        return res.status(409).json({ error: 'PIN already in use' });
-      }
+      if (exists && exists.id !== req.params.id) return res.status(409).json({ error: 'PIN already in use' });
     } else {
       newPin = await makeUniquePin(async (p) => {
         const ex = await prisma.user.findUnique({ where: { pin: p } });
@@ -126,11 +163,7 @@ router.post('/:id/reset-pin', authMiddleware, adminOnly, async (req: Request, re
       });
     }
 
-    const updated = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { pin: newPin },
-    });
-
+    const updated = await prisma.user.update({ where: { id: req.params.id }, data: { pin: newPin } });
     return res.json({ pin: newPin, user: updated });
   } catch (err) {
     console.error(err);
@@ -142,13 +175,10 @@ router.post('/:id/reset-pin', authMiddleware, adminOnly, async (req: Request, re
 router.patch('/:id/photo', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { photo } = req.body as { photo: string };
-    if (req.user!.userId !== req.params.id && req.user!.role !== 'ADMIN') {
+    if (req.user!.userId !== req.params.id && req.user!.role !== 'ADMIN' && req.user!.role !== 'TUTOR') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const updated = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { photo },
-    });
+    const updated = await prisma.user.update({ where: { id: req.params.id }, data: { photo } });
     return res.json(updated);
   } catch (err) {
     console.error(err);
@@ -156,7 +186,7 @@ router.patch('/:id/photo', authMiddleware, async (req: Request, res: Response) =
   }
 });
 
-// GET /api/students/me — current student profile
+// GET /api/students/me/profile
 router.get('/me/profile', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
@@ -166,6 +196,7 @@ router.get('/me/profile', authMiddleware, async (req: Request, res: Response) =>
           include: { details: true, assignment: { select: { title: true, subject: true } } },
           orderBy: { completedAt: 'desc' },
         },
+        teacher: { select: { id: true, name: true } },
       },
     });
     if (!user) return res.status(404).json({ error: 'Not found' });

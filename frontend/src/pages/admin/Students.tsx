@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { students as studentsApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { User, QuizResult } from '../../types';
@@ -11,6 +12,8 @@ interface StudentWithResults extends User {
 }
 
 export default function AdminStudents() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [list, setList] = useState<StudentWithResults[]>([]);
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
@@ -54,7 +57,7 @@ export default function AdminStudents() {
 
   return (
     <div>
-      <div className="ph"><h2>👥 Students &amp; PINs</h2><p>Manage student accounts, grades, PINs and access</p></div>
+      <div className="ph"><h2>👥 {isAdmin ? 'Students & PINs' : 'My Students'}</h2><p>{isAdmin ? 'Manage all student accounts, grades, PINs and access' : 'Your allocated students — their progress and PINs'}</p></div>
       <div className="flex g2 mb2 wrap">
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
@@ -70,7 +73,7 @@ export default function AdminStudents() {
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="dt">
-            <thead><tr><th>Student</th><th>PIN</th><th>Grade</th><th>Level</th><th>Quizzes</th><th>Avg</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Student</th><th>PIN</th><th>Grade</th>{isAdmin && <th>Teacher</th>}<th>Level</th><th>Quizzes</th><th>Avg</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {list.map((s) => {
                 const avg = s.results?.length ? (s.results.reduce((x, r) => x + r.score, 0) / s.results.length).toFixed(1) : '—';
@@ -83,6 +86,7 @@ export default function AdminStudents() {
                     </div></td>
                     <td><span style={{ fontFamily: 'var(--fh)', fontWeight: 700, color: 'var(--p)', letterSpacing: '.12em', fontSize: 13, cursor: 'pointer' }} onClick={() => copyPin(s.pin || '')}>{s.pin || '—'} 📋</span></td>
                     <td>Gr{s.grade || 10}</td>
+                    {isAdmin && <td><span className="xs ct2">{(s as StudentWithResults & { teacher?: { name: string } }).teacher?.name || <span className="ct3">—</span>}</span></td>}
                     <td><span className={`lvl ${lv.cl}`} style={{ fontSize: 10.5 }}>{lv.ic} {lv.name}</span><div className="xs ct3">⚡{s.xp || 0} XP</div></td>
                     <td>{s.results?.length || 0}</td>
                     <td><strong>{avg}{avg !== '—' ? '%' : ''}</strong></td>

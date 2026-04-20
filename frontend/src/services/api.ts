@@ -24,7 +24,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ─── Auth ─────────────────────────────────────────────────────────
 export const auth = {
-  login: (value: string, role: 'student' | 'admin') =>
+  login: (value: string, role: 'student' | 'tutor' | 'admin') =>
     request<{ token?: string; user?: object; needsGrade?: boolean; name?: string; returning?: boolean }>(
       '/auth/login', { method: 'POST', body: JSON.stringify({ value, role }) }
     ),
@@ -139,3 +139,12 @@ export const parent = {
 // ─── Student search ───────────────────────────────────────────────
 export const studentSearch = (q: string) =>
   request<{ id: string; name: string; grade: number; pin: string }[]>(`/students/search?q=${encodeURIComponent(q)}`);
+
+// ─── Tutors (admin only) ──────────────────────────────────────────
+export const tutors = {
+  list: () => request<object[]>('/students/tutors'),
+  toggleActive: (id: string) =>
+    request<object>(`/students/tutors/${id}/toggle-active`, { method: 'PATCH' }),
+  assignStudent: (studentId: string, tutorId: string | null) =>
+    request<object>(`/students/${studentId}/assign-tutor`, { method: 'PATCH', body: JSON.stringify({ tutorId }) }),
+};

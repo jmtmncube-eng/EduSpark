@@ -39,6 +39,17 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
     { to: '/app/questions', ico: '📝', label: 'Question Bank' },
     { to: '/app/assignments', ico: '📋', label: 'Assignments', section: 'Management' },
     { to: '/app/students', ico: '👥', label: 'Students & PINs' },
+    { to: '/app/tutors', ico: '👩‍🏫', label: 'Teachers' },
+    { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
+    { to: '/app/analytics', ico: '📈', label: 'Analytics', section: 'Reports' },
+    { to: '/app/calendar', ico: '📅', label: 'Calendar' },
+  ];
+
+  const tutorLinks = [
+    { to: '/app/dashboard', ico: '🏠', label: 'Dashboard', section: 'Main' },
+    { to: '/app/questions', ico: '📝', label: 'Question Bank' },
+    { to: '/app/assignments', ico: '📋', label: 'Assignments', section: 'My Class' },
+    { to: '/app/students', ico: '👥', label: 'My Students' },
     { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
     { to: '/app/analytics', ico: '📈', label: 'Analytics', section: 'Reports' },
     { to: '/app/calendar', ico: '📅', label: 'Calendar' },
@@ -51,7 +62,8 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
     { to: '/app/exam-readiness', ico: '🎯', label: 'Exam Readiness' },
     { to: '/app/calendar', ico: '📅', label: 'My Schedule' },
   ];
-  const links = isAdmin ? adminLinks : studentLinks;
+  const isTutor = user.role === 'TUTOR';
+  const links = isAdmin ? adminLinks : isTutor ? tutorLinks : studentLinks;
 
   return (
     <>
@@ -108,7 +120,9 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
             </label>
             <div style={{ fontFamily: 'var(--fh)', fontSize: 22, fontWeight: 700, marginTop: 12 }}>{user.name}</div>
             {isAdmin
-              ? <span className="badge btl mt1">Teacher / Admin</span>
+              ? <span className="badge btl mt1">SuperAdmin</span>
+              : isTutor
+              ? <span className="badge btl mt1">Teacher</span>
               : <span className="badge btl mt1">Grade {user.grade} Student</span>
             }
             <div className="xs ct3 mt1">Tap photo to change picture</div>
@@ -138,8 +152,8 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
           )}
 
           <div style={{ background: 'rgba(20,184,166,.05)', borderRadius: 11, padding: 13 }}>
-            {isAdmin
-              ? [['Role', 'Teacher / Admin'], ['Account', 'Session-based']].map(([k, v]) => (
+            {(isAdmin || isTutor)
+              ? [['Role', isAdmin ? 'SuperAdmin' : 'Teacher'], ['Account', 'Session-based']].map(([k, v]) => (
                   <div key={k} className="flex jb" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}><span className="ct2">{k}</span><span className="bold">{v}</span></div>
                 ))
               : [['Level', lv.ic + ' ' + lv.name], ['Total XP', '⚡ ' + (user.xp || 0) + ' XP'], ['Joined', fmtDate(user.createdAt)]].map(([k, v]) => (

@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  role      Role     @default(STUDENT)
+  pin       String?  @unique
+  grade     Int?
+  xp        Int      @default(0)
+  active    Boolean  @default(true)
+  photo     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results            QuizResult[]
+  createdNotes       CalendarNote[]
+  createdAssignments Assignment[]
+  createdQuestions   Question[]
+  calendarRequests   CalendarRequest[] @relation("CalendarRequests")
+  parentAccesses     ParentAccess[]    @relation("ParentAccess")
+
+  @@map("users")
+}
+
+model Question {
+  id         String     @id @default(cuid())
+  subject    Subject
+  grade      Int
+  topic      String
+  difficulty Difficulty @default(EASY)
+  question   String     @db.Text
+  options    String[]
+  answer     String
+  solution   String?    @db.Text
+  visibility Visibility @default(ALL)
+  imageData  String?    @db.Text
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+  createdById String?
+
+  assignmentQuestions AssignmentQuestion[]
+  resultDetails       ResultDetail[]
+
+  @@map("questions")
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  subject     Subject
+  grade       Int
+  topic       String
+  dueDate     DateTime
+  assignTo    String   @default("all")
+  maxAttempts Int      @default(3)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdById String
+
+  questions  AssignmentQuestion[]
+  documents  AssignmentDocument[]
+  results    QuizResult[]
+
+  @@map("assignments")
+}
+
+model AssignmentQuestion {
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId   String
+  order        Int        @default(0)
+
+  @@id([assignmentId, questionId])
+  @@map("assignment_questions")
+}
+
+model AssignmentDocument {
+  id           String     @id @default(cuid())
+  title        String
+  content      String?    @db.Text
+  imageData    String?    @db.Text
+  documentType String     @default("text")
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+
+  @@map("assignment_documents")
+}
+
+model QuizResult {
+  id            String   @id @default(cuid())
+  score         Int
+  correct       Int
+  total         Int
+  timeTaken     Int      @default(0)
+  xpEarned      Int      @default(0)
+  attemptNumber Int      @default(1)
+  completedAt   DateTime @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+
+  details ResultDetail[]
+
+  @@map("quiz_results")
+}
+
+model ResultDetail {
+  id             String @id @default(cuid())
+  questionText   String @db.Text
+  selectedAnswer String?
+  correctAnswer  String
+  isCorrect      Boolean
+  solution       String? @db.Text
+  difficulty     String  @default("Easy")
+  imageData      String? @db.Text
+
+  result     QuizResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  resultId   String
+  question   Question?  @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  questionId String?
+
+  @@map("result_details")
+}
+
+model CalendarNote {
+  id        String   @id @default(cuid())
+  date      String
+  title     String
+  content   String?  @db.Text
+  color     String   @default("note")
+  createdAt DateTime @default(now())
+
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  createdById String
+
+  requests CalendarRequest[]
+
+  @@map("calendar_notes")
+}
+
+model CalendarRequest {
+  id          String   @id @default(cuid())
+  noteId      String
+  studentId   String
+  studentName String
+  message     String   @db.Text
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  note    CalendarNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  student User         @relation("CalendarRequests", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("calendar_requests")
+}
+
+model ParentAccess {
+  id        String   @id @default(cuid())
+  pin       String   @unique
+  studentId String
+  label     String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  student User @relation("ParentAccess", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("parent_access")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum Subject {
+  MATHEMATICS
+  PHYSICAL_SCIENCES
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Visibility {
+  ALL
+  GR10
+  GR11
+  GR12
+  NONE
+}

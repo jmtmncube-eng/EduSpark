@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext';
+import { getLvl } from './utils/helpers';
 import Background from './components/Background';
 import ToastContainer from './components/Toast';
 import Sidebar from './components/Sidebar';
@@ -70,6 +71,28 @@ function AppShell() {
       <div className="main">
         <div className="topbar">
           <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
+
+          {/* Centre identity strip */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isStaff ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: 17 }}>🔬</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--p)', fontFamily: 'var(--fh)', letterSpacing: '.01em' }}>EduSpark</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: isAdmin ? 'rgba(14,165,233,.14)' : 'rgba(20,184,166,.14)', color: isAdmin ? '#0ea5e9' : 'var(--p)', border: `1px solid ${isAdmin ? 'rgba(14,165,233,.3)' : 'rgba(20,184,166,.3)'}` }}>
+                  {isAdmin ? 'Admin' : 'Tutor'}
+                </span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: 13, color: 'var(--t3)' }}>👋</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>{user.name.split(' ')[0]}</span>
+                {(() => { const lv = getLvl(user.xp || 0); return (
+                  <span className={`lvl ${lv.cl}`} style={{ fontSize: 10, padding: '2px 8px' }}>{lv.ic} {lv.name}</span>
+                ); })()}
+              </div>
+            )}
+          </div>
+
           <div className="flex ia g2">
             {!isAdmin && (user.xp || 0) > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--p)' }}>⚡ {user.xp} XP</span>}
           </div>

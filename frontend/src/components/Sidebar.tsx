@@ -83,7 +83,11 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="sb-nm">{user.name}</div>
             <div className="sb-pin">
-              {isAdmin ? <span style={{ color: 'var(--t3)' }}>Teacher</span> : <span style={{ color: 'var(--t3)', letterSpacing: '.1em' }}>SPK-••••</span>}
+              {isAdmin
+                ? <span style={{ color: 'var(--t3)', letterSpacing: '.1em' }}>ADM-••••</span>
+                : isTutor
+                ? <span style={{ color: 'var(--t3)', letterSpacing: '.1em' }}>TCH-••••</span>
+                : <span style={{ color: 'var(--t3)', letterSpacing: '.1em' }}>SPK-••••</span>}
             </div>
           </div>
         </div>
@@ -134,7 +138,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
                 <div className="flex jb ia" style={{ marginBottom: showPin ? 8 : 0 }}>
                   <div>
                     <div className="sm bold">Your Login PIN</div>
-                    <div className="xs ct3">Used to sign in to EduSpark</div>
+                    <div className="xs ct3">{isTutor ? 'TCH-XXXX — used to sign in' : 'SPK-XXXX — used to sign in'}</div>
                   </div>
                   <button className="btn ba btn-sm" onClick={() => setShowPin((v) => !v)}>
                     {showPin ? '🙈 Hide' : '👁 Reveal'}

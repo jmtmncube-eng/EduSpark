@@ -43,13 +43,21 @@ export default function Login() {
     try {
       const res = await auth.login(trimmed, role);
       if ((res as { needsGrade?: boolean }).needsGrade) {
+        // New student — show grade picker
         setPendingName((res as { name: string }).name);
         setGradeModal(true);
+      } else if ((res as { isNew?: boolean; token?: string }).isNew && (res as { token?: string }).token) {
+        // New tutor — log in immediately and show their TCH pin
+        login((res as { user: User }).user, (res as { token: string }).token);
+        const pin = (res as { user: User }).user.pin || '';
+        setNewPin(pin);
+        setNewName((res as { user: User }).user.name);
+        setPinCopied(false);
       } else if ((res as { token?: string }).token) {
+        // Returning user
         login((res as { user: User }).user, (res as { token: string }).token);
         navigate('/app/dashboard');
-        const name = (res as { user: User }).user.name;
-        showToast(`Welcome back, ${name}! 🎉`);
+        showToast(`Welcome back, ${(res as { user: User }).user.name}! 🎉`);
       }
     } catch (e: unknown) {
       showToast((e as Error).message || 'Login failed', 'err');
@@ -67,7 +75,7 @@ export default function Login() {
       setNewPin(pin);
       setNewName(pendingName);
       setGradeModal(false);
-      // Don't navigate yet — let them see + save their PIN first
+      setPinCopied(false);
     } catch (e: unknown) {
       showToast((e as Error).message || 'Registration failed', 'err');
     } finally {
@@ -84,23 +92,27 @@ export default function Login() {
 
   function confirmPinSaved() {
     if (!pinCopied) {
-      showToast('Please copy your PIN first — you cannot recover it without your teacher!', 'warn');
+      showToast('Please copy your PIN first — you cannot sign in without it!', 'warn');
       return;
     }
     navigate('/app/dashboard');
     setNewPin('');
   }
 
-  const placeholder = role === 'student' ? 'Enter your PIN (e.g. SPK-A1B2)' : 'Enter your name';
-  const hint = role === 'student'
-    ? 'New student? Enter your name to create an account.'
-    : role === 'tutor'
-    ? 'Enter your name to access your teacher dashboard.'
-    : 'Enter your name for full platform access.';
+  const isPin = (v: string) => /^(SPK|TCH|ADM)-/i.test(v);
+
+  const placeholder =
+    role === 'admin' ? 'Enter your PIN (e.g. ADM-XXXX)' :
+    role === 'tutor' ? 'Enter your name or PIN (TCH-XXXX)' :
+    'Enter your PIN (e.g. SPK-XXXX) or name';
+
+  const hint =
+    role === 'admin' ? 'Admin access requires a PIN. Contact the platform owner if locked out.' :
+    role === 'tutor' ? 'New teacher? Enter your name to create an account and receive your PIN.' :
+    'Returning student? Enter your SPK-XXXX PIN. First time? Enter your name.';
 
   return (
     <div id="login" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
-      {/* Theme toggle — top right */}
       <button onClick={toggleTheme} style={{ position: 'fixed', top: 18, right: 18, zIndex: 10, background: 'rgba(255,255,255,.22)', backdropFilter: 'blur(12px)', border: '1.5px solid rgba(255,255,255,.45)', borderRadius: 12, padding: '8px 14px', cursor: 'pointer', fontSize: 18, lineHeight: 1, color: 'var(--t2)', transition: 'all .25s', boxShadow: '0 2px 12px rgba(0,0,0,.10)' }} title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
         {theme === 'dark' ? '☀️' : '🌙'}
       </button>
@@ -119,36 +131,36 @@ export default function Login() {
           <div className={`role-card ${role === 'student' ? 'active' : ''}`} onClick={() => { setRole('student'); setValue(''); }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>🎒</div>
             <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Student</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Sign in with PIN</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>SPK-XXXX</div>
           </div>
           <div className={`role-card ${role === 'tutor' ? 'active' : ''}`} onClick={() => { setRole('tutor'); setValue(''); }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>👩‍🏫</div>
             <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Teacher</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Your class dashboard</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>TCH-XXXX</div>
           </div>
           <div className={`role-card ${role === 'admin' ? 'active' : ''}`} onClick={() => { setRole('admin'); setValue(''); }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>👨‍💼</div>
             <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Admin</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>Full platform control</div>
+            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>ADM-XXXX</div>
           </div>
         </div>
 
         <input
-          type={role === 'student' ? 'text' : 'text'} className="l-in" autoComplete="off" spellCheck={false}
+          type="text" className="l-in" autoComplete="off" spellCheck={false}
           placeholder={placeholder}
           value={value} onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && doLogin()}
-          style={{ letterSpacing: role === 'student' && value.toUpperCase().startsWith('SPK') ? '.12em' : 'normal' }}
+          style={{ letterSpacing: isPin(value) ? '.12em' : 'normal' }}
         />
         <p style={{ fontSize: 11.5, color: 'var(--t3)', marginBottom: 14, textAlign: 'center' }}>{hint}</p>
 
         <button className="l-btn" onClick={doLogin} disabled={loading}>
-          {loading ? 'Loading…' : role === 'student' ? '🔐 Sign In' : '→ Enter Dashboard'}
+          {loading ? 'Loading…' : '🔐 Sign In'}
         </button>
         <div style={{ fontSize: 11, color: 'var(--t4)', textAlign: 'center' }}>Mathematics &amp; Physical Sciences · CAPS Aligned</div>
       </div>
 
-      {/* Grade selection for new students */}
+      {/* Grade picker — new students only */}
       {gradeModal && (
         <Modal title={`👋 Welcome, ${pendingName}!`} onClose={() => setGradeModal(false)}>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -171,17 +183,23 @@ export default function Login() {
         </Modal>
       )}
 
-      {/* PIN reveal — must copy before continuing */}
+      {/* PIN reveal — must copy before continuing (students and new tutors) */}
       {newPin && (
-        <Modal title="🎉 Account Created!" onClose={() => {}}>
+        <Modal title={newName && newPin.startsWith('TCH') ? '👩‍🏫 Teacher Account Created!' : '🎉 Account Created!'} onClose={() => {}}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 42, marginBottom: 6 }}>🔐</div>
+            <div style={{ fontSize: 42, marginBottom: 6 }}>{newPin.startsWith('TCH') ? '👩‍🏫' : '🔐'}</div>
             <h3 className="fh" style={{ fontSize: 19, marginBottom: 4 }}>Your Permanent PIN</h3>
-            <p className="sm ct2">This is the <strong>only way</strong> to access your account. Your teacher cannot see it. Write it down now!</p>
+            <p className="sm ct2">
+              {newPin.startsWith('TCH')
+                ? 'This PIN is how you sign in as a Teacher. Save it — it cannot be recovered without an Admin!'
+                : 'This is the only way to access your account. Your teacher cannot see it. Write it down now!'}
+            </p>
           </div>
 
           <div className="pin-reveal-card" onClick={copyPin}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: '.1em', marginBottom: 6 }}>PIN CODE FOR {newName.toUpperCase()}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: '.1em', marginBottom: 6 }}>
+              {newPin.startsWith('TCH') ? 'TEACHER PIN FOR' : 'PIN CODE FOR'} {newName.toUpperCase()}
+            </div>
             <div className="pin-big">{newPin}</div>
             <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
               {pinCopied ? '✅ Copied to clipboard!' : '👆 Tap to copy'}
@@ -189,7 +207,7 @@ export default function Login() {
           </div>
 
           <div style={{ background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.3)', borderRadius: 10, padding: '10px 14px', margin: '14px 0', fontSize: 12.5 }}>
-            ⚠️ <strong>Important:</strong> From now on, you must <strong>use this PIN to sign in</strong>. Your name alone will not work. Save it somewhere safe!
+            ⚠️ <strong>Important:</strong> From now on, sign in using <strong>this PIN</strong>. Your name alone will not work. Save it somewhere safe!
           </div>
 
           <button className={`btn wf mt1 ${pinCopied ? 'bp' : 'ba'}`} style={{ justifyContent: 'center' }} onClick={confirmPinSaved}>

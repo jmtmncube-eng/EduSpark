@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { signToken } from '../middleware/auth';
-import { makeUniquePin } from '../utils/pinGenerator';
+import { makeUniquePin, generateTutorPin } from '../utils/pinGenerator';
 
 const router = Router();
 
@@ -13,45 +13,45 @@ router.post('/login', async (req: Request, res: Response) => {
     const input = value.trim();
     const upperInput = input.toUpperCase();
 
-    // PIN login — SPK-XXXX (students)
-    if (/^SPK-[A-Z0-9]{4}$/i.test(upperInput)) {
+    // PIN login — SPK-XXXX (students), TCH-XXXX (tutors), ADM-XXXX (admins)
+    if (/^(SPK|TCH|ADM)-[A-Z0-9]{4}$/i.test(upperInput)) {
       const user = await prisma.user.findUnique({ where: { pin: upperInput } });
       if (user) {
-        if (!user.active) return res.status(403).json({ error: 'Account deactivated. Contact your teacher.' });
+        if (!user.active) return res.status(403).json({ error: 'Account deactivated. Contact the admin.' });
         const token = signToken({ userId: user.id, role: user.role as 'STUDENT' | 'TUTOR' | 'ADMIN' });
         return res.json({ token, user: sanitize(user) });
       }
       return res.status(401).json({ error: 'PIN not found. Check your PIN and try again.' });
     }
 
-    // Admin (SuperAdmin) login by name — find or create
+    // Admin: PIN only — no name-based login
     if (role === 'admin') {
-      let adminUser = await prisma.user.findFirst({
-        where: { role: 'ADMIN', name: { equals: input, mode: 'insensitive' } },
-      });
-      if (!adminUser) {
-        adminUser = await prisma.user.create({ data: { name: input, role: 'ADMIN', pin: null } });
-      }
-      const token = signToken({ userId: adminUser.id, role: 'ADMIN' });
-      return res.json({ token, user: sanitize(adminUser) });
+      return res.status(401).json({ error: 'Please enter your Admin PIN (ADM-XXXX) to sign in.' });
     }
 
-    // Tutor login by name — find or create
+    // Tutor: name → create account with TCH pin, or redirect to PIN if already exists
     if (role === 'tutor') {
-      let tutorUser = await prisma.user.findFirst({
+      const existing = await prisma.user.findFirst({
         where: { role: 'TUTOR', name: { equals: input, mode: 'insensitive' } },
       });
-      if (!tutorUser) {
-        tutorUser = await prisma.user.create({ data: { name: input, role: 'TUTOR', pin: null } });
+      if (existing) {
+        return res.status(401).json({
+          error: 'You already have an account. Please sign in with your PIN (TCH-XXXX).',
+          hasAccount: true,
+        });
       }
-      if (!tutorUser.active) {
-        return res.status(403).json({ error: 'Your account has been deactivated. Contact the admin.' });
-      }
-      const token = signToken({ userId: tutorUser.id, role: 'TUTOR' });
-      return res.json({ token, user: sanitize(tutorUser) });
+      const pin = await makeUniquePin(
+        async (p) => !!(await prisma.user.findUnique({ where: { pin: p } })),
+        generateTutorPin
+      );
+      const tutor = await prisma.user.create({
+        data: { name: input, role: 'TUTOR', pin, active: true },
+      });
+      const token = signToken({ userId: tutor.id, role: 'TUTOR' });
+      return res.json({ token, user: sanitize(tutor), isNew: true });
     }
 
-    // Student name input — only for NEW students
+    // Student: name → check if returning, else show grade picker
     const existing = await prisma.user.findFirst({
       where: { role: 'STUDENT', name: { equals: input, mode: 'insensitive' } },
     });

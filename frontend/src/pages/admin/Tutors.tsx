@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { tutors as tutorsApi, studentSearch } from '../../services/api';
+import { tutors as tutorsApi, studentSearch, students as studentsApi } from '../../services/api';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { User } from '../../types';
@@ -17,6 +17,10 @@ export default function AdminTutors() {
   const [stuSearch, setStuSearch] = useState('');
   const [stuResults, setStuResults] = useState<StudentResult[]>([]);
   const [saving, setSaving] = useState(false);
+  const [resetTutor, setResetTutor] = useState<Tutor | null>(null);
+  const [customPin, setCustomPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [showPinFor, setShowPinFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await tutorsApi.list();
@@ -55,18 +59,33 @@ export default function AdminTutors() {
     load();
   }
 
+  async function doResetPin() {
+    if (!resetTutor) return;
+    try {
+      const r = await studentsApi.resetPin(resetTutor.id, customPin || undefined);
+      setNewPin((r as { pin: string }).pin);
+      showToast(`PIN reset for ${resetTutor.name}!`);
+      load();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+  }
+
+  function copyPin(pin: string) {
+    navigator.clipboard?.writeText(pin);
+    showToast('PIN copied!', 'info');
+  }
+
   return (
     <div>
       <div className="ph">
         <h2>👩‍🏫 Teachers</h2>
-        <p>Manage teacher accounts and allocate students to their classes. Teachers sign up via the login page under the "Teacher" tab.</p>
+        <p>Manage teacher accounts and allocate students to their classes. Teachers sign up via the login page under the "Teacher" tab and receive a TCH-XXXX PIN.</p>
       </div>
 
       {list.length === 0 ? (
         <div className="empty">
           <div className="eico">👩‍🏫</div>
           <h3>No teachers yet</h3>
-          <p>Teachers register themselves on the login page by selecting the "Teacher" tab and entering their name. They'll appear here once registered.</p>
+          <p>Teachers register on the login page by selecting the "Teacher" tab and entering their name. They'll appear here once registered.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -79,12 +98,27 @@ export default function AdminTutors() {
                   </div>
                   <div>
                     <div className="bold fh" style={{ fontSize: 15 }}>{t.name}</div>
-                    <div className="xs ct3">{t.students.length} student{t.students.length !== 1 ? 's' : ''} allocated</div>
+                    <div className="xs ct3" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                      <span
+                        style={{ fontFamily: 'var(--fh)', fontWeight: 700, letterSpacing: '.1em', color: 'var(--p)', cursor: 'pointer', fontSize: 12 }}
+                        onClick={() => setShowPinFor(showPinFor === t.id ? null : t.id)}
+                        title="Click to reveal PIN"
+                      >
+                        {showPinFor === t.id ? t.pin : 'TCH-••••'} 👁
+                      </span>
+                      {showPinFor === t.id && (
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--p)', padding: 0 }} onClick={() => copyPin(t.pin || '')}>📋 Copy</button>
+                      )}
+                      <span>· {t.students.length} student{t.students.length !== 1 ? 's' : ''}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex g1 wrap">
                   <button className="btn bp btn-sm" onClick={() => { setSelTutor(t); setStuSearch(''); setStuResults([]); setShowAssign(true); }}>
                     + Assign Students
+                  </button>
+                  <button className="btn bw-btn btn-sm" onClick={() => { setResetTutor(t); setCustomPin(''); setNewPin(''); }}>
+                    🔑 Reset PIN
                   </button>
                   <button className="btn bg-btn btn-sm" onClick={() => toggleTutor(t)}>
                     {t.active ? '🔒 Deactivate' : '✅ Activate'}
@@ -111,12 +145,12 @@ export default function AdminTutors() {
         </div>
       )}
 
+      {/* Assign Students Modal */}
       {showAssign && selTutor && (
         <Modal title={`Assign Students to ${selTutor.name}`} onClose={() => setShowAssign(false)}>
           <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(20,184,166,.06)', borderRadius: 10, fontSize: 13, color: 'var(--t2)', borderLeft: '3px solid var(--p)' }}>
             Currently has <strong>{selTutor.students.length}</strong> student{selTutor.students.length !== 1 ? 's' : ''}. Search below to add more.
           </div>
-
           <div className="fg">
             <label className="lbl">Search Student by Name</label>
             <input type="text" className="input" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)}
@@ -144,7 +178,6 @@ export default function AdminTutors() {
               </div>
             )}
           </div>
-
           {selTutor.students.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div className="lbl mb1">Currently Assigned</div>
@@ -156,8 +189,42 @@ export default function AdminTutors() {
               ))}
             </div>
           )}
-
           <button className="btn bg-btn wf mt2" style={{ justifyContent: 'center' }} onClick={() => setShowAssign(false)}>Done</button>
+        </Modal>
+      )}
+
+      {/* Reset Tutor PIN Modal */}
+      {resetTutor && (
+        <Modal title="🔑 Reset Teacher PIN" onClose={() => setResetTutor(null)}>
+          {newPin ? (
+            <>
+              <div className="pin-hero mb2" onClick={() => copyPin(newPin)}>
+                <div className="pin-lbl">NEW PIN FOR {resetTutor.name.toUpperCase()}</div>
+                <div className="pin-val">{newPin}</div>
+                <div className="pin-hint">Click to copy · Old PIN no longer works</div>
+              </div>
+              <button className="btn bp wf" style={{ justifyContent: 'center' }} onClick={() => setResetTutor(null)}>✅ Done</button>
+            </>
+          ) : (
+            <>
+              <div className="flex ia g2 mb2">
+                <div className="av">{resetTutor.name.charAt(0)}</div>
+                <div>
+                  <div className="bold">{resetTutor.name}</div>
+                  <div className="sm ct2">Current PIN: <strong className="cp">{resetTutor.pin || '—'}</strong></div>
+                </div>
+              </div>
+              <p className="sm ct2 mb2">A new TCH-XXXX PIN will be generated. The old one stops working immediately.</p>
+              <div className="fg">
+                <label className="lbl">Custom 4-char suffix (optional)</label>
+                <input type="text" className="input" value={customPin} onChange={(e) => setCustomPin(e.target.value.toUpperCase().slice(0, 4))} placeholder="Auto-generated if blank" maxLength={4} />
+              </div>
+              <div className="flex g1 mt1">
+                <button className="btn bp" onClick={doResetPin}>🔑 Reset PIN</button>
+                <button className="btn bg-btn" onClick={() => setResetTutor(null)}>Cancel</button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
-import { makeUniquePin } from '../utils/pinGenerator';
+import { makeUniquePin, generatePin, generateTutorPin } from '../utils/pinGenerator';
 
 const router = Router();
 
@@ -139,28 +139,34 @@ router.patch('/:id/toggle-active', authMiddleware, adminOnly, async (req: Reques
   }
 });
 
-// POST /api/students/:id/reset-pin
+// POST /api/students/:id/reset-pin — works for students (SPK) and tutors (TCH); admin resets either
 router.post('/:id/reset-pin', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    // Tutors can only reset PINs for their students
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    // Tutors can only reset PINs for their own students
     if (req.user!.role === 'TUTOR') {
-      const student = await prisma.user.findUnique({ where: { id: req.params.id } });
-      if (!student || student.teacherId !== req.user!.userId) {
+      if (target.role !== 'STUDENT' || target.teacherId !== req.user!.userId) {
         return res.status(403).json({ error: 'This student is not in your class' });
       }
     }
 
+    const isTutorTarget = target.role === 'TUTOR';
+    const prefix = isTutorTarget ? 'TCH' : 'SPK';
+    const generator = isTutorTarget ? generateTutorPin : generatePin;
+
     const { customSuffix } = req.body as { customSuffix?: string };
     let newPin: string;
     if (customSuffix && /^[A-Z0-9]{4}$/i.test(customSuffix)) {
-      newPin = 'SPK-' + customSuffix.toUpperCase();
+      newPin = `${prefix}-${customSuffix.toUpperCase()}`;
       const exists = await prisma.user.findUnique({ where: { pin: newPin } });
       if (exists && exists.id !== req.params.id) return res.status(409).json({ error: 'PIN already in use' });
     } else {
       newPin = await makeUniquePin(async (p) => {
         const ex = await prisma.user.findUnique({ where: { pin: p } });
         return !!ex && ex.id !== req.params.id;
-      });
+      }, generator);
     }
 
     const updated = await prisma.user.update({ where: { id: req.params.id }, data: { pin: newPin } });

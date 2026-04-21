@@ -59,6 +59,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.1.1] — 2026-04-21 — PIN-Based Auth for All Roles & Seeded Admins
+
+### Changed — Backend
+- Tutors now receive a `TCH-XXXX` PIN on first registration (name-based sign-up → PIN issued, same pattern as students)
+- Admin login is PIN-only (`ADM-XXXX`); no name-based admin creation via the API
+- PIN detection in auth route covers all three prefixes: `SPK` (student), `TCH` (tutor), `ADM` (admin)
+- `makeUniquePin` now accepts a `generator` argument — used to emit correct prefix per role
+- `pinGenerator.ts`: added `generateTutorPin()` (`TCH-`) and `generateAdminPin()` (`ADM-`) exports
+- Reset-pin endpoint detects target user's role and generates `TCH-` or `SPK-` prefix accordingly
+- Seed updated: 3 pre-created admin accounts — Alistair Sabe (`ADM-ALIS`), Mbongeni Mncube (`ADM-MBON`), Glad Mpala (`ADM-GLAD`)
+- Tutor management routes (`GET /tutors`, `PATCH /tutors/:id/toggle-active`, `PATCH /:id/assign-tutor`) remain admin-only
+
+### Changed — Frontend
+- Login page: each role card now shows its PIN format (`SPK-XXXX` / `TCH-XXXX` / `ADM-XXXX`) as a sub-label
+- Tutor first sign-up shows the same PIN copy-before-continue modal as students (PIN prefixed `TCH-`)
+- Admin tab accepts PIN only; entering a plain name shows a clear error directing to `ADM-XXXX`
+- Letter-spacing on the login input activates for any `SPK-`, `TCH-`, or `ADM-` prefix
+- Sidebar: masked PIN badge shows correct prefix per role (`ADM-••••` / `TCH-••••` / `SPK-••••`)
+- Sidebar profile modal: tutors can reveal and copy their `TCH-XXXX` PIN (same as students)
+- Tutors page: each teacher card shows their `TCH-XXXX` PIN (click to reveal/hide, copy button) and a Reset PIN button (admin only)
+
+---
+
 ## [1.1.0] — 2026-04-20 — Tutor Role & Multi-Class Support
 
 ### Added — Backend

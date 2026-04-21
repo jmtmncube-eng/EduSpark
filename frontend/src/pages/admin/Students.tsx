@@ -103,6 +103,15 @@ export default function AdminStudents() {
     showToast('PIN copied!', 'info');
   }
 
+  async function toggleExamReadiness(s: StudentWithResults) {
+    try {
+      const res = await studentsApi.toggleExamReadiness(s.id);
+      const { examReadinessUnlocked } = res as { examReadinessUnlocked: boolean };
+      showToast(`Exam Readiness ${examReadinessUnlocked ? 'unlocked' : 'locked'} for ${s.name}`, 'info');
+      setList((prev) => prev.map((x) => x.id === s.id ? { ...x, examReadinessUnlocked } : x));
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+  }
+
   // For recommendation: match grades already in tutor's cohort
   const tutorGrades = [...new Set(list.map((s) => s.grade).filter(Boolean))];
   const isRecommended = (grade: number) => tutorGrades.length === 0 || tutorGrades.includes(grade);
@@ -185,6 +194,14 @@ export default function AdminStudents() {
                     <td><div className="flex g1 wrap">
                       <button className="btn bg-btn btn-sm" onClick={() => setViewStu(s)}>View</button>
                       <button className="btn ba btn-sm" onClick={() => navigate(`/app/report/${s.id}`)}>📊 Report</button>
+                      <button
+                        className={`btn btn-sm ${s.examReadinessUnlocked ? 'bok' : 'ba'}`}
+                        style={{ fontSize: 11 }}
+                        title={s.examReadinessUnlocked ? 'Click to lock exam readiness' : 'Click to unlock exam readiness'}
+                        onClick={() => toggleExamReadiness(s)}
+                      >
+                        {s.examReadinessUnlocked ? '🔓 Readiness' : '🔒 Readiness'}
+                      </button>
                       <button className="btn bw-btn btn-sm" onClick={() => { setResetPinStu(s); setCustomPin(''); setNewPin(''); }}>🔑 PIN</button>
                       {isAdmin && <button className="btn bg-btn btn-sm" onClick={() => toggleActive(s.id)}>{s.active !== false ? 'Deactivate' : 'Activate'}</button>}
                     </div></td>

@@ -216,7 +216,7 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
     }
 
     const [student, results] = await Promise.all([
-      prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, grade: true, xp: true, createdAt: true, photo: true, teacher: { select: { id: true, name: true } } } }),
+      prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, grade: true, xp: true, createdAt: true, photo: true, examReadinessUnlocked: true, teacher: { select: { id: true, name: true } } } }),
       prisma.quizResult.findMany({
         where: { userId: targetId },
         include: {
@@ -228,6 +228,11 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
     ]);
 
     if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    // Students can only access their own exam readiness if tutor/admin has unlocked it
+    if (role === 'STUDENT' && !student.examReadinessUnlocked) {
+      return res.json({ locked: true });
+    }
 
     const topicMap: Record<string, { scores: number[]; subject: string }> = {};
     results.forEach((r) => {

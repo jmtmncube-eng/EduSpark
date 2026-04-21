@@ -86,6 +86,8 @@ export const students = {
   me: () => request<object>('/students/me/profile'),
   toggleActive: (id: string) =>
     request<object>(`/students/${id}/toggle-active`, { method: 'PATCH' }),
+  toggleExamReadiness: (id: string) =>
+    request<{ examReadinessUnlocked: boolean }>(`/students/${id}/toggle-exam-readiness`, { method: 'PATCH' }),
   resetPin: (id: string, customSuffix?: string) =>
     request<{ pin: string; user: object }>(
       `/students/${id}/reset-pin`, { method: 'POST', body: JSON.stringify({ customSuffix }) }

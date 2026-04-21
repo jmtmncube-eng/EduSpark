@@ -161,6 +161,27 @@ router.patch('/:id/toggle-active', authMiddleware, adminOnly, async (req: Reques
   }
 });
 
+// PATCH /api/students/:id/toggle-exam-readiness — tutor or admin unlocks/locks exam readiness for a student
+router.patch('/:id/toggle-exam-readiness', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const student = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!student || student.role !== 'STUDENT') return res.status(404).json({ error: 'Student not found' });
+
+    if (req.user!.role === 'TUTOR' && student.teacherId !== req.user!.userId) {
+      return res.status(403).json({ error: 'This student is not in your class' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { examReadinessUnlocked: !student.examReadinessUnlocked },
+    });
+    return res.json({ examReadinessUnlocked: updated.examReadinessUnlocked });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/students/:id/reset-pin — works for students (SPK) and tutors (TCH); admin resets either
 router.post('/:id/reset-pin', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {

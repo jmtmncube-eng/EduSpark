@@ -18,6 +18,7 @@ export interface User {
   students?: { id: string; name: string; grade: number }[];
   subjects?: string[];
   teachGrades?: number[];
+  examReadinessUnlocked?: boolean;
 }
 
 export interface Question {

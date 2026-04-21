@@ -11,6 +11,7 @@ interface TopicStat { topic: string; subject: string; avgScore: number; attempts
 interface Rec { priority: 'urgent' | 'review' | 'maintain'; topic: string; avg: number; message: string; }
 interface TrendPoint { date: string; score: number; topic: string; }
 interface Report {
+  locked?: boolean;
   student: { name: string; grade: number; xp: number; photo?: string };
   totalQuizzes: number; avgScore: number; bestScore: number; totalXp: number;
   examReadiness: number | null;
@@ -65,6 +66,19 @@ export default function ExamReadiness() {
   const dk = isDk();
 
   if (loading) return <div className="empty"><div className="eico">⏳</div><h3>Loading your report…</h3></div>;
+
+  if (report?.locked) {
+    return (
+      <div>
+        <div className="ph"><h2>🎯 Exam Readiness</h2><p>Your personalised readiness report</p></div>
+        <div className="empty">
+          <div className="eico">🔒</div>
+          <h3>Not yet available</h3>
+          <p>Your tutor hasn't unlocked your exam readiness report yet. Keep completing quizzes — your tutor will unlock this once they're ready to review your progress with you.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!report || report.totalQuizzes === 0) {
     return (

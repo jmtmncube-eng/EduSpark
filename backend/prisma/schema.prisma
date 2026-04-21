@@ -23,6 +23,9 @@ model User {
   subjects    String[]
   teachGrades Int[]
 
+  // For students: whether tutor has unlocked exam readiness view
+  examReadinessUnlocked Boolean @default(false)
+
   // For students: which tutor manages them
   teacherId String?
   teacher   User?   @relation("TutorStudents", fields: [teacherId], references: [id])

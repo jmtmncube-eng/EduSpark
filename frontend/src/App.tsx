@@ -41,7 +41,7 @@ function AppShell() {
     '/app/analytics': '📈 Analytics',
     '/app/calendar': '📅 Calendar',
     '/app/parent-pins': '🔑 Parent Access',
-    '/app/tutors': '👩‍🏫 Teachers',
+    '/app/tutors': '📚 Tutors',
     '/app/progress': '📈 My Progress',
     '/app/history': '🗂 Quiz History',
     '/app/exam-readiness': '🎯 Exam Readiness',

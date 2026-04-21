@@ -21,7 +21,7 @@ router.post('/pins', authMiddleware, adminOrTutorOnly, async (req: Request, res:
       return res.status(403).json({ error: 'This student is not in your class' });
     }
   }
-  const { studentId, label } = req.body;
+  const { studentId, label, expiryDays } = req.body;
   if (!studentId) return res.status(400).json({ error: 'studentId required' });
 
   // Verify student exists
@@ -38,7 +38,8 @@ router.post('/pins', authMiddleware, adminOrTutorOnly, async (req: Request, res:
     attempts++;
   }
 
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const days = [7, 14, 30, 60].includes(Number(expiryDays)) ? Number(expiryDays) : 7;
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
   const access = await prisma.parentAccess.create({
     data: { pin, studentId, label: label || null, expiresAt },

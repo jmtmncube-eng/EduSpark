@@ -47,7 +47,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
     { to: '/app/questions', ico: '📝', label: 'Question Bank' },
     { to: '/app/assignments', ico: '📋', label: 'Assignments', section: 'Management' },
     { to: '/app/students', ico: '👥', label: 'Students & PINs' },
-    { to: '/app/tutors', ico: '👩‍🏫', label: 'Teachers' },
+    { to: '/app/tutors', ico: '📚', label: 'Tutors' },
     { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
     { to: '/app/analytics', ico: '📈', label: 'Analytics', section: 'Reports' },
     { to: '/app/calendar', ico: '📅', label: 'Calendar' },
@@ -127,7 +127,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
       </aside>
 
       {showProfile && (
-        <Modal title={isAdmin ? '👩‍🏫 Teacher Profile' : '👤 My Profile'} onClose={() => { setShowProfile(false); setShowPin(false); }}>
+        <Modal title={isAdmin ? '👨‍💼 Admin Profile' : isTutor ? '📚 Tutor Profile' : '👤 My Profile'} onClose={() => { setShowProfile(false); setShowPin(false); }}>
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <label style={{ cursor: 'pointer', position: 'relative', display: 'inline-block' }}>
               <div className="av" style={{ width: 80, height: 80, fontSize: 32, margin: '0 auto', border: '3px solid var(--p)' }}>
@@ -140,7 +140,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
             {isAdmin
               ? <span className="badge btl mt1">SuperAdmin</span>
               : isTutor
-              ? <span className="badge btl mt1">Teacher</span>
+              ? <span className="badge btl mt1">Tutor</span>
               : <span className="badge btl mt1">Grade {user.grade} Student</span>
             }
             <div className="xs ct3 mt1">Tap photo to change picture</div>
@@ -170,10 +170,23 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
           )}
 
           <div style={{ background: 'rgba(20,184,166,.05)', borderRadius: 11, padding: 13 }}>
-            {(isAdmin || isTutor)
-              ? [['Role', isAdmin ? 'SuperAdmin' : 'Teacher'], ['Account', 'Session-based']].map(([k, v]) => (
+            {isAdmin
+              ? [['Role', 'SuperAdmin'], ['Account', 'PIN-based']].map(([k, v]) => (
                   <div key={k} className="flex jb" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}><span className="ct2">{k}</span><span className="bold">{v}</span></div>
                 ))
+              : isTutor
+              ? (
+                <>
+                  {[
+                    ['Role', 'Tutor'],
+                    ['Subjects', (user.subjects?.map((s) => s === 'MATHEMATICS' ? 'Maths' : 'Phys Sci').join(', ')) || '—'],
+                    ['Grades', (user.teachGrades?.map((g) => `Gr${g}`).join(', ')) || '—'],
+                    ['Joined', fmtDate(user.createdAt)],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex jb" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}><span className="ct2">{k}</span><span className="bold">{v}</span></div>
+                  ))}
+                </>
+              )
               : [['Level', lv.ic + ' ' + lv.name], ['Total XP', '⚡ ' + (user.xp || 0) + ' XP'], ['Joined', fmtDate(user.createdAt)]].map(([k, v]) => (
                   <div key={k} className="flex jb" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}><span className="ct2">{k}</span><span className="bold">{v}</span></div>
                 ))

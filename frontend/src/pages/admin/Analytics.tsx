@@ -18,6 +18,7 @@ interface Overview {
 
 interface StuReport {
   student: { name: string; grade: number; xp: number };
+  tutor: { id: string; name: string } | null;
   totalQuizzes: number; avgScore: number; bestScore: number; passRate: number;
   topicBreakdown: { topic: string; avgScore: number; attempts: number }[];
   recentResults: { id: string; score: number; title: string; topic: string; completedAt: string }[];
@@ -254,6 +255,20 @@ export default function AdminAnalytics() {
 
           {stuReport && !stuLoading && (
             <>
+              {/* Tutor info banner */}
+              <div className="cc mb2" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14, background: stuReport.tutor ? 'rgba(20,184,166,.05)' : 'rgba(0,0,0,.03)' }}>
+                <div className="av" style={{ width: 38, height: 38, fontSize: 16, flexShrink: 0, background: stuReport.tutor ? 'rgba(20,184,166,.15)' : 'rgba(0,0,0,.08)' }}>
+                  {stuReport.tutor ? stuReport.tutor.name.charAt(0).toUpperCase() : '—'}
+                </div>
+                <div>
+                  <div className="xs ct3" style={{ textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600, marginBottom: 2 }}>Allocated Tutor</div>
+                  {stuReport.tutor
+                    ? <div className="bold" style={{ fontSize: 14, color: 'var(--p)' }}>{stuReport.tutor.name}</div>
+                    : <div className="sm ct3" style={{ fontStyle: 'italic' }}>No tutor assigned — contact admin to allocate</div>
+                  }
+                </div>
+              </div>
+
               {/* Student summary KPIs */}
               <div className="stats mb2">
                 {[

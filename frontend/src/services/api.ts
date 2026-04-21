@@ -32,6 +32,10 @@ export const auth = {
     request<{ token: string; user: object; isNew: boolean }>(
       '/auth/register', { method: 'POST', body: JSON.stringify({ name, grade }) }
     ),
+  registerTutor: (name: string, subjects: string[], teachGrades: number[]) =>
+    request<{ token: string; user: object; isNew: boolean }>(
+      '/auth/register-tutor', { method: 'POST', body: JSON.stringify({ name, subjects, teachGrades }) }
+    ),
 };
 
 // ─── Questions ────────────────────────────────────────────────────
@@ -129,8 +133,8 @@ export const analytics = {
 // ─── Parent Access ────────────────────────────────────────────────
 export const parent = {
   listPins: () => request<object[]>('/parent/pins'),
-  createPin: (studentId: string, label?: string) =>
-    request<object>('/parent/pins', { method: 'POST', body: JSON.stringify({ studentId, label }) }),
+  createPin: (studentId: string, label?: string, expiryDays?: number) =>
+    request<object>('/parent/pins', { method: 'POST', body: JSON.stringify({ studentId, label, expiryDays }) }),
   deletePin: (id: string) =>
     request<{ success: boolean }>(`/parent/pins/${id}`, { method: 'DELETE' }),
   view: (pin: string) => request<object>(`/parent/view/${pin}`),

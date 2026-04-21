@@ -19,6 +19,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // For tutors: subjects and grades they teach (used for student pairing recommendations)
+  subjects    String[]
+  teachGrades Int[]
+
   // For students: which tutor manages them
   teacherId String?
   teacher   User?   @relation("TutorStudents", fields: [teacherId], references: [id])

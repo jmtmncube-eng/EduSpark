@@ -216,7 +216,7 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
     }
 
     const [student, results] = await Promise.all([
-      prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, grade: true, xp: true, createdAt: true, photo: true } }),
+      prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, grade: true, xp: true, createdAt: true, photo: true, teacher: { select: { id: true, name: true } } } }),
       prisma.quizResult.findMany({
         where: { userId: targetId },
         include: {
@@ -282,7 +282,8 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
     const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment.topic }));
 
     return res.json({
-      student, totalQuizzes: results.length, avgScore, bestScore, passRate, totalXp: student.xp,
+      student, tutor: student.teacher ?? null,
+      totalQuizzes: results.length, avgScore, bestScore, passRate, totalXp: student.xp,
       examReadiness, topicBreakdown, difficultyBreakdown: diffMap, recentResults, attemptStats, trend,
     });
   } catch (err) {

@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.2.1] — 2026-04-20 — Tutor Onboarding, Analytics & Parent PIN Flow
+
+### Changed
+- Renamed "Teacher" → "Tutor" throughout all UI labels (nav, badges, modals, headings, column headers)
+- Tutor login card updated to show TCH-XXXX PIN format
+
+### Added — Backend
+- `subjects String[]` and `teachGrades Int[]` fields on User model for tutor profiles
+- `POST /auth/register-tutor` endpoint: creates tutor account with subjects + grade preferences after onboarding
+- Tutor name entry now returns `{ needsProfile: true }` — account created only after profile step
+- Analytics `/report/:id` now includes allocated tutor (`tutor: { id, name } | null`) in response
+- Parent PIN `createPin` accepts `expiryDays` param (7 / 14 / 30 / 60); defaults to 7
+
+### Added — Frontend
+- Tutor onboarding modal on login: select subjects (Maths / Phys Sci) and grades (10 / 11 / 12) before account creation
+- Tutor profile shows subjects + grades in Sidebar profile modal
+- Admin Analytics per-student view: tutor info banner above KPI cards (name or "No tutor assigned")
+- Parent PINs: 2-step modal flow — browse full student list (searchable + grade filter) → configure PIN label & expiry
+- Admin Tutors page: subject + grade tags on each tutor card
+- Removed duplicate "Request Students" button from Tutor My Students empty state (kept header button only)
+
+---
+
 ## [1.0.0] — 2026-04-20 — Initial Release 🚀
 
 ### Added — Backend

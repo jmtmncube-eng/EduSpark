@@ -6,6 +6,8 @@ import type { User, TutorRequest } from '../../types';
 
 interface Tutor extends User {
   students: { id: string; name: string; grade: number }[];
+  subjects: string[];
+  teachGrades: number[];
 }
 
 interface StudentResult { id: string; name: string; grade: number; pin: string; }
@@ -103,8 +105,8 @@ export default function AdminTutors() {
   return (
     <div>
       <div className="ph">
-        <h2>👩‍🏫 Teachers</h2>
-        <p>Manage teacher accounts and allocate students to their classes. Teachers sign up via the login page under the "Teacher" tab and receive a TCH-XXXX PIN.</p>
+        <h2>📚 Tutors</h2>
+        <p>Manage tutor accounts and allocate students to their classes. Tutors sign up via the login page under the "Tutor" tab and receive a TCH-XXXX PIN.</p>
       </div>
 
       {/* Pending pairing requests */}
@@ -153,9 +155,9 @@ export default function AdminTutors() {
 
       {list.length === 0 ? (
         <div className="empty">
-          <div className="eico">👩‍🏫</div>
-          <h3>No teachers yet</h3>
-          <p>Teachers register on the login page by selecting the "Teacher" tab and entering their name. They'll appear here once registered.</p>
+          <div className="eico">📚</div>
+          <h3>No tutors yet</h3>
+          <p>Tutors register on the login page by selecting the "Tutor" tab and entering their name and teaching profile. They'll appear here once registered.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -168,6 +170,16 @@ export default function AdminTutors() {
                   </div>
                   <div>
                     <div className="bold fh" style={{ fontSize: 15 }}>{t.name}</div>
+                    {(t.subjects?.length > 0 || t.teachGrades?.length > 0) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '4px 0 2px' }}>
+                        {t.subjects?.map((s) => (
+                          <span key={s} className="badge btl" style={{ fontSize: 9.5 }}>{s === 'MATHEMATICS' ? '📐 Maths' : '⚗️ Phys Sci'}</span>
+                        ))}
+                        {t.teachGrades?.map((g) => (
+                          <span key={g} className="badge bcy" style={{ fontSize: 9.5 }}>Gr{g}</span>
+                        ))}
+                      </div>
+                    )}
                     <div className="xs ct3" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
                       <span
                         style={{ fontFamily: 'var(--fh)', fontWeight: 700, letterSpacing: '.1em', color: 'var(--p)', cursor: 'pointer', fontSize: 12 }}
@@ -269,7 +281,7 @@ export default function AdminTutors() {
 
       {/* Reset Tutor PIN Modal */}
       {resetTutor && (
-        <Modal title="🔑 Reset Teacher PIN" onClose={() => setResetTutor(null)}>
+        <Modal title="🔑 Reset Tutor PIN" onClose={() => setResetTutor(null)}>
           {newPin ? (
             <>
               <div className="pin-hero mb2" onClick={() => copyPin(newPin)}>
@@ -288,7 +300,7 @@ export default function AdminTutors() {
                   <div className="sm ct2">Current PIN: <strong className="cp">{resetTutor.pin || '—'}</strong></div>
                 </div>
               </div>
-              <p className="sm ct2 mb2">A new TCH-XXXX PIN will be generated. The old one stops working immediately.</p>
+              <p className="sm ct2 mb2">A new TCH-XXXX tutor PIN will be generated. The old one stops working immediately.</p>
               <div className="fg">
                 <label className="lbl">Custom 4-char suffix (optional)</label>
                 <input type="text" className="input" value={customPin} onChange={(e) => setCustomPin(e.target.value.toUpperCase().slice(0, 4))} placeholder="Auto-generated if blank" maxLength={4} />

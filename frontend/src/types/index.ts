@@ -16,6 +16,8 @@ export interface User {
   teacherId?: string | null;
   teacher?: { id: string; name: string } | null;
   students?: { id: string; name: string; grade: number }[];
+  subjects?: string[];
+  teachGrades?: number[];
 }
 
 export interface Question {

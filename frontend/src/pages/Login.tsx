@@ -11,19 +11,35 @@ const MOTIVATIONAL = [
   'Great minds are built one study session at a time. 💪',
   'Maths opens every door. Science explains every wonder. 🚀',
   'Your hard work today is your success story tomorrow. 🏆',
-  'Believe in yourself — your teacher already does. ✨',
+  'Believe in yourself — your tutor already does. ✨',
+];
+
+const SUBJECTS = [
+  { value: 'MATHEMATICS', label: '📐 Mathematics' },
+  { value: 'PHYSICAL_SCIENCES', label: '⚗️ Physical Sciences' },
 ];
 
 export default function Login() {
   const [role, setRole] = useState<'student' | 'tutor' | 'admin'>('student');
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Shared PIN reveal state (students + tutors)
   const [newPin, setNewPin] = useState('');
   const [newName, setNewName] = useState('');
   const [pinCopied, setPinCopied] = useState(false);
+
+  // Student registration state
   const [gradeModal, setGradeModal] = useState(false);
   const [pendingName, setPendingName] = useState('');
   const [grade, setGrade] = useState('10');
+
+  // Tutor profile state
+  const [tutorModal, setTutorModal] = useState(false);
+  const [pendingTutorName, setPendingTutorName] = useState('');
+  const [tutorSubjects, setTutorSubjects] = useState<string[]>([]);
+  const [tutorGrades, setTutorGrades] = useState<number[]>([]);
+
   const [theme, setTheme] = useState(() => localStorage.getItem('es_theme') || 'light');
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -36,28 +52,41 @@ export default function Login() {
     localStorage.setItem('es_theme', next);
   }
 
+  function toggleSubject(s: string) {
+    setTutorSubjects((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+  }
+
+  function toggleTutorGrade(g: number) {
+    setTutorGrades((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
+  }
+
   async function doLogin() {
     const trimmed = value.trim();
     if (!trimmed) { showToast('Please enter your name or PIN', 'warn'); return; }
     setLoading(true);
     try {
       const res = await auth.login(trimmed, role);
-      if ((res as { needsGrade?: boolean }).needsGrade) {
-        // New student — show grade picker
-        setPendingName((res as { name: string }).name);
+      const r = res as { needsGrade?: boolean; needsProfile?: boolean; isNew?: boolean; token?: string; name?: string; user?: User };
+
+      if (r.needsGrade) {
+        setPendingName(r.name!);
         setGradeModal(true);
-      } else if ((res as { isNew?: boolean; token?: string }).isNew && (res as { token?: string }).token) {
-        // New tutor — log in immediately and show their TCH pin
-        login((res as { user: User }).user, (res as { token: string }).token);
-        const pin = (res as { user: User }).user.pin || '';
-        setNewPin(pin);
-        setNewName((res as { user: User }).user.name);
+      } else if (r.needsProfile) {
+        // New tutor — collect subjects + grades
+        setPendingTutorName(r.name!);
+        setTutorSubjects([]);
+        setTutorGrades([]);
+        setTutorModal(true);
+      } else if (r.isNew && r.token) {
+        // Shouldn't reach here in normal flow, but handle gracefully
+        login(r.user!, r.token);
+        setNewPin(r.user!.pin || '');
+        setNewName(r.user!.name);
         setPinCopied(false);
-      } else if ((res as { token?: string }).token) {
-        // Returning user
-        login((res as { user: User }).user, (res as { token: string }).token);
+      } else if (r.token) {
+        login(r.user!, r.token);
         navigate('/app/dashboard');
-        showToast(`Welcome back, ${(res as { user: User }).user.name}! 🎉`);
+        showToast(`Welcome back, ${r.user!.name}! 🎉`);
       }
     } catch (e: unknown) {
       showToast((e as Error).message || 'Login failed', 'err');
@@ -66,15 +95,34 @@ export default function Login() {
     }
   }
 
-  async function doRegister() {
+  async function doRegisterStudent() {
     setLoading(true);
     try {
       const res = await auth.register(pendingName, Number(grade));
-      login((res as { user: User }).user, (res as { token: string }).token);
-      const pin = (res as { user: User }).user.pin || '';
-      setNewPin(pin);
+      const r = res as { token: string; user: User };
+      login(r.user, r.token);
+      setNewPin(r.user.pin || '');
       setNewName(pendingName);
       setGradeModal(false);
+      setPinCopied(false);
+    } catch (e: unknown) {
+      showToast((e as Error).message || 'Registration failed', 'err');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function doRegisterTutor() {
+    if (tutorSubjects.length === 0) { showToast('Select at least one subject', 'warn'); return; }
+    if (tutorGrades.length === 0) { showToast('Select at least one grade', 'warn'); return; }
+    setLoading(true);
+    try {
+      const res = await auth.registerTutor(pendingTutorName, tutorSubjects, tutorGrades);
+      const r = res as { token: string; user: User };
+      login(r.user, r.token);
+      setNewPin(r.user.pin || '');
+      setNewName(pendingTutorName);
+      setTutorModal(false);
       setPinCopied(false);
     } catch (e: unknown) {
       showToast((e as Error).message || 'Registration failed', 'err');
@@ -91,10 +139,7 @@ export default function Login() {
   }
 
   function confirmPinSaved() {
-    if (!pinCopied) {
-      showToast('Please copy your PIN first — you cannot sign in without it!', 'warn');
-      return;
-    }
+    if (!pinCopied) { showToast('Please copy your PIN first — you cannot sign in without it!', 'warn'); return; }
     navigate('/app/dashboard');
     setNewPin('');
   }
@@ -104,11 +149,11 @@ export default function Login() {
   const placeholder =
     role === 'admin' ? 'Enter your PIN (e.g. ADM-XXXX)' :
     role === 'tutor' ? 'Enter your name or PIN (TCH-XXXX)' :
-    'Enter your PIN (e.g. SPK-XXXX) or name';
+    'Enter your PIN (SPK-XXXX) or your name';
 
   const hint =
     role === 'admin' ? 'Admin access requires a PIN. Contact the platform owner if locked out.' :
-    role === 'tutor' ? 'New teacher? Enter your name to create an account and receive your PIN.' :
+    role === 'tutor' ? 'New tutor? Enter your name to create an account. Returning? Use your TCH-XXXX PIN.' :
     'Returning student? Enter your SPK-XXXX PIN. First time? Enter your name.';
 
   return (
@@ -128,21 +173,17 @@ export default function Login() {
         </div>
 
         <div className="role-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          <div className={`role-card ${role === 'student' ? 'active' : ''}`} onClick={() => { setRole('student'); setValue(''); }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>🎒</div>
-            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Student</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>SPK-XXXX</div>
-          </div>
-          <div className={`role-card ${role === 'tutor' ? 'active' : ''}`} onClick={() => { setRole('tutor'); setValue(''); }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>👩‍🏫</div>
-            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Teacher</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>TCH-XXXX</div>
-          </div>
-          <div className={`role-card ${role === 'admin' ? 'active' : ''}`} onClick={() => { setRole('admin'); setValue(''); }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>👨‍💼</div>
-            <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>Admin</div>
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>ADM-XXXX</div>
-          </div>
+          {([
+            { key: 'student', ico: '🎒', label: 'Student',  sub: 'SPK-XXXX' },
+            { key: 'tutor',   ico: '📚', label: 'Tutor',    sub: 'TCH-XXXX' },
+            { key: 'admin',   ico: '👨‍💼', label: 'Admin',    sub: 'ADM-XXXX' },
+          ] as const).map(({ key, ico, label, sub }) => (
+            <div key={key} className={`role-card ${role === key ? 'active' : ''}`} onClick={() => { setRole(key); setValue(''); }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>{ico}</div>
+              <div style={{ fontFamily: 'var(--fh)', fontSize: 14, fontWeight: 600 }}>{label}</div>
+              <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>{sub}</div>
+            </div>
+          ))}
         </div>
 
         <input
@@ -160,7 +201,7 @@ export default function Login() {
         <div style={{ fontSize: 11, color: 'var(--t4)', textAlign: 'center' }}>Mathematics &amp; Physical Sciences · CAPS Aligned</div>
       </div>
 
-      {/* Grade picker — new students only */}
+      {/* Grade picker — new students */}
       {gradeModal && (
         <Modal title={`👋 Welcome, ${pendingName}!`} onClose={() => setGradeModal(false)}>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -177,28 +218,73 @@ export default function Login() {
             </select>
           </div>
           <div className="flex g1 mt1">
-            <button className="btn bp" onClick={doRegister} disabled={loading}>{loading ? '…' : '🚀 Create My Account'}</button>
+            <button className="btn bp" onClick={doRegisterStudent} disabled={loading}>{loading ? '…' : '🚀 Create My Account'}</button>
             <button className="btn bg-btn" onClick={() => setGradeModal(false)}>Cancel</button>
           </div>
         </Modal>
       )}
 
-      {/* PIN reveal — must copy before continuing (students and new tutors) */}
-      {newPin && (
-        <Modal title={newName && newPin.startsWith('TCH') ? '👩‍🏫 Teacher Account Created!' : '🎉 Account Created!'} onClose={() => {}}>
+      {/* Tutor profile — new tutors: subjects + grades */}
+      {tutorModal && (
+        <Modal title={`📚 Welcome, ${pendingTutorName}!`} onClose={() => setTutorModal(false)}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 42, marginBottom: 6 }}>{newPin.startsWith('TCH') ? '👩‍🏫' : '🔐'}</div>
+            <div style={{ fontSize: 44, marginBottom: 6 }}>📚</div>
+            <p className="sm ct2">Let's set up your tutor profile. This helps us pair you with the right students.</p>
+          </div>
+
+          <div className="fg mb2">
+            <label className="lbl">What subjects do you teach?</label>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              {SUBJECTS.map(({ value: sv, label: sl }) => (
+                <label key={sv} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', border: `2px solid ${tutorSubjects.includes(sv) ? 'var(--p)' : 'var(--bd)'}`, borderRadius: 10, cursor: 'pointer', background: tutorSubjects.includes(sv) ? 'rgba(20,184,166,.08)' : 'transparent', transition: 'all .18s', fontSize: 13, fontWeight: 600 }}>
+                  <input type="checkbox" checked={tutorSubjects.includes(sv)} onChange={() => toggleSubject(sv)} style={{ display: 'none' }} />
+                  <span style={{ fontSize: 20 }}>{tutorSubjects.includes(sv) ? '✅' : '⬜'}</span>
+                  {sl}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="fg mb2">
+            <label className="lbl">What grades do you teach?</label>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              {[10, 11, 12].map((g) => (
+                <label key={g} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', border: `2px solid ${tutorGrades.includes(g) ? 'var(--p)' : 'var(--bd)'}`, borderRadius: 10, cursor: 'pointer', background: tutorGrades.includes(g) ? 'rgba(20,184,166,.08)' : 'transparent', transition: 'all .18s', fontSize: 13, fontWeight: 700 }}>
+                  <input type="checkbox" checked={tutorGrades.includes(g)} onChange={() => toggleTutorGrade(g)} style={{ display: 'none' }} />
+                  <span style={{ fontSize: 18 }}>{tutorGrades.includes(g) ? '✅' : '⬜'}</span>
+                  Grade {g}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(20,184,166,.06)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: 'var(--t3)', marginBottom: 16 }}>
+            💡 This info is used to recommend students whose subjects and grades match your teaching profile.
+          </div>
+
+          <div className="flex g1">
+            <button className="btn bp" onClick={doRegisterTutor} disabled={loading}>{loading ? '…' : '🚀 Create My Account'}</button>
+            <button className="btn bg-btn" onClick={() => setTutorModal(false)}>Cancel</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* PIN reveal — students + tutors */}
+      {newPin && (
+        <Modal title={newPin.startsWith('TCH') ? '📚 Tutor Account Created!' : '🎉 Account Created!'} onClose={() => {}}>
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div style={{ fontSize: 42, marginBottom: 6 }}>{newPin.startsWith('TCH') ? '📚' : '🔐'}</div>
             <h3 className="fh" style={{ fontSize: 19, marginBottom: 4 }}>Your Permanent PIN</h3>
             <p className="sm ct2">
               {newPin.startsWith('TCH')
-                ? 'This PIN is how you sign in as a Teacher. Save it — it cannot be recovered without an Admin!'
-                : 'This is the only way to access your account. Your teacher cannot see it. Write it down now!'}
+                ? 'This PIN is how you sign in as a Tutor. Save it — it cannot be recovered without an Admin!'
+                : 'This is the only way to access your account. Your tutor cannot see it. Write it down now!'}
             </p>
           </div>
 
           <div className="pin-reveal-card" onClick={copyPin}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: '.1em', marginBottom: 6 }}>
-              {newPin.startsWith('TCH') ? 'TEACHER PIN FOR' : 'PIN CODE FOR'} {newName.toUpperCase()}
+              {newPin.startsWith('TCH') ? 'TUTOR PIN FOR' : 'PIN CODE FOR'} {newName.toUpperCase()}
             </div>
             <div className="pin-big">{newPin}</div>
             <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>

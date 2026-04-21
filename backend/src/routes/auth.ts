@@ -29,7 +29,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Please enter your Admin PIN (ADM-XXXX) to sign in.' });
     }
 
-    // Tutor: name → create account with TCH pin, or redirect to PIN if already exists
+    // Tutor: name → check existing, else prompt for profile setup
     if (role === 'tutor') {
       const existing = await prisma.user.findFirst({
         where: { role: 'TUTOR', name: { equals: input, mode: 'insensitive' } },
@@ -40,15 +40,8 @@ router.post('/login', async (req: Request, res: Response) => {
           hasAccount: true,
         });
       }
-      const pin = await makeUniquePin(
-        async (p) => !!(await prisma.user.findUnique({ where: { pin: p } })),
-        generateTutorPin
-      );
-      const tutor = await prisma.user.create({
-        data: { name: input, role: 'TUTOR', pin, active: true },
-      });
-      const token = signToken({ userId: tutor.id, role: 'TUTOR' });
-      return res.json({ token, user: sanitize(tutor), isNew: true });
+      // New tutor — prompt frontend for subjects + grades before creating account
+      return res.json({ needsProfile: true, name: input });
     }
 
     // Student: name → check if returning, else show grade picker
@@ -69,6 +62,7 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// Student registration (after grade picker)
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const { name, grade } = req.body as { name: string; grade: number };
@@ -88,6 +82,47 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const token = signToken({ userId: user.id, role: 'STUDENT' });
     return res.json({ token, user: sanitize(user), isNew: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Tutor registration (after subject/grade profile setup)
+router.post('/register-tutor', async (req: Request, res: Response) => {
+  try {
+    const { name, subjects, teachGrades } = req.body as {
+      name: string;
+      subjects: string[];
+      teachGrades: number[];
+    };
+    if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+
+    const exists = await prisma.user.findFirst({
+      where: { role: 'TUTOR', name: { equals: name.trim(), mode: 'insensitive' } },
+    });
+    if (exists) {
+      return res.status(409).json({ error: 'A tutor with this name already exists. Use your PIN to sign in.', hasAccount: true });
+    }
+
+    const pin = await makeUniquePin(
+      async (p) => !!(await prisma.user.findUnique({ where: { pin: p } })),
+      generateTutorPin
+    );
+
+    const tutor = await prisma.user.create({
+      data: {
+        name: name.trim(),
+        role: 'TUTOR',
+        pin,
+        active: true,
+        subjects: subjects ?? [],
+        teachGrades: teachGrades ?? [],
+      },
+    });
+
+    const token = signToken({ userId: tutor.id, role: 'TUTOR' });
+    return res.json({ token, user: sanitize(tutor), isNew: true });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

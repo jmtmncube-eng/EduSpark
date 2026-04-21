@@ -159,13 +159,12 @@ export default function AdminStudents() {
         <div className="empty">
           <div className="eico">👥</div>
           <h3>{isTutor ? 'No students allocated yet' : 'No students yet'}</h3>
-          <p>{isTutor ? 'Request students via the button above, or wait for admin to allocate some to your class.' : 'Students appear once they register.'}</p>
-          {isTutor && <button className="btn bp mt2" onClick={openRequestModal}>+ Request Students</button>}
+          <p>{isTutor ? 'Use the "Request Students" button above, or wait for the admin to allocate students to your class.' : 'Students appear once they register.'}</p>
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="dt">
-            <thead><tr><th>Student</th><th>PIN</th><th>Grade</th>{isAdmin && <th>Teacher</th>}<th>Level</th><th>Quizzes</th><th>Avg</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Student</th><th>PIN</th><th>Grade</th>{isAdmin && <th>Tutor</th>}<th>Level</th><th>Quizzes</th><th>Avg</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {list.map((s) => {
                 const avg = s.results?.length ? (s.results.reduce((x, r) => x + r.score, 0) / s.results.length).toFixed(1) : '—';

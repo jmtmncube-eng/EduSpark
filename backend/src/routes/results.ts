@@ -28,6 +28,20 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
 
+    // Validate the student is actually assigned to this work
+    const student = await prisma.user.findUnique({ where: { id: userId } });
+    const fromTheirTutor = assignment.tutorId === null || assignment.tutorId === student?.teacherId;
+    function isAssignedTo(assignTo: string, grade: number | null, uid: string) {
+      if (assignTo === 'all') return true;
+      if (assignTo === 'gr10') return grade === 10;
+      if (assignTo === 'gr11') return grade === 11;
+      if (assignTo === 'gr12') return grade === 12;
+      return assignTo === uid;
+    }
+    if (!fromTheirTutor || !isAssignedTo(assignment.assignTo, student?.grade ?? null, userId)) {
+      return res.status(403).json({ error: 'This assignment is not assigned to you' });
+    }
+
     if (attemptCount >= assignment.maxAttempts) {
       return res.status(400).json({ error: 'Maximum attempts reached for this assignment' });
     }
@@ -124,8 +138,21 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 // GET /api/results/assignment/:assignmentId
 router.get('/assignment/:assignmentId', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const { role, userId } = req.user!;
     const where: Record<string, unknown> = { assignmentId: req.params.assignmentId };
-    if (req.user!.role !== 'ADMIN') where.userId = req.user!.userId;
+
+    if (role === 'ADMIN') {
+      // Admin sees all results for this assignment
+    } else if (role === 'TUTOR') {
+      // Tutor sees results only if the assignment belongs to them
+      const assignment = await prisma.assignment.findUnique({ where: { id: req.params.assignmentId } });
+      if (!assignment || assignment.tutorId !== userId) {
+        return res.status(403).json({ error: 'You can only view results for your own assignments' });
+      }
+    } else {
+      // Student sees only their own results
+      where.userId = userId;
+    }
 
     const results = await prisma.quizResult.findMany({
       where,

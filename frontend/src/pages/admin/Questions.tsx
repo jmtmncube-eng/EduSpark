@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { questions as questionsApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Question } from '../../types';
 import { subjectBadge, diffBadge, visLabel, compressImage } from '../../utils/helpers';
 
-const CAPS_TOPICS: Record<string, Record<number, string[]>> = {
+const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: { 10: ['Algebra','Functions & Graphs','Trigonometry','Statistics','Finance & Growth','Euclidean Geometry'], 11: ['Quadratic Equations','Trigonometric Functions','Analytical Geometry','Finance','Counting & Probability','Inequalities'], 12: ['Differential Calculus','Sequences & Series','Polynomials','Exponential & Logarithms','Regression Analysis','Trigonometry Advanced'] },
   physical_sciences: { 10: ["Newton's Laws",'Momentum','Energy & Power','Waves & Sound','Electricity & Magnetism','Chemistry: Matter'], 11: ['Projectile Motion','Electrostatics','Electric Circuits','Intermolecular Forces','Chemical Equilibrium','Vectors & Scalars'], 12: ['Momentum & Impulse','Vertical Projectile Motion','Electrodynamics','Organic Chemistry','Electrochemistry','Optical Phenomena'] },
 };
@@ -15,9 +16,17 @@ interface QForm { subject: string; grade: string; topic: string; difficulty: str
 const defaultForm = (): QForm => ({ subject: 'mathematics', grade: '10', topic: 'Algebra', difficulty: 'Easy', question: '', options: '', answer: '', solution: '', visibility: 'all', imageData: '' });
 
 export default function AdminQuestions() {
+  const { user } = useAuth();
+  const isTutor = user?.role === 'TUTOR';
+
+  // Default grade to first of tutor's taught grades (or '10' for admin)
+  const defaultGrade = isTutor && user?.teachGrades?.length ? String(Math.min(...(user.teachGrades as number[]))) : '10';
+
   const [qs, setQs] = useState<Question[]>([]);
   const [search, setSearch] = useState('');
   const [filterSub, setFilterSub] = useState('');
+  const [filterGrade, setFilterGrade] = useState(isTutor && user?.teachGrades?.length ? defaultGrade : '');
+  const [filterTopic, setFilterTopic] = useState('');
   const [filterVis, setFilterVis] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -27,23 +36,32 @@ export default function AdminQuestions() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Generate controls
   const [genSub, setGenSub] = useState('mathematics');
-  const [genGr, setGenGr] = useState('10');
+  const [genGr, setGenGr] = useState(defaultGrade);
   const [genTp, setGenTp] = useState('Algebra');
   const [genCt, setGenCt] = useState('5');
 
   const load = useCallback(async () => {
     const params: Record<string, string> = {};
     if (filterSub) params.subject = filterSub.toUpperCase();
+    if (filterGrade) params.grade = filterGrade;
+    if (filterTopic) params.topic = filterTopic;
     if (filterVis) params.visibility = filterVis.toUpperCase();
     if (search) params.search = search;
     const data = await questionsApi.list(params);
     setQs(data as Question[]);
-  }, [search, filterSub, filterVis]);
+  }, [search, filterSub, filterGrade, filterTopic, filterVis]);
 
   useEffect(() => { load(); }, [load]);
 
-  const topics = CAPS_TOPICS[genSub]?.[Number(genGr)] || [];
-  const formTopics = CAPS_TOPICS[form.subject]?.[Number(form.grade)] || [];
+  // Topics available for the current grade/subject filter combination
+  const filterTopics = filterSub && filterGrade ? TOPICS[filterSub]?.[Number(filterGrade)] || [] : [];
+  const topics = TOPICS[genSub]?.[Number(genGr)] || [];
+  const formTopics = TOPICS[form.subject]?.[Number(form.grade)] || [];
+
+  // Grade options — tutors restricted to their taught grades
+  const gradeOptions = isTutor && user?.teachGrades?.length
+    ? (user.teachGrades as number[]).sort()
+    : [10, 11, 12];
 
   async function generate() {
     try {
@@ -101,7 +119,7 @@ export default function AdminQuestions() {
 
   return (
     <div>
-      <div className="ph"><h2>📝 Question Bank</h2><p>Generate, upload and manage CAPS questions.</p></div>
+      <div className="ph"><h2>📝 Question Bank</h2><p>Generate, upload and manage questions aligned to CAPS, IEB, NSC &amp; Cambridge.</p></div>
 
       {/* Generate */}
       <div className="card mb2">
@@ -113,8 +131,8 @@ export default function AdminQuestions() {
             </select>
           </div>
           <div className="fg"><label className="lbl">Grade</label>
-            <select className="select" value={genGr} onChange={(e) => { setGenGr(e.target.value); setGenTp(CAPS_TOPICS[genSub]?.[Number(e.target.value)]?.[0] || ''); }}>
-              <option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option>
+            <select className="select" value={genGr} onChange={(e) => { setGenGr(e.target.value); setGenTp(TOPICS[genSub]?.[Number(e.target.value)]?.[0] || ''); }}>
+              {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
             </select>
           </div>
           <div className="fg"><label className="lbl">Topic</label>
@@ -141,12 +159,22 @@ export default function AdminQuestions() {
           <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
           <input type="text" className="input" style={{ paddingLeft: 34 }} placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="select" style={{ width: 'auto' }} value={filterSub} onChange={(e) => setFilterSub(e.target.value)}>
+        <select className="select" style={{ width: 'auto' }} value={filterSub} onChange={(e) => { setFilterSub(e.target.value); setFilterTopic(''); }}>
           <option value="">All Subjects</option><option value="mathematics">Maths</option><option value="physical_sciences">Physics</option>
         </select>
-        <select className="select" style={{ width: 'auto' }} value={filterVis} onChange={(e) => setFilterVis(e.target.value)}>
-          <option value="">All Visibility</option><option value="all">Visible All</option><option value="gr10">Gr10 Only</option><option value="gr11">Gr11 Only</option><option value="gr12">Gr12 Only</option><option value="none">Hidden</option>
+        <select className="select" style={{ width: 'auto' }} value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); setFilterTopic(''); }}>
+          <option value="">All Grades</option>
+          {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
         </select>
+        <select className="select" style={{ width: 'auto' }} value={filterTopic} onChange={(e) => setFilterTopic(e.target.value)} disabled={filterTopics.length === 0}>
+          <option value="">{filterTopics.length === 0 ? 'Select subject & grade first' : 'All Topics'}</option>
+          {filterTopics.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {!isTutor && (
+          <select className="select" style={{ width: 'auto' }} value={filterVis} onChange={(e) => setFilterVis(e.target.value)}>
+            <option value="">All Visibility</option><option value="all">Visible All</option><option value="gr10">Gr10 Only</option><option value="gr11">Gr11 Only</option><option value="gr12">Gr12 Only</option><option value="none">Hidden</option>
+          </select>
+        )}
       </div>
 
       {/* Question list */}
@@ -192,13 +220,13 @@ export default function AdminQuestions() {
         <Modal title={editId ? 'Edit Question' : 'Add Question'} onClose={() => { setShowAdd(false); setEditId(''); }} wide>
           <div className="grid2" style={{ gap: 10 }}>
             <div className="fg"><label className="lbl">Subject</label>
-              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: CAPS_TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
+              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
                 <option value="mathematics">Mathematics</option><option value="physical_sciences">Physical Sciences</option>
               </select>
             </div>
             <div className="fg"><label className="lbl">Grade</label>
-              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: CAPS_TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
-                <option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option>
+              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
+                {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
               </select>
             </div>
             <div className="fg"><label className="lbl">Topic</label>

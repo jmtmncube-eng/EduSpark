@@ -22,12 +22,15 @@ const visMap: Record<string, Visibility> = {
 // GET /api/questions
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { subject, visibility, search, grade } = req.query;
+    const { subject, visibility, search, grade, topic } = req.query;
     const user = req.user!;
 
     const where: Record<string, unknown> = {};
 
     if (subject) where.subject = subjectMap[subject as string] || subject;
+    if (topic) where.topic = topic as string;
+    if (grade) where.grade = Number(grade);
+
     if (visibility && user.role === 'ADMIN') where.visibility = visMap[visibility as string] || visibility;
 
     // Students only see visible questions for their grade
@@ -43,7 +46,6 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         { topic: { contains: search as string, mode: 'insensitive' } },
       ];
     }
-    if (grade && user.role === 'ADMIN') where.grade = Number(grade);
 
     const questions = await prisma.question.findMany({
       where,

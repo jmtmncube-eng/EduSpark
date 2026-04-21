@@ -81,6 +81,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 // GET /api/assignments/:id
 router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const { role, userId } = req.user!;
     const assignment = await prisma.assignment.findUnique({
       where: { id: req.params.id },
       include: {
@@ -91,6 +92,20 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
       },
     });
     if (!assignment) return res.status(404).json({ error: 'Not found' });
+
+    if (role === 'STUDENT') {
+      const student = await prisma.user.findUnique({ where: { id: userId } });
+      const fromTheirTutor = assignment.tutorId === null || assignment.tutorId === student?.teacherId;
+      const assignedToThem = isAssignedTo(assignment.assignTo, student?.grade ?? null, userId);
+      if (!fromTheirTutor || !assignedToThem) {
+        return res.status(403).json({ error: 'This assignment is not assigned to you' });
+      }
+    }
+
+    if (role === 'TUTOR' && assignment.tutorId !== userId) {
+      return res.status(403).json({ error: 'You can only view your own assignments' });
+    }
+
     return res.json(assignment);
   } catch (err) {
     console.error(err);

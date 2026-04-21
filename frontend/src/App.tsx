@@ -74,7 +74,7 @@ function AppShell() {
             <div className="tb-t">{title}</div>
           </div>
           <div className="flex ia g2">
-            {!isAdmin && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--p)' }}>⚡ {user.xp || 0} XP</span>}
+            {!isAdmin && (user.xp || 0) > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--p)' }}>⚡ {user.xp} XP</span>}
           </div>
         </div>
 

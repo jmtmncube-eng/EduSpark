@@ -95,21 +95,23 @@ export default function ParentSession() {
           </div>
         </div>
 
-        {/* KPI cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 18 }}>
-          {[
-            { ico: '📝', val: data.totalQuizzes, lbl: 'Quizzes Done' },
-            { ico: '🎯', val: `${data.avgScore}%`, lbl: 'Average Score', col: scoreColor(data.avgScore) },
-            { ico: '🏆', val: `${data.bestScore}%`, lbl: 'Best Score', col: scoreColor(data.bestScore) },
-            { ico: '✅', val: `${data.passRate}%`, lbl: 'Pass Rate', col: scoreColor(data.passRate) },
-          ].map((k) => (
-            <div key={k.lbl} style={{ background: 'rgba(255,255,255,.65)', backdropFilter: 'blur(16px)', borderRadius: 14, padding: '16px 18px', border: '1.5px solid rgba(255,255,255,.85)', textAlign: 'center' }}>
-              <div style={{ fontSize: 26, marginBottom: 6 }}>{k.ico}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: k.col || '#0f766e' }}>{k.val}</div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{k.lbl}</div>
-            </div>
-          ))}
-        </div>
+        {/* KPI cards — only shown once the student has completed at least one quiz */}
+        {data.totalQuizzes > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 18 }}>
+            {[
+              { ico: '📝', val: data.totalQuizzes, lbl: 'Quizzes Done' },
+              { ico: '🎯', val: `${data.avgScore}%`, lbl: 'Average Score', col: scoreColor(data.avgScore) },
+              { ico: '🏆', val: `${data.bestScore}%`, lbl: 'Best Score', col: scoreColor(data.bestScore) },
+              { ico: '✅', val: `${data.passRate}%`, lbl: 'Pass Rate', col: scoreColor(data.passRate) },
+            ].map((k) => (
+              <div key={k.lbl} style={{ background: 'rgba(255,255,255,.65)', backdropFilter: 'blur(16px)', borderRadius: 14, padding: '16px 18px', border: '1.5px solid rgba(255,255,255,.85)', textAlign: 'center' }}>
+                <div style={{ fontSize: 26, marginBottom: 6 }}>{k.ico}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: k.col || '#0f766e' }}>{k.val}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{k.lbl}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Topic breakdown */}
         {data.topicBreakdown.length > 0 && (

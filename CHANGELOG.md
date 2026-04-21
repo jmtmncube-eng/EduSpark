@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.5.0] — 2026-04-21 — Security Fixes, Topic Filter & Multi-Syllabus Support
+
+### Fixed — Backend
+- `GET /api/assignments/:id` now validates student access — checks `assignTo` scope and tutor ownership before returning the assignment; students cannot fetch assignments outside their scope
+- `POST /api/results` (quiz submission) now validates the student is assigned to the assignment before accepting a submission
+- `GET /api/results/assignment/:id` now allows tutors to view all results for their own assignments (previously returned only the tutor's own results as if they were a student)
+- `GET /api/questions` now accepts `topic` and `grade` query params for all roles (previously `grade` was admin-only and `topic` was not supported)
+
+### Added — Frontend
+- **Question bank topic filter**: selecting a subject and grade reveals a topic dropdown; only questions for that topic are shown — applies to both admin and tutor
+- **Question bank grade filter**: visible for all staff; tutors default to their taught grades and cannot be shown grades outside their profile
+- **Tutor grade scoping**: question bank grade selector and Add/Edit question form are pre-scoped to the tutor's taught grades; tutors cannot create or browse questions outside their assigned grades
+- Visibility filter hidden from tutor view (tutors see all non-hidden questions by design)
+
+### Changed
+- Question bank page heading updated from "CAPS questions" to "questions aligned to CAPS, IEB, NSC & Cambridge" — the platform is not limited to one syllabus
+- `CAPS_TOPICS` constant renamed to `TOPICS` in the frontend to reflect multi-syllabus scope
+- Parent session KPI cards (Avg Score, Best Score, Pass Rate, Quizzes Done) are now hidden until the student has completed at least one quiz — prevents a confusing all-zero state
+- Student dashboard empty state now links to the Question Bank so students can practise while waiting for assignments
+- XP badge in the top bar is now hidden when XP is 0 (first-time students no longer see "⚡ 0 XP")
+
+---
+
 ## [1.4.0] — 2026-04-21 — Parent PIN Sessions, Exam Readiness Gate & Dashboard Cleanup
 
 ### Added — Backend

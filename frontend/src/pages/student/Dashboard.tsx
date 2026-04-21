@@ -92,7 +92,7 @@ export default function StudentDashboard() {
 
       <div className="sec-h">📋 My Assigned Quizzes</div>
       {asgns.length === 0 ? (
-        <div className="empty"><div className="eico">📭</div><h3>No quizzes yet</h3><p>Your teacher will assign quizzes soon. Check back later!</p></div>
+        <div className="empty"><div className="eico">📭</div><h3>No quizzes assigned yet</h3><p>Your tutor hasn't assigned any work yet. In the meantime, practise in the <button className="btn bp btn-sm" style={{ marginTop: 4 }} onClick={() => navigate('/app/questions')}>Question Bank →</button></p></div>
       ) : (
         <div className="gauto">
           {asgns.length > 0 && asgns.every((a) => doneIds.includes(a.id)) ? (

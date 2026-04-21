@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { questions as questionsApi } from '../../services/api';
+import { questions as questionsApi, results as resultsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import type { Question } from '../../types';
 import { subjectBadge, diffBadge } from '../../utils/helpers';
 
-interface PracticeResult { questionId: string; correct: boolean; time: number; }
+interface PracticeResult { questionId: string; correct: boolean; time: number; selectedAnswer: string | null; }
 
 export default function StudentQuestions() {
   const { user } = useAuth();
@@ -21,7 +21,8 @@ export default function StudentQuestions() {
   const [pResults, setPResults] = useState<PracticeResult[]>([]);
   const [pDone, setPDone] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
-  const [qTime, setQTime] = useState(0); // time spent on current question
+  const [qTime, setQTime] = useState(0);
+  const [practiceXp, setPracticeXp] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -56,14 +57,14 @@ export default function StudentQuestions() {
     if (pool.length === 0) return;
     setPracticeQs(pool);
     setPIdx(0); setPSelected(null); setPRevealed(false);
-    setPResults([]); setPDone(false);
+    setPResults([]); setPDone(false); setPracticeXp(0);
     setPracticeMode(true);
     setTimeout(startTimers, 50);
   }
 
   function autoNext() {
     stopTimers();
-    setPResults((prev) => [...prev, { questionId: practiceQs[pIdx]?.id || '', correct: false, time: 30 }]);
+    setPResults((prev) => [...prev, { questionId: practiceQs[pIdx]?.id || '', correct: false, time: 30, selectedAnswer: null }]);
     advance();
   }
 
@@ -75,7 +76,7 @@ export default function StudentQuestions() {
     setPRevealed(true);
     const elapsed = qTime;
     setTimeout(() => {
-      setPResults((prev) => [...prev, { questionId: practiceQs[pIdx].id, correct, time: elapsed }]);
+      setPResults((prev) => [...prev, { questionId: practiceQs[pIdx].id, correct, time: elapsed, selectedAnswer: opt }]);
       advance();
     }, 1400);
   }
@@ -84,6 +85,20 @@ export default function StudentQuestions() {
     const next = pIdx + 1;
     if (next >= practiceQs.length) {
       setPDone(true);
+      // Save results after state settles — collect current results + the just-added entry
+      setTimeout(async () => {
+        setPResults((finalResults) => {
+          const allResults = finalResults; // already includes the last entry from handleSelect/autoNext
+          const topic = practiceQs[0]?.topic || 'General';
+          const subject = practiceQs[0]?.subject?.toLowerCase() || 'mathematics';
+          resultsApi.submitPractice({
+            questionIds: practiceQs.map((q) => q.id),
+            answers: allResults.map((r) => ({ questionId: r.questionId, selectedAnswer: r.selectedAnswer, timeSpent: r.time })),
+            topic, subject,
+          }).then((r) => setPracticeXp(r.xpEarned)).catch(() => {/* non-blocking */});
+          return finalResults;
+        });
+      }, 100);
     } else {
       setPIdx(next);
       setPSelected(null);
@@ -110,6 +125,11 @@ export default function StudentQuestions() {
         <div className="card glass-card" style={{ textAlign: 'center', padding: '36px 24px', marginBottom: 20 }}>
           <div style={{ fontSize: 68, fontWeight: 900, fontFamily: 'var(--fh)', color: grade.col, lineHeight: 1.1 }}>{score}%</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: grade.col, marginTop: 6 }}>{grade.label}</div>
+          {practiceXp > 0 && (
+            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,184,166,.12)', border: '1.5px solid rgba(20,184,166,.3)', borderRadius: 20, padding: '5px 14px', fontSize: 13, fontWeight: 700, color: 'var(--p)' }}>
+              ⚡ +{practiceXp} XP earned
+            </div>
+          )}
           <div className="stats mt2" style={{ maxWidth: 400, margin: '16px auto 0' }}>
             {[{ ico: '✅', val: correct, lbl: 'Correct' }, { ico: '❌', val: practiceQs.length - correct, lbl: 'Wrong' }, { ico: '⏱', val: `${avgTime}s`, lbl: 'Avg Time' }].map((s) => (
               <div key={s.lbl} className="scard"><div className="sico">{s.ico}</div><div className="sv">{s.val}</div><div className="sl">{s.lbl}</div></div>

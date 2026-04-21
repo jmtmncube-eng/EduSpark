@@ -25,14 +25,16 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
       ? { result: { userId: { in: scopeIds } } }
       : {};
 
+    const assignmentResultWhere = { ...resultWhere, resultType: 'ASSIGNMENT' as const };
+
     const [studentCount, results, resultDetails] = await Promise.all([
       prisma.user.count({ where: { ...studentWhere, active: true } }),
       prisma.quizResult.findMany({
-        where: resultWhere,
+        where: assignmentResultWhere,
         select: { score: true, timeTaken: true, completedAt: true, userId: true },
         orderBy: { completedAt: 'asc' },
       }),
-      prisma.resultDetail.findMany({ where: detailWhere, select: { difficulty: true, isCorrect: true } }),
+      prisma.resultDetail.findMany({ where: { ...detailWhere, result: { ...((detailWhere as { result?: Record<string, unknown> }).result || {}), resultType: 'ASSIGNMENT' } }, select: { difficulty: true, isCorrect: true } }),
     ]);
 
     const assignmentCount = await prisma.assignment.count(
@@ -49,11 +51,12 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
       ? Number(((results.filter((r) => r.score >= 50).length / results.length) * 100).toFixed(1)) : 0;
 
     const topicResults = await prisma.quizResult.findMany({
-      where: resultWhere,
+      where: { ...resultWhere, resultType: 'ASSIGNMENT' },
       include: { assignment: { select: { topic: true } } },
     });
     const topicScores: Record<string, number[]> = {};
     topicResults.forEach((r) => {
+      if (!r.assignment) return;
       if (!topicScores[r.assignment.topic]) topicScores[r.assignment.topic] = [];
       topicScores[r.assignment.topic].push(r.score);
     });
@@ -101,11 +104,12 @@ router.get('/topic-performance', authMiddleware, adminOrTutorOnly, async (req: R
   try {
     const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const results = await prisma.quizResult.findMany({
-      where: scopeIds ? { userId: { in: scopeIds } } : {},
+      where: { ...(scopeIds ? { userId: { in: scopeIds } } : {}), resultType: 'ASSIGNMENT' },
       include: { assignment: { select: { topic: true } } },
     });
     const byTopic: Record<string, { total: number; count: number }> = {};
     results.forEach((r) => {
+      if (!r.assignment) return;
       const t = r.assignment.topic;
       if (!byTopic[t]) byTopic[t] = { total: 0, count: 0 };
       byTopic[t].total += r.score; byTopic[t].count++;
@@ -123,11 +127,12 @@ router.get('/subject-performance', authMiddleware, adminOrTutorOnly, async (req:
   try {
     const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const results = await prisma.quizResult.findMany({
-      where: scopeIds ? { userId: { in: scopeIds } } : {},
+      where: { ...(scopeIds ? { userId: { in: scopeIds } } : {}), resultType: 'ASSIGNMENT' },
       include: { assignment: { select: { subject: true } } },
     });
     const bySubject: Record<string, { total: number; count: number }> = {};
     results.forEach((r) => {
+      if (!r.assignment) return;
       const s = r.assignment.subject;
       if (!bySubject[s]) bySubject[s] = { total: 0, count: 0 };
       bySubject[s].total += r.score; bySubject[s].count++;
@@ -186,7 +191,9 @@ router.get('/difficulty-breakdown', authMiddleware, adminOrTutorOnly, async (req
   try {
     const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const details = await prisma.resultDetail.findMany({
-      where: scopeIds ? { result: { userId: { in: scopeIds } } } : {},
+      where: scopeIds
+        ? { result: { userId: { in: scopeIds }, resultType: 'ASSIGNMENT' } }
+        : { result: { resultType: 'ASSIGNMENT' } },
       select: { difficulty: true, isCorrect: true },
     });
     const breakdown: Record<string, { correct: number; total: number }> = {
@@ -215,15 +222,21 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
       if (!student || student.teacherId !== userId) return res.status(403).json({ error: 'This student is not in your class' });
     }
 
-    const [student, results] = await Promise.all([
+    const [student, results, practiceResults] = await Promise.all([
       prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, grade: true, xp: true, createdAt: true, photo: true, examReadinessUnlocked: true, teacher: { select: { id: true, name: true } } } }),
       prisma.quizResult.findMany({
-        where: { userId: targetId },
+        where: { userId: targetId, resultType: 'ASSIGNMENT' },
         include: {
           assignment: { select: { id: true, title: true, subject: true, topic: true, grade: true } },
           details: { select: { difficulty: true, isCorrect: true } },
         },
         orderBy: { completedAt: 'asc' },
+      }),
+      prisma.quizResult.findMany({
+        where: { userId: targetId, resultType: 'PRACTICE' },
+        select: { score: true, correct: true, total: true, practiceTopic: true, practiceSubject: true, completedAt: true, xpEarned: true },
+        orderBy: { completedAt: 'desc' },
+        take: 20,
       }),
     ]);
 
@@ -236,6 +249,7 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
 
     const topicMap: Record<string, { scores: number[]; subject: string }> = {};
     results.forEach((r) => {
+      if (!r.assignment) return;
       const key = r.assignment.topic;
       if (!topicMap[key]) topicMap[key] = { scores: [], subject: r.assignment.subject };
       topicMap[key].scores.push(r.score);
@@ -268,7 +282,10 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
     const passRate = results.length ? Math.round((results.filter((r) => r.score >= 50).length / results.length) * 100) : 0;
 
     const recentResults = results.slice(-10).reverse().map((r) => ({
-      id: r.id, score: r.score, title: r.assignment.title, topic: r.assignment.topic, completedAt: r.completedAt,
+      id: r.id, score: r.score,
+      title: r.assignment?.title ?? 'Practice',
+      topic: r.assignment?.topic ?? r.practiceTopic ?? '',
+      completedAt: r.completedAt,
     }));
 
     const assignmentAttemptMap: Record<string, { assignmentTitle: string; scores: number[] }> = {};
@@ -284,7 +301,19 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
       bestScore: Math.max(...scores),
     }));
 
-    const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment.topic }));
+    const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment?.topic ?? '' }));
+
+    // Practice summary for this student
+    const practiceByTopic: Record<string, { attempts: number; totalScore: number }> = {};
+    practiceResults.forEach((p) => {
+      const key = p.practiceTopic ?? 'General';
+      if (!practiceByTopic[key]) practiceByTopic[key] = { attempts: 0, totalScore: 0 };
+      practiceByTopic[key].attempts++;
+      practiceByTopic[key].totalScore += p.score;
+    });
+    const practiceSummary = Object.entries(practiceByTopic).map(([topic, d]) => ({
+      topic, attempts: d.attempts, avgScore: Math.round(d.totalScore / d.attempts),
+    })).sort((a, b) => b.attempts - a.attempts);
 
     const recommendations = topicBreakdown.map((t) => {
       if (t.avgScore < 50) return {
@@ -306,6 +335,7 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
       totalQuizzes: results.length, avgScore, bestScore, passRate, totalXp: student.xp,
       examReadiness, topicBreakdown, difficultyBreakdown: diffMap,
       recommendations, recentResults, attemptStats, trend,
+      practiceSummary, totalPracticeSessions: practiceResults.length,
     });
   } catch (err) {
     console.error(err);

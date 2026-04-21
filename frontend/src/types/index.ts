@@ -79,6 +79,8 @@ export interface ResultDetail {
   question?: { options: string[] } | null;
 }
 
+export type ResultType = 'ASSIGNMENT' | 'PRACTICE';
+
 export interface QuizResult {
   id: string;
   score: number;
@@ -89,8 +91,11 @@ export interface QuizResult {
   completedAt: string;
   attemptNumber?: number;
   userId?: string;
-  assignmentId: string;
-  assignment?: { title: string; subject: Subject; topic: string; grade: number };
+  resultType?: ResultType;
+  assignmentId?: string | null;
+  practiceTopic?: string | null;
+  practiceSubject?: string | null;
+  assignment?: { title: string; subject: Subject; topic: string; grade: number } | null;
   details?: ResultDetail[];
 }
 

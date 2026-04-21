@@ -136,9 +136,8 @@ export default function AdminQuestions() {
             </select>
           </div>
           <div className="fg"><label className="lbl">Topic</label>
-            <select className="select" value={genTp} onChange={(e) => setGenTp(e.target.value)}>
-              {topics.map((t) => <option key={t}>{t}</option>)}
-            </select>
+            <input list="gen-topics-list" className="input" value={genTp} onChange={(e) => setGenTp(e.target.value)} placeholder="Type or select a topic…" />
+            <datalist id="gen-topics-list">{topics.map((t) => <option key={t} value={t} />)}</datalist>
           </div>
           <div className="fg"><label className="lbl">Count</label>
             <select className="select" value={genCt} onChange={(e) => setGenCt(e.target.value)}>
@@ -230,9 +229,8 @@ export default function AdminQuestions() {
               </select>
             </div>
             <div className="fg"><label className="lbl">Topic</label>
-              <select className="select" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
-                {formTopics.map((t) => <option key={t}>{t}</option>)}
-              </select>
+              <input list="form-topics-list" className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Type or select a topic…" />
+              <datalist id="form-topics-list">{formTopics.map((t) => <option key={t} value={t} />)}</datalist>
             </div>
             <div className="fg"><label className="lbl">Difficulty</label>
               <select className="select" value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>

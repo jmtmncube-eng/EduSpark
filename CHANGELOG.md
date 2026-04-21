@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.6.0] — 2026-04-21 — Practice Result Tracking, Tutor Result Scope & Free-Text Topics
+
+### Added — Backend
+- `ResultType` enum (`ASSIGNMENT` | `PRACTICE`) added to Prisma schema; `assignmentId` made optional on `QuizResult` to support practice sessions
+- `practiceTopic` and `practiceSubject` fields on `QuizResult` to tag practice sessions by topic
+- `POST /api/results/practice` — saves a completed practice session; awards half XP (no completion bonus) to distinguish from formal work
+- Prisma migration `add_practice_results` applied
+
+### Fixed — Backend
+- `GET /results/assignment/:assignmentId` — tutors now see results for **any assignment completed by their students**, not just their own assignments. For global admin assignments, results are filtered to the tutor's students only
+- `GET /results/:id` — tutors can now fetch individual result records for their own students
+- All analytics routes (`overview`, `topic-performance`, `subject-performance`, `difficulty-breakdown`) now filter to `resultType: ASSIGNMENT` so practice sessions do not distort formal pass rates and averages
+- Student report (`analytics/student-report/:id`) adds `practiceSummary` and `totalPracticeSessions` to the response — tutors can see what topics a student has been self-studying
+
+### Added — Frontend
+- Practice sessions now **save to the database** on completion via `POST /results/practice`
+- Practice results screen shows an **XP earned badge** (e.g. ⚡ +12 XP) after a session completes
+- Topic fields in the Question Bank and Assignments modals are now **free-text inputs with `<datalist>` suggestions** — any custom topic can be typed in; the predefined list still appears as autocomplete options
+- `CAPS_TOPICS` renamed `TOPICS` in Assignments.tsx (aligned with Questions.tsx rename from v1.5.0)
+- `QuizResult` type updated: `assignmentId` optional, `resultType`, `practiceTopic`, `practiceSubject` fields added
+
+---
+
 ## [1.5.0] — 2026-04-21 — Security Fixes, Topic Filter & Multi-Syllabus Support
 
 ### Fixed — Backend

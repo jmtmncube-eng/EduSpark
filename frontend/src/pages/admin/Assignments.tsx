@@ -5,7 +5,7 @@ import Modal from '../../components/Modal';
 import type { Assignment, Question } from '../../types';
 import { subjectBadge, fmtDate, compressImage } from '../../utils/helpers';
 
-const CAPS_TOPICS: Record<string, Record<number, string[]>> = {
+const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: { 10: ['Algebra','Functions & Graphs','Trigonometry','Statistics','Finance & Growth','Euclidean Geometry'], 11: ['Quadratic Equations','Trigonometric Functions','Analytical Geometry','Finance','Counting & Probability','Inequalities'], 12: ['Differential Calculus','Sequences & Series','Polynomials','Exponential & Logarithms','Regression Analysis','Trigonometry Advanced'] },
   physical_sciences: { 10: ["Newton's Laws",'Momentum','Energy & Power','Waves & Sound','Electricity & Magnetism','Chemistry: Matter'], 11: ['Projectile Motion','Electrostatics','Electric Circuits','Intermolecular Forces','Chemical Equilibrium','Vectors & Scalars'], 12: ['Momentum & Impulse','Vertical Projectile Motion','Electrodynamics','Organic Chemistry','Electrochemistry','Optical Phenomena'] },
 };
@@ -33,7 +33,7 @@ export default function AdminAssignments() {
 
   useEffect(() => { load(); }, [load]);
 
-  const topics = CAPS_TOPICS[form.subject]?.[Number(form.grade)] || [];
+  const topics = TOPICS[form.subject]?.[Number(form.grade)] || [];
 
   useEffect(() => {
     if (stuSearch.trim().length < 2) { setStuResults([]); return; }
@@ -143,20 +143,19 @@ export default function AdminAssignments() {
             <div className="fg"><label className="lbl">Title</label><input type="text" className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Algebra Test 1" /></div>
             <div className="fg"><label className="lbl">Due Date</label><input type="date" className="input" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
             <div className="fg"><label className="lbl">Subject</label>
-              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: CAPS_TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
+              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
                 <option value="mathematics">Mathematics</option><option value="physical_sciences">Physical Sciences</option>
               </select>
             </div>
             <div className="fg"><label className="lbl">Grade</label>
-              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: CAPS_TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
+              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
                 <option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option>
               </select>
             </div>
           </div>
           <div className="fg"><label className="lbl">Topic</label>
-            <select className="select" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}>
-              {topics.map((t) => <option key={t}>{t}</option>)}
-            </select>
+            <input list="asgn-topics-list" className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Type or select a topic…" />
+            <datalist id="asgn-topics-list">{topics.map((t) => <option key={t} value={t} />)}</datalist>
           </div>
           <div className="grid2" style={{ gap: 10 }}>
             <div className="fg"><label className="lbl">Assign To</label>

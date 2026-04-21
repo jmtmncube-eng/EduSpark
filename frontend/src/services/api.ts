@@ -100,6 +100,8 @@ export const students = {
 export const results = {
   submit: (data: { assignmentId: string; answers: { questionId: string; selectedAnswer: string }[] }) =>
     request<object>('/results', { method: 'POST', body: JSON.stringify(data) }),
+  submitPractice: (data: { questionIds: string[]; answers: { questionId: string; selectedAnswer: string | null; timeSpent: number }[]; topic: string; subject: string }) =>
+    request<{ xpEarned: number }>('/results/practice', { method: 'POST', body: JSON.stringify(data) }),
   list: () => request<object[]>('/results'),
   get: (id: string) => request<object>(`/results/${id}`),
   byAssignment: (assignmentId: string) => request<object[]>(`/results/assignment/${assignmentId}`),

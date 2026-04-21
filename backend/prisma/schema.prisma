@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -114,19 +115,22 @@ model AssignmentDocument {
 }
 
 model QuizResult {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   score         Int
   correct       Int
   total         Int
-  timeTaken     Int      @default(0)
-  xpEarned      Int      @default(0)
-  attemptNumber Int      @default(1)
-  completedAt   DateTime @default(now())
+  timeTaken     Int        @default(0)
+  xpEarned      Int        @default(0)
+  attemptNumber Int        @default(1)
+  resultType    ResultType @default(ASSIGNMENT)
+  practiceTopic   String?
+  practiceSubject String?
+  completedAt   DateTime   @default(now())
 
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId       String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  assignmentId String
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String?
 
   details ResultDetail[]
 
@@ -235,4 +239,9 @@ enum Visibility {
   GR11
   GR12
   NONE
+}
+
+enum ResultType {
+  ASSIGNMENT
+  PRACTICE
 }

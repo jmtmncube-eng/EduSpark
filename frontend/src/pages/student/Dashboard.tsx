@@ -33,9 +33,6 @@ export default function StudentDashboard() {
   const xp = user.xp || 0;
   const lv = getLvl(xp);
   const now = new Date();
-  // Count attempts per assignment
-  const attemptCounts: Record<string, number> = {};
-  myResults.forEach((r) => { attemptCounts[r.assignmentId] = (attemptCounts[r.assignmentId] || 0) + 1; });
   const doneIds = myResults.map((r) => r.assignmentId);
   const avg = myResults.length ? (myResults.reduce((s, r) => s + r.score, 0) / myResults.length).toFixed(1) : 0;
   const streak = calcStreak(myResults);
@@ -98,14 +95,19 @@ export default function StudentDashboard() {
         <div className="empty"><div className="eico">📭</div><h3>No quizzes yet</h3><p>Your teacher will assign quizzes soon. Check back later!</p></div>
       ) : (
         <div className="gauto">
-          {[...asgns].reverse().map((a) => {
-            const done = doneIds.includes(a.id);
-            const dd = new Date(a.dueDate), ov = dd < now && !done;
+          {asgns.length > 0 && asgns.every((a) => doneIds.includes(a.id)) ? (
+            <div className="empty" style={{ padding: '20px 0' }}>
+              <div className="eico">🎉</div>
+              <h3>All done!</h3>
+              <p>You've completed all assigned quizzes. <button className="btn bp btn-sm" style={{ marginTop: 6 }} onClick={() => navigate('/app/my-work')}>View My Work →</button></p>
+            </div>
+          ) : null}
+          {[...asgns].reverse().filter((a) => !doneIds.includes(a.id)).map((a) => {
+            const dd = new Date(a.dueDate), ov = dd < now;
             const dl = Math.ceil((dd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            const res = myResults.find((r) => r.assignmentId === a.id);
             const hasDocs = a.documents.length > 0;
             return (
-              <div key={a.id} className={`acard glass-card ${done ? 'done' : ov ? 'overdue' : ''}`}>
+              <div key={a.id} className={`acard glass-card ${ov ? 'overdue' : ''}`}>
                 <div className="flex jb">
                   <div>
                     <div className="ac-t">{a.title}</div>
@@ -115,36 +117,16 @@ export default function StudentDashboard() {
                       {hasDocs && <span className="badge bcy">📄 {a.documents.length}</span>}
                     </div>
                   </div>
-                  {done ? <span className="badge bok">✅ Done</span> : ov ? <span className="badge bng">Overdue</span> : <div className="ring" />}
+                  {ov ? <span className="badge bng">Overdue</span> : <div className="ring" />}
                 </div>
-                {done && res && (
-                  <div style={{ background: res.score >= 70 ? 'rgba(20,184,166,.09)' : res.score >= 50 ? 'rgba(251,191,36,.09)' : 'rgba(220,38,38,.07)', borderRadius: 9, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div className="sm ct2">Score</div>
-                      <div style={{ fontSize: 11, color: res.score >= 70 ? 'var(--s)' : res.score >= 50 ? 'var(--wr)' : 'var(--dr)', fontWeight: 600 }}>
-                        {res.score >= 80 ? '🏆 Distinction' : res.score >= 70 ? '🌟 Merit' : res.score >= 50 ? '✅ Pass' : '📖 Keep studying'}
-                      </div>
-                    </div>
-                    <span className="bold fh" style={{ fontSize: 24, color: res.score >= 70 ? 'var(--s)' : res.score >= 50 ? 'var(--wr)' : 'var(--dr)' }}>{res.score}%</span>
-                  </div>
-                )}
                 <div className="flex jb ia">
                   <span className={`sm ${ov ? 'cdr' : dl <= 3 ? 'cwr' : 'ct3'}`}>📅 {ov ? 'Overdue' : dl <= 0 ? 'Due today!' : `${dl}d left`}</span>
                   <div className="flex g1">
                     {hasDocs && <button className="btn ba btn-sm" onClick={() => setViewDocs(a)}>📄 Docs</button>}
-                    {done ? (
-                      <div className="flex g1">
-                        <button className="btn bg-btn btn-sm" onClick={() => { if (res) navigate(`/app/results/${res.id}`); }}>View Results</button>
-                        {(attemptCounts[a.id] || 0) < (a.maxAttempts ?? 3) && (
-                          <button className="btn ba btn-sm" onClick={() => navigate(`/app/quiz/${a.id}`)}>🔁 Retake</button>
-                        )}
-                      </div>
-                    ) : (
-                      <button className="btn bp btn-sm" onClick={() => navigate(`/app/quiz/${a.id}`)}>Start Quiz →</button>
-                    )}
+                    <button className="btn bp btn-sm" onClick={() => navigate(`/app/quiz/${a.id}`)}>Start Quiz →</button>
                   </div>
                 </div>
-                {!done && !ov && dl <= 3 && (
+                {!ov && dl <= 3 && (
                   <div style={{ fontSize: 11, color: 'var(--wr)', background: 'rgba(245,158,11,.08)', borderRadius: 7, padding: '4px 8px', marginTop: 4 }}>
                     ⚡ Due soon! Start now to earn your XP
                   </div>

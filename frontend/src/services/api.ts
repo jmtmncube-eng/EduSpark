@@ -140,6 +140,22 @@ export const parent = {
 export const studentSearch = (q: string) =>
   request<{ id: string; name: string; grade: number; pin: string }[]>(`/students/search?q=${encodeURIComponent(q)}`);
 
+// ─── Tutor Requests ───────────────────────────────────────────────
+export const tutorRequests = {
+  list: () => request<object[]>('/tutor-requests'),
+  create: (studentId: string, note?: string) =>
+    request<object>('/tutor-requests', { method: 'POST', body: JSON.stringify({ studentId, note }) }),
+  updateStatus: (id: string, status: 'approved' | 'denied') =>
+    request<object>(`/tutor-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  cancel: (id: string) =>
+    request<{ success: boolean }>(`/tutor-requests/${id}`, { method: 'DELETE' }),
+};
+
+export const availableStudents = (grade?: string) => {
+  const q = grade ? `?grade=${grade}` : '';
+  return request<object[]>(`/students/available${q}`);
+};
+
 // ─── Tutors (admin only) ──────────────────────────────────────────
 export const tutors = {
   list: () => request<object[]>('/students/tutors'),

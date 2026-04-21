@@ -59,6 +59,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.2.0] — 2026-04-21 — Tutor-Student Pairing Requests & Allocation Flow
+
+### Added — Backend
+- New `TutorRequest` Prisma model (`tutor_requests` table): tutorId, studentId, status (pending/approved/denied), optional note; unique per pair
+- Migration `add_tutor_requests` applied
+- New route file `/api/tutor-requests`: GET (admin: all; tutor: own), POST (tutor requests student), PATCH (admin approve/deny), DELETE (tutor cancels pending)
+- On approval: student `teacherId` set automatically; all other pending requests for same student auto-denied
+- `GET /api/students/available` — returns unallocated students (no teacherId), filterable by grade
+- Re-request allowed after a previous denial (re-opens as pending)
+
+### Added — Frontend
+- **Tutor — My Students**: "Request Students" button always visible; empty-state CTA when no students yet
+- **Tutor — Request Students modal**: browse unallocated students by grade; "⭐ REC" badge on students matching tutor's existing cohort grades; optional note per request; shows pending requests with cancel
+- **Tutor — Pending requests banner**: compact chip list of pending requests on the My Students page; quick-cancel from banner
+- **Admin — Teachers page**: "Pending Pairing Requests" panel at top; shows tutor name → student name with Approve/Deny buttons; auto-dismisses when all resolved
+- **Admin — Assign Students modal**: updated description clarifies students can be moved between teachers
+- **Sidebar (admin)**: amber badge on Teachers nav link shows count of pending pairing requests; clears when all resolved
+
+---
+
 ## [1.1.1] — 2026-04-21 — PIN-Based Auth for All Roles & Seeded Admins
 
 ### Changed — Backend

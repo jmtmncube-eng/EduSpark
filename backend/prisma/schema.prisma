@@ -30,6 +30,8 @@ model User {
   createdQuestions   Question[]
   calendarRequests   CalendarRequest[] @relation("CalendarRequests")
   parentAccesses     ParentAccess[]    @relation("ParentAccess")
+  tutorRequests      TutorRequest[]    @relation("TutorRequests")
+  studentRequests    TutorRequest[]    @relation("StudentRequests")
 
   @@map("users")
 }
@@ -185,6 +187,22 @@ model ParentAccess {
   student User @relation("ParentAccess", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("parent_access")
+}
+
+model TutorRequest {
+  id        String   @id @default(cuid())
+  tutorId   String
+  studentId String
+  status    String   @default("pending")
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tutor   User @relation("TutorRequests",  fields: [tutorId],   references: [id], onDelete: Cascade)
+  student User @relation("StudentRequests", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([tutorId, studentId])
+  @@map("tutor_requests")
 }
 
 enum Role {

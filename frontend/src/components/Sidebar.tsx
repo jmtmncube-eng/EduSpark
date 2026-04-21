@@ -1,9 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { fmtDate, getLvl, compressImage } from '../utils/helpers';
-import { students as studentsApi } from '../services/api';
+import { students as studentsApi, tutorRequests as requestsApi } from '../services/api';
 import { showToast } from './Toast';
 
 export default function Sidebar({ onToggle, open }: { onToggle: () => void; open: boolean }) {
@@ -12,6 +12,14 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
   const [showProfile, setShowProfile] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('es_theme') || 'light');
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') return;
+    requestsApi.list()
+      .then((data) => setPendingCount((data as { status: string }[]).filter((r) => r.status === 'pending').length))
+      .catch(() => {});
+  }, [user?.role]);
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -97,7 +105,13 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
             <div key={l.to}>
               {l.section && <div className="nsec">{l.section}</div>}
               <NavLink to={l.to} className={({ isActive }) => `ni${isActive ? ' active' : ''}`} onClick={onToggle}>
-                <span className="n-ico">{l.ico}</span>{l.label}
+                <span className="n-ico">{l.ico}</span>
+                {l.label}
+                {l.to === '/app/tutors' && pendingCount > 0 && (
+                  <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, background: 'var(--wr)', color: '#fff', borderRadius: '50%', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                    {pendingCount}
+                  </span>
+                )}
               </NavLink>
             </div>
           ))}

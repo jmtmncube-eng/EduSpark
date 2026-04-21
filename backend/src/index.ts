@@ -10,6 +10,7 @@ import resultsRouter from './routes/results';
 import calendarRouter from './routes/calendar';
 import analyticsRouter from './routes/analytics';
 import parentRouter from './routes/parent';
+import tutorRequestsRouter from './routes/tutor-requests';
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -33,6 +34,7 @@ app.use('/api/results', resultsRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/parent', parentRouter);
+app.use('/api/tutor-requests', tutorRequestsRouter);
 
 // 404 handler
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

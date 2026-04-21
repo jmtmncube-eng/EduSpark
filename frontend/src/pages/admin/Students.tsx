@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { students as studentsApi } from '../../services/api';
+import { students as studentsApi, tutorRequests as requestsApi, availableStudents } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
-import type { User, QuizResult } from '../../types';
+import type { User, QuizResult, TutorRequest, AvailableStudent } from '../../types';
 import { getLvl, fmtDate } from '../../utils/helpers';
 
 interface StudentWithResults extends User {
@@ -14,6 +14,7 @@ interface StudentWithResults extends User {
 export default function AdminStudents() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  const isTutor = user?.role === 'TUTOR';
   const [list, setList] = useState<StudentWithResults[]>([]);
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
@@ -21,6 +22,14 @@ export default function AdminStudents() {
   const [resetPinStu, setResetPinStu] = useState<StudentWithResults | null>(null);
   const [customPin, setCustomPin] = useState('');
   const [newPin, setNewPin] = useState('');
+
+  // Tutor request state
+  const [showRequest, setShowRequest] = useState(false);
+  const [available, setAvailable] = useState<AvailableStudent[]>([]);
+  const [avGrade, setAvGrade] = useState('');
+  const [myRequests, setMyRequests] = useState<TutorRequest[]>([]);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [reqNote, setReqNote] = useState('');
 
   const navigate = useNavigate();
 
@@ -32,7 +41,25 @@ export default function AdminStudents() {
     setList(data as StudentWithResults[]);
   }, [search, filterGrade]);
 
+  const loadRequests = useCallback(async () => {
+    if (!isTutor) return;
+    const data = await requestsApi.list();
+    setMyRequests((data as TutorRequest[]).filter((r) => r.status === 'pending'));
+  }, [isTutor]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  const openRequestModal = async () => {
+    const data = await availableStudents(avGrade || undefined);
+    setAvailable(data as AvailableStudent[]);
+    setShowRequest(true);
+  };
+
+  useEffect(() => {
+    if (!showRequest) return;
+    availableStudents(avGrade || undefined).then((d) => setAvailable(d as AvailableStudent[]));
+  }, [avGrade, showRequest]);
 
   async function toggleActive(id: string) {
     await studentsApi.toggleActive(id);
@@ -50,14 +77,74 @@ export default function AdminStudents() {
     } catch (e: unknown) { showToast((e as Error).message, 'err'); }
   }
 
+  async function requestStudent(studentId: string) {
+    setRequestingId(studentId);
+    try {
+      await requestsApi.create(studentId, reqNote || undefined);
+      showToast('Request sent — waiting for admin approval ✅');
+      setReqNote('');
+      loadRequests();
+      const data = await availableStudents(avGrade || undefined);
+      setAvailable(data as AvailableStudent[]);
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+    finally { setRequestingId(null); }
+  }
+
+  async function cancelRequest(id: string) {
+    await requestsApi.cancel(id);
+    showToast('Request cancelled', 'info');
+    loadRequests();
+    const data = await availableStudents(avGrade || undefined);
+    setAvailable(data as AvailableStudent[]); // refresh — student may reappear as available
+  }
+
   function copyPin(pin: string) {
     navigator.clipboard?.writeText(pin);
     showToast('PIN copied!', 'info');
   }
 
+  // For recommendation: match grades already in tutor's cohort
+  const tutorGrades = [...new Set(list.map((s) => s.grade).filter(Boolean))];
+  const isRecommended = (grade: number) => tutorGrades.length === 0 || tutorGrades.includes(grade);
+
+  // Check if tutor already has a pending request for a student
+  const pendingStudentIds = new Set(myRequests.map((r) => r.studentId));
+
   return (
     <div>
-      <div className="ph"><h2>👥 {isAdmin ? 'Students & PINs' : 'My Students'}</h2><p>{isAdmin ? 'Manage all student accounts, grades, PINs and access' : 'Your allocated students — their progress and PINs'}</p></div>
+      <div className="ph">
+        <div className="flex jb ia wrap" style={{ gap: 10 }}>
+          <div>
+            <h2>👥 {isAdmin ? 'Students & PINs' : 'My Students'}</h2>
+            <p>{isAdmin ? 'Manage all student accounts, grades, PINs and access' : 'Your allocated students — their progress, PINs and activities'}</p>
+          </div>
+          {isTutor && (
+            <button className="btn bp" onClick={openRequestModal}>
+              + Request Students
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tutor: pending requests banner */}
+      {isTutor && myRequests.length > 0 && (
+        <div className="cc mb2" style={{ background: 'rgba(251,191,36,.07)', border: '1px solid rgba(251,191,36,.25)' }}>
+          <div className="flex jb ia mb1">
+            <div className="bold" style={{ fontSize: 13 }}>⏳ Pending Requests ({myRequests.length})</div>
+            <button className="btn ba btn-sm" onClick={openRequestModal}>Manage</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {myRequests.map((r) => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(251,191,36,.1)', border: '1px solid rgba(251,191,36,.3)', borderRadius: 8, padding: '5px 10px', fontSize: 12 }}>
+                <span className="bold">{r.student?.name}</span>
+                <span className="ct3">Gr{r.student?.grade}</span>
+                <button onClick={() => cancelRequest(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--t3)', padding: '0 2px' }} title="Cancel">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex g2 mb2 wrap">
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
@@ -69,7 +156,12 @@ export default function AdminStudents() {
       </div>
 
       {list.length === 0 ? (
-        <div className="empty"><div className="eico">👥</div><h3>No students yet</h3><p>Students appear once they register.</p></div>
+        <div className="empty">
+          <div className="eico">👥</div>
+          <h3>{isTutor ? 'No students allocated yet' : 'No students yet'}</h3>
+          <p>{isTutor ? 'Request students via the button above, or wait for admin to allocate some to your class.' : 'Students appear once they register.'}</p>
+          {isTutor && <button className="btn bp mt2" onClick={openRequestModal}>+ Request Students</button>}
+        </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="dt">
@@ -95,7 +187,7 @@ export default function AdminStudents() {
                       <button className="btn bg-btn btn-sm" onClick={() => setViewStu(s)}>View</button>
                       <button className="btn ba btn-sm" onClick={() => navigate(`/app/report/${s.id}`)}>📊 Report</button>
                       <button className="btn bw-btn btn-sm" onClick={() => { setResetPinStu(s); setCustomPin(''); setNewPin(''); }}>🔑 PIN</button>
-                      <button className="btn bg-btn btn-sm" onClick={() => toggleActive(s.id)}>{s.active !== false ? 'Deactivate' : 'Activate'}</button>
+                      {isAdmin && <button className="btn bg-btn btn-sm" onClick={() => toggleActive(s.id)}>{s.active !== false ? 'Deactivate' : 'Activate'}</button>}
                     </div></td>
                   </tr>
                 );
@@ -133,7 +225,7 @@ export default function AdminStudents() {
           <div className="flex g1 mt2 wrap">
             <button className="btn bp" onClick={() => { navigate(`/app/report/${viewStu.id}`); setViewStu(null); }}>📊 Exam Report</button>
             <button className="btn bw-btn" onClick={() => { setResetPinStu(viewStu); setViewStu(null); setCustomPin(''); setNewPin(''); }}>🔑 Reset PIN</button>
-            <button className="btn bg-btn" onClick={() => { toggleActive(viewStu.id); setViewStu(null); }}>{viewStu.active !== false ? 'Deactivate' : 'Activate'}</button>
+            {isAdmin && <button className="btn bg-btn" onClick={() => { toggleActive(viewStu.id); setViewStu(null); }}>{viewStu.active !== false ? 'Deactivate' : 'Activate'}</button>}
           </div>
         </Modal>
       )}
@@ -161,6 +253,106 @@ export default function AdminStudents() {
               <div className="flex g1 mt1"><button className="btn bp" onClick={doResetPin}>🔑 Reset PIN</button><button className="btn bg-btn" onClick={() => setResetPinStu(null)}>Cancel</button></div>
             </>
           )}
+        </Modal>
+      )}
+
+      {/* Request Students Modal (tutor only) */}
+      {showRequest && isTutor && (
+        <Modal title="🔎 Find & Request Students" onClose={() => setShowRequest(false)} wide>
+          {/* Pending requests section */}
+          {myRequests.length > 0 && (
+            <div style={{ marginBottom: 18, padding: '12px 14px', background: 'rgba(251,191,36,.07)', border: '1px solid rgba(251,191,36,.25)', borderRadius: 10 }}>
+              <div className="bold xs ct2 mb1" style={{ textTransform: 'uppercase', letterSpacing: '.05em' }}>⏳ Your Pending Requests</div>
+              {myRequests.map((r) => (
+                <div key={r.id} className="flex jb ia" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                  <div>
+                    <span className="bold">{r.student?.name}</span>
+                    <span className="xs ct3 ml1"> · Grade {r.student?.grade}</span>
+                  </div>
+                  <div className="flex ia g1">
+                    <span className="badge" style={{ background: 'rgba(251,191,36,.15)', color: 'var(--wr)', fontSize: 10 }}>⏳ Pending</span>
+                    <button className="btn bd-btn btn-sm" onClick={() => cancelRequest(r.id)}>Cancel</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Grade filter */}
+          <div className="flex ia g2 mb2">
+            <label className="lbl" style={{ whiteSpace: 'nowrap', marginBottom: 0 }}>Filter grade:</label>
+            <select className="select" style={{ width: 'auto' }} value={avGrade} onChange={(e) => setAvGrade(e.target.value)}>
+              <option value="">All Grades</option>
+              <option value="10">Grade 10</option>
+              <option value="11">Grade 11</option>
+              <option value="12">Grade 12</option>
+            </select>
+            {tutorGrades.length > 0 && (
+              <span className="xs ct3">Recommended: Gr{tutorGrades.join(', ')}</span>
+            )}
+          </div>
+
+          {available.length === 0 ? (
+            <div className="empty" style={{ padding: '24px 0' }}>
+              <div className="eico" style={{ fontSize: 32 }}>🎓</div>
+              <p className="sm ct2">No unallocated students{avGrade ? ` in Grade ${avGrade}` : ''} at the moment.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+              {available.map((s) => {
+                const avg = s.results.length ? Math.round(s.results.reduce((a, r) => a + r.score, 0) / s.results.length) : null;
+                const lv = getLvl(s.xp || 0);
+                const rec = isRecommended(s.grade);
+                const alreadyPending = pendingStudentIds.has(s.id);
+                return (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: rec ? 'rgba(20,184,166,.05)' : 'rgba(0,0,0,.02)', border: `1px solid ${rec ? 'rgba(20,184,166,.2)' : 'var(--bd)'}`, borderRadius: 10 }}>
+                    <div className="flex ia g2">
+                      <div className="av" style={{ width: 34, height: 34, fontSize: 14, flexShrink: 0 }}>
+                        {s.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="bold" style={{ fontSize: 13 }}>
+                          {s.name}
+                          {rec && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: 'var(--p)', background: 'rgba(20,184,166,.12)', padding: '2px 6px', borderRadius: 4, letterSpacing: '.04em' }}>⭐ REC</span>}
+                        </div>
+                        <div className="xs ct3 flex ia g1">
+                          <span>Grade {s.grade}</span>
+                          <span>·</span>
+                          <span className={`lvl ${lv.cl}`} style={{ fontSize: 9 }}>{lv.ic} {lv.name}</span>
+                          {avg !== null && <><span>·</span><span>Avg {avg}%</span></>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex ia g1">
+                      {alreadyPending ? (
+                        <span className="badge" style={{ background: 'rgba(251,191,36,.15)', color: 'var(--wr)', fontSize: 10 }}>⏳ Requested</span>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            className="input"
+                            style={{ width: 130, fontSize: 12, padding: '5px 10px' }}
+                            placeholder="Note (optional)"
+                            onFocus={(e) => setReqNote(e.target.value)}
+                            onChange={(e) => setReqNote(e.target.value)}
+                          />
+                          <button
+                            className="btn bp btn-sm"
+                            disabled={requestingId === s.id}
+                            onClick={() => requestStudent(s.id)}
+                          >
+                            {requestingId === s.id ? '…' : '+ Request'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <button className="btn bg-btn wf mt2" style={{ justifyContent: 'center' }} onClick={() => setShowRequest(false)}>Done</button>
         </Modal>
       )}
     </div>

@@ -76,6 +76,28 @@ router.get('/search', authMiddleware, adminOrTutorOnly, async (req: Request, res
   }
 });
 
+// GET /api/students/available — unallocated students (no teacherId), for tutor request browsing
+router.get('/available', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const { grade } = req.query;
+    const where: Record<string, unknown> = { role: 'STUDENT', teacherId: null };
+    if (grade) where.grade = Number(grade);
+
+    const available = await prisma.user.findMany({
+      where,
+      select: {
+        id: true, name: true, grade: true, xp: true, active: true, createdAt: true,
+        results: { select: { score: true }, orderBy: { completedAt: 'desc' }, take: 10 },
+      },
+      orderBy: { name: 'asc' },
+    });
+    return res.json(available);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // PATCH /api/students/:id/assign-tutor — ADMIN only: assign a student to a tutor
 router.patch('/:id/assign-tutor', authMiddleware, adminOnly, async (req: Request, res: Response) => {
   try {

@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { tutors as tutorsApi, studentSearch, students as studentsApi } from '../../services/api';
+import { tutors as tutorsApi, studentSearch, students as studentsApi, tutorRequests as requestsApi } from '../../services/api';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
-import type { User } from '../../types';
+import type { User, TutorRequest } from '../../types';
 
 interface Tutor extends User {
   students: { id: string; name: string; grade: number }[];
@@ -12,6 +12,7 @@ interface StudentResult { id: string; name: string; grade: number; pin: string; 
 
 export default function AdminTutors() {
   const [list, setList] = useState<Tutor[]>([]);
+  const [pendingReqs, setPendingReqs] = useState<TutorRequest[]>([]);
   const [showAssign, setShowAssign] = useState(false);
   const [selTutor, setSelTutor] = useState<Tutor | null>(null);
   const [stuSearch, setStuSearch] = useState('');
@@ -21,10 +22,15 @@ export default function AdminTutors() {
   const [customPin, setCustomPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [showPinFor, setShowPinFor] = useState<string | null>(null);
+  const [actioningReq, setActioningReq] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await tutorsApi.list();
-    setList(data as Tutor[]);
+    const [tutorData, reqData] = await Promise.all([
+      tutorsApi.list(),
+      requestsApi.list(),
+    ]);
+    setList(tutorData as Tutor[]);
+    setPendingReqs((reqData as TutorRequest[]).filter((r) => r.status === 'pending'));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -34,6 +40,26 @@ export default function AdminTutors() {
     const t = setTimeout(() => studentSearch(stuSearch).then(setStuResults).catch(() => setStuResults([])), 300);
     return () => clearTimeout(t);
   }, [stuSearch]);
+
+  async function approveRequest(req: TutorRequest) {
+    setActioningReq(req.id);
+    try {
+      await requestsApi.updateStatus(req.id, 'approved');
+      showToast(`${req.student?.name} assigned to ${req.tutor?.name} ✅`);
+      load();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+    finally { setActioningReq(null); }
+  }
+
+  async function denyRequest(req: TutorRequest) {
+    setActioningReq(req.id);
+    try {
+      await requestsApi.updateStatus(req.id, 'denied');
+      showToast(`Request denied`, 'info');
+      load();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+    finally { setActioningReq(null); }
+  }
 
   async function assignStudent(student: StudentResult, tutorId: string) {
     setSaving(true);
@@ -80,6 +106,50 @@ export default function AdminTutors() {
         <h2>👩‍🏫 Teachers</h2>
         <p>Manage teacher accounts and allocate students to their classes. Teachers sign up via the login page under the "Teacher" tab and receive a TCH-XXXX PIN.</p>
       </div>
+
+      {/* Pending pairing requests */}
+      {pendingReqs.length > 0 && (
+        <div className="cc mb3" style={{ border: '1.5px solid rgba(251,191,36,.4)', background: 'rgba(251,191,36,.05)' }}>
+          <div className="flex jb ia mb2">
+            <div>
+              <div className="bold fh" style={{ fontSize: 15 }}>⏳ Pending Pairing Requests</div>
+              <div className="xs ct3">Teachers have requested these students — approve or deny</div>
+            </div>
+            <span className="badge" style={{ background: 'rgba(251,191,36,.2)', color: 'var(--wr)', fontWeight: 700 }}>{pendingReqs.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pendingReqs.map((req) => (
+              <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 9, border: '1px solid var(--bd)' }}>
+                <div>
+                  <div style={{ fontSize: 13 }}>
+                    <span className="bold" style={{ color: 'var(--p)' }}>{req.tutor?.name}</span>
+                    <span className="ct3"> requested </span>
+                    <span className="bold">{req.student?.name}</span>
+                    <span className="xs ct3 ml1">· Grade {req.student?.grade}</span>
+                  </div>
+                  {req.note && <div className="xs ct3" style={{ marginTop: 3, fontStyle: 'italic' }}>"{req.note}"</div>}
+                </div>
+                <div className="flex g1">
+                  <button
+                    className="btn bp btn-sm"
+                    disabled={actioningReq === req.id}
+                    onClick={() => approveRequest(req)}
+                  >
+                    ✅ Approve
+                  </button>
+                  <button
+                    className="btn bd-btn btn-sm"
+                    disabled={actioningReq === req.id}
+                    onClick={() => denyRequest(req)}
+                  >
+                    ✕ Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {list.length === 0 ? (
         <div className="empty">
@@ -140,6 +210,10 @@ export default function AdminTutors() {
                   </div>
                 </div>
               )}
+
+              {t.students.length === 0 && !t.active && (
+                <div className="xs ct3" style={{ fontStyle: 'italic' }}>Deactivated — no students allocated</div>
+              )}
             </div>
           ))}
         </div>
@@ -149,7 +223,7 @@ export default function AdminTutors() {
       {showAssign && selTutor && (
         <Modal title={`Assign Students to ${selTutor.name}`} onClose={() => setShowAssign(false)}>
           <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(20,184,166,.06)', borderRadius: 10, fontSize: 13, color: 'var(--t2)', borderLeft: '3px solid var(--p)' }}>
-            Currently has <strong>{selTutor.students.length}</strong> student{selTutor.students.length !== 1 ? 's' : ''}. Search below to add more.
+            Currently has <strong>{selTutor.students.length}</strong> student{selTutor.students.length !== 1 ? 's' : ''}. Search any student to assign (or move from another teacher).
           </div>
           <div className="fg">
             <label className="lbl">Search Student by Name</label>
@@ -166,7 +240,7 @@ export default function AdminTutors() {
                         <div className="xs ct3">Grade {s.grade}</div>
                       </div>
                       {alreadyAssigned ? (
-                        <span className="badge bok xs">Already assigned</span>
+                        <span className="badge bok xs">Already in class</span>
                       ) : (
                         <button className="btn bp btn-sm" disabled={saving} onClick={() => assignStudent(s, selTutor.id)}>
                           + Assign

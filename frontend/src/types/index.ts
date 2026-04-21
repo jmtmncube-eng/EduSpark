@@ -107,6 +107,27 @@ export interface CalendarRequest {
   note?: { title: string; date: string };
 }
 
+export interface TutorRequest {
+  id: string;
+  tutorId: string;
+  studentId: string;
+  status: 'pending' | 'approved' | 'denied';
+  note: string | null;
+  createdAt: string;
+  tutor?: { id: string; name: string; pin?: string | null };
+  student?: { id: string; name: string; grade: number; xp?: number; pin?: string | null; teacherId?: string | null };
+}
+
+export interface AvailableStudent {
+  id: string;
+  name: string;
+  grade: number;
+  xp: number;
+  active: boolean;
+  createdAt: string;
+  results: { score: number }[];
+}
+
 export interface Level {
   name: string;
   cl: string;

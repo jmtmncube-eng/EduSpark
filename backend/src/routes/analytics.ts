@@ -281,10 +281,26 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
 
     const trend = results.slice(-8).map((r) => ({ date: r.completedAt.toISOString().split('T')[0], score: r.score, topic: r.assignment.topic }));
 
+    const recommendations = topicBreakdown.map((t) => {
+      if (t.avgScore < 50) return {
+        priority: 'urgent' as const, topic: t.topic, avg: t.avgScore,
+        message: `Scoring below 50% — requires focused revision and extra practice before the exam.`,
+      };
+      if (t.avgScore < 70) return {
+        priority: 'review' as const, topic: t.topic, avg: t.avgScore,
+        message: `Passing but not yet consistent — review key concepts and attempt more practice questions.`,
+      };
+      return {
+        priority: 'maintain' as const, topic: t.topic, avg: t.avgScore,
+        message: `Strong performance — continue practising to maintain exam readiness.`,
+      };
+    });
+
     return res.json({
       student, tutor: student.teacher ?? null,
       totalQuizzes: results.length, avgScore, bestScore, passRate, totalXp: student.xp,
-      examReadiness, topicBreakdown, difficultyBreakdown: diffMap, recentResults, attemptStats, trend,
+      examReadiness, topicBreakdown, difficultyBreakdown: diffMap,
+      recommendations, recentResults, attemptStats, trend,
     });
   } catch (err) {
     console.error(err);

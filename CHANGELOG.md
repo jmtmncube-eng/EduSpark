@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.3.0] — 2026-04-21 — Student Work Tracker
+
+### Added — Frontend
+- New **My Work** page for students (`/app/my-work`): full assignment tracker with filter tabs (All / Pending / Done / Overdue), subject filter, sort by due date / title / score
+- Overall completion progress bar with attempt count tracking (X/max attempts used)
+- Colour-coded urgency: overdue (red), due ≤2 days (amber), on-track (default)
+- Best-score panel on completed assignments showing distinction/merit/pass grade and correct/total breakdown
+- Retake button shows remaining attempts; disabled when exhausted
+- Sidebar badge on "My Work" showing count of pending (non-overdue, not done) assignments
+- Sidebar student nav reorganised: My Work as first learning item
+
+---
+
 ## [1.2.1] — 2026-04-20 — Tutor Onboarding, Analytics & Parent PIN Flow
 
 ### Changed

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { fmtDate, getLvl, compressImage } from '../utils/helpers';
-import { students as studentsApi, tutorRequests as requestsApi } from '../services/api';
+import { students as studentsApi, tutorRequests as requestsApi, assignments as assignmentsApi, results as resultsApi } from '../services/api';
 import { showToast } from './Toast';
 
 export default function Sidebar({ onToggle, open }: { onToggle: () => void; open: boolean }) {
@@ -13,11 +13,26 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
   const [showPin, setShowPin] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('es_theme') || 'light');
   const [pendingCount, setPendingCount] = useState(0);
+  const [workBadge, setWorkBadge] = useState(0);
 
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
     requestsApi.list()
       .then((data) => setPendingCount((data as { status: string }[]).filter((r) => r.status === 'pending').length))
+      .catch(() => {});
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== 'STUDENT') return;
+    Promise.all([assignmentsApi.list(), resultsApi.list()])
+      .then(([asgns, res]) => {
+        const doneIds = new Set((res as { assignmentId: string }[]).map((r) => r.assignmentId));
+        const now = Date.now();
+        const pending = (asgns as { id: string; dueDate: string }[]).filter(
+          (a) => !doneIds.has(a.id) && new Date(a.dueDate).getTime() >= now
+        ).length;
+        setWorkBadge(pending);
+      })
       .catch(() => {});
   }, [user?.role]);
 
@@ -64,8 +79,9 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
   ];
   const studentLinks = [
     { to: '/app/dashboard', ico: '🏠', label: 'Dashboard', section: 'Main' },
+    { to: '/app/my-work', ico: '📋', label: 'My Work', section: 'Learning' },
     { to: '/app/questions', ico: '📚', label: 'Question Bank' },
-    { to: '/app/progress', ico: '📈', label: 'My Progress', section: 'Learning' },
+    { to: '/app/progress', ico: '📈', label: 'My Progress' },
     { to: '/app/history', ico: '🗂', label: 'Quiz History' },
     { to: '/app/exam-readiness', ico: '🎯', label: 'Exam Readiness' },
     { to: '/app/calendar', ico: '📅', label: 'My Schedule' },
@@ -110,6 +126,11 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
                 {l.to === '/app/tutors' && pendingCount > 0 && (
                   <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, background: 'var(--wr)', color: '#fff', borderRadius: '50%', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                     {pendingCount}
+                  </span>
+                )}
+                {l.to === '/app/my-work' && workBadge > 0 && (
+                  <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, background: 'var(--p)', color: '#fff', borderRadius: '50%', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                    {workBadge}
                   </span>
                 )}
               </NavLink>

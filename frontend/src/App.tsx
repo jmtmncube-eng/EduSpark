@@ -27,6 +27,7 @@ import StudentCalendar from './pages/student/Calendar';
 import QuizPage from './pages/student/Quiz';
 import ResultsPage from './pages/student/Results';
 import ExamReadiness from './pages/student/ExamReadiness';
+import StudentMyWork from './pages/student/MyWork';
 
 function AppShell() {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ function AppShell() {
     '/app/calendar': '📅 Calendar',
     '/app/parent-pins': '🔑 Parent Access',
     '/app/tutors': '📚 Tutors',
+    '/app/my-work': '📋 My Work',
     '/app/progress': '📈 My Progress',
     '/app/history': '🗂 Quiz History',
     '/app/exam-readiness': '🎯 Exam Readiness',
@@ -93,6 +95,7 @@ function AppShell() {
               <>
                 <Route path="dashboard" element={<StudentDashboard />} />
                 <Route path="questions" element={<StudentQuestions />} />
+                <Route path="my-work" element={<StudentMyWork />} />
                 <Route path="progress" element={<StudentProgress />} />
                 <Route path="history" element={<StudentHistory />} />
                 <Route path="calendar" element={<StudentCalendar />} />

@@ -63,6 +63,20 @@ export default function Login() {
   async function doLogin() {
     const trimmed = value.trim();
     if (!trimmed) { showToast('Please enter your name or PIN', 'warn'); return; }
+    // PAR-XXXX: parent access — bypass role selection entirely
+    if (/^PAR-[A-Z0-9]{4}$/i.test(trimmed)) {
+      setLoading(true);
+      try {
+        const res = await auth.login(trimmed, 'student'); // role ignored by backend for PAR-
+        const r = res as { token?: string; user?: User };
+        if (r.token && r.user) {
+          login(r.user, r.token);
+          navigate('/app/dashboard');
+        }
+      } catch (e: unknown) { showToast((e as Error).message || 'Invalid parent PIN', 'err'); }
+      finally { setLoading(false); }
+      return;
+    }
     setLoading(true);
     try {
       const res = await auth.login(trimmed, role);
@@ -144,14 +158,17 @@ export default function Login() {
     setNewPin('');
   }
 
-  const isPin = (v: string) => /^(SPK|TCH|ADM)-/i.test(v);
+  const isParentPin = (v: string) => /^PAR-/i.test(v);
+  const isPin = (v: string) => /^(SPK|TCH|ADM|PAR)-/i.test(v);
 
   const placeholder =
+    isParentPin(value) ? 'Enter parent access code (PAR-XXXX)' :
     role === 'admin' ? 'Enter your PIN (e.g. ADM-XXXX)' :
     role === 'tutor' ? 'Enter your name or PIN (TCH-XXXX)' :
     'Enter your PIN (SPK-XXXX) or your name';
 
   const hint =
+    isParentPin(value) ? 'Parent access is temporary and view-only. No account creation needed.' :
     role === 'admin' ? 'Admin access requires a PIN. Contact the platform owner if locked out.' :
     role === 'tutor' ? 'New tutor? Enter your name to create an account. Returning? Use your TCH-XXXX PIN.' :
     'Returning student? Enter your SPK-XXXX PIN. First time? Enter your name.';

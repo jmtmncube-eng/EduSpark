@@ -13,6 +13,37 @@ router.post('/login', async (req: Request, res: Response) => {
     const input = value.trim();
     const upperInput = input.toUpperCase();
 
+    // PAR-XXXX — parent temporary PIN login (no User record needed)
+    if (/^PAR-[A-Z0-9]{4}$/i.test(upperInput)) {
+      const access = await prisma.parentAccess.findUnique({
+        where: { pin: upperInput },
+        include: { student: { select: { id: true, name: true, grade: true } } },
+      });
+      if (!access) return res.status(401).json({ error: 'Parent PIN not found. Check the link your teacher shared.' });
+      if (new Date() > access.expiresAt) {
+        return res.status(401).json({ error: 'This parent PIN has expired. Ask the teacher to generate a new one.' });
+      }
+      const daysLeft = Math.ceil((access.expiresAt.getTime() - Date.now()) / 86_400_000);
+      const token = signToken({ userId: upperInput, role: 'PARENT' });
+      return res.json({
+        token,
+        user: {
+          id: upperInput,
+          name: access.student.name,
+          role: 'PARENT',
+          pin: upperInput,
+          grade: access.student.grade,
+          xp: 0,
+          active: true,
+          photo: null,
+          createdAt: access.createdAt.toISOString(),
+          label: access.label,
+          studentId: access.studentId,
+          daysLeft,
+        },
+      });
+    }
+
     // PIN login — SPK-XXXX (students), TCH-XXXX (tutors), ADM-XXXX (admins)
     if (/^(SPK|TCH|ADM)-[A-Z0-9]{4}$/i.test(upperInput)) {
       const user = await prisma.user.findUnique({ where: { pin: upperInput } });

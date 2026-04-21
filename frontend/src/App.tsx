@@ -17,6 +17,7 @@ import AdminStudentReport from './pages/admin/StudentReport';
 import AdminParentPins from './pages/admin/ParentPins';
 import AdminTutors from './pages/admin/Tutors';
 import ParentView from './pages/ParentView';
+import ParentSession from './pages/ParentSession';
 
 // Student pages
 import StudentDashboard from './pages/student/Dashboard';
@@ -55,6 +56,7 @@ function AppShell() {
   const title = pageTitle[location.pathname] || (reportMatch ? '📊 Student Report' : 'EduSpark');
 
   if (!user) return <Navigate to="/" replace />;
+  if (user.role === 'PARENT') return <ParentSession />;
 
   const isAdmin = user.role === 'ADMIN';
   const isTutor = user.role === 'TUTOR';

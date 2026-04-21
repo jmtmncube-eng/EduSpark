@@ -1,4 +1,4 @@
-export type Role = 'STUDENT' | 'TUTOR' | 'ADMIN';
+export type Role = 'STUDENT' | 'TUTOR' | 'ADMIN' | 'PARENT';
 export type Subject = 'MATHEMATICS' | 'PHYSICAL_SCIENCES';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export type Visibility = 'ALL' | 'GR10' | 'GR11' | 'GR12' | 'NONE';
@@ -19,6 +19,10 @@ export interface User {
   subjects?: string[];
   teachGrades?: number[];
   examReadinessUnlocked?: boolean;
+  // Parent session fields
+  label?: string;
+  studentId?: string;
+  daysLeft?: number;
 }
 
 export interface Question {

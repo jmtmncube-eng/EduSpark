@@ -69,10 +69,7 @@ function AppShell() {
 
       <div className="main">
         <div className="topbar">
-          <div className="flex ia g1">
-            <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
-            <div className="tb-t">{title}</div>
-          </div>
+          <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div className="flex ia g2">
             {!isAdmin && (user.xp || 0) > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--p)' }}>⚡ {user.xp} XP</span>}
           </div>

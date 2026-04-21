@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [1.4.0] — 2026-04-21 — Parent PIN Sessions, Exam Readiness Gate & Dashboard Cleanup
+
+### Added — Backend
+- `examReadinessUnlocked Boolean @default(false)` field on User model; Prisma migration `add_exam_readiness_unlock` applied
+- `PATCH /students/:id/toggle-exam-readiness` endpoint (tutor/admin only); tutors restricted to their own cohort
+- Analytics `student-report/:id` now returns `recommendations` array computed from topic averages: `< 50%` → urgent, `50–69%` → review, `≥ 70%` → maintain
+- Analytics `student-report/:id` returns `{ locked: true }` for STUDENT callers when `examReadinessUnlocked` is false
+- `PAR-XXXX` parent PIN auth: validated against `ParentAccess` table, issues JWT with `role: 'PARENT'`; no onboarding step
+- `AuthPayload` extended with `'PARENT'` role in `auth.ts` middleware
+
+### Added — Frontend
+- **Parent PIN session**: entering a `PAR-XXXX` PIN on the login page authenticates directly (no role card, no onboarding)
+- New **ParentSession** component (`/frontend/src/pages/ParentSession.tsx`): in-app read-only dashboard with student header, 4 KPI cards, topic performance bars, and recent quizzes list; no sidebar or navigation
+- `AppShell` short-circuits for `PARENT` role and renders `ParentSession` instead of the standard layout
+- **Exam readiness lock/unlock toggle** on Admin/Tutor Students page: per-student button (`🔒 Readiness` / `🔓 Readiness`); updates list in-place via API
+- ExamReadiness page shows a friendly locked state when `{ locked: true }` is returned by the API
+- Student Report (`/app/report/:studentId`): tutor badge added; all "Teacher Comment" labels renamed to "Tutor Comment"; footer updated to reference allocated tutor
+- Student **Dashboard** cleanup: completed assignments are filtered out of the pending quiz list; "All done!" empty state with link to My Work shown when no pending work remains
+
+### Changed
+- `frontend/src/types/index.ts`: `Role` extended with `'PARENT'`; `User` interface gains `examReadinessUnlocked`, `label`, `studentId`, `daysLeft` fields
+- `students` API service gains `toggleExamReadiness(id)` call
+
+---
+
 ## [1.3.0] — 2026-04-21 — Student Work Tracker
 
 ### Added — Frontend

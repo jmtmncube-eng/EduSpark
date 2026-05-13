@@ -41,12 +41,14 @@ export default function StudentMyWork() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Build lookup maps
+  // Build lookup maps — skip practice results that have no assignmentId
   const attemptMap = useMemo(() => {
     const m: Record<string, QuizResult[]> = {};
     results.forEach((r) => {
-      if (!m[r.assignmentId]) m[r.assignmentId] = [];
-      m[r.assignmentId].push(r);
+      if (!r.assignmentId) return;
+      const key = r.assignmentId;
+      if (!m[key]) m[key] = [];
+      m[key].push(r);
     });
     return m;
   }, [results]);

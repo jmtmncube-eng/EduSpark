@@ -28,7 +28,9 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-eduspark}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-eduspark}
+      # connection_limit=15 + pool_timeout=20s — sane defaults for a single-app DB.
+      # Bump connection_limit if your VPS has more cores / Postgres can handle it.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-eduspark}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-eduspark}?connection_limit=15&pool_timeout=20
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       NODE_ENV: production
       PORT: 8000

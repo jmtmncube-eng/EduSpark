@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 import { generateQuestion, CAPS_TOPICS, expectedSecondsFor } from '../utils/questionGenerators';
+import { maybeMakeDiagram } from '../utils/diagramTemplates';
 import { audit } from '../utils/audit';
 import { Difficulty, Subject, Visibility } from '@prisma/client';
 
@@ -117,8 +118,14 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
     const n = Math.min(Number(count), 20);
     const created = [];
 
+    // Alternate diagram-on / diagram-off for a roughly 50-50 mix per batch.
+    // For odd counts the parity flips deterministically so a single-question
+    // generation still sometimes ships a diagram, sometimes doesn't.
+    const startWithDiagram = Math.random() < 0.5;
     for (let i = 0; i < n; i++) {
       const d = generateQuestion(topic, subject, Number(grade));
+      const includeDiagram = ((i + (startWithDiagram ? 0 : 1)) % 2) === 0;
+      const imageData = includeDiagram ? maybeMakeDiagram(topic, 1.0) : null;
       const q = await prisma.question.create({
         data: {
           subject: sub as Subject,
@@ -130,6 +137,7 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
           answer: d.ans,
           solution: d.sol,
           visibility: 'ALL',
+          imageData: imageData || null,
           createdById: req.user!.userId,
         },
       });

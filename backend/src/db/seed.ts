@@ -23,6 +23,22 @@ async function main() {
 
   const adminRef = admins[0]; // used as createdBy for sample data
 
+  // ── Demo tutors ─────────────────────────────────────────────────
+  const tutorData = [
+    { name: 'Moses', pin: 'TCH-D5VA', subjects: ['MATHEMATICS', 'PHYSICAL_SCIENCES'], teachGrades: [10, 11] },
+    { name: 'John',  pin: 'TCH-GDBR', subjects: ['MATHEMATICS'],                       teachGrades: [11, 12] },
+  ];
+  for (const t of tutorData) {
+    await prisma.user.upsert({
+      where: { pin: t.pin },
+      update: {},
+      create: {
+        name: t.name, role: 'TUTOR', pin: t.pin, active: true,
+        subjects: t.subjects, teachGrades: t.teachGrades,
+      },
+    });
+  }
+
   // ── Demo students ────────────────────────────────────────────────
   const students = await Promise.all([
     prisma.user.upsert({

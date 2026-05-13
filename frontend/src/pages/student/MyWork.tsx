@@ -5,6 +5,7 @@ import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { subjectBadge, fmtDate } from '../../utils/helpers';
+import DiagramViewer from '../../components/DiagramViewer';
 
 type Filter = 'all' | 'pending' | 'done' | 'overdue';
 type SortKey = 'due' | 'title' | 'score';
@@ -307,7 +308,7 @@ export default function StudentMyWork() {
             <div key={d.id} className="doc-vw">
               <div className="doc-title">📄 {d.title}</div>
               {d.content && <div className="doc-body">{d.content}</div>}
-              {d.imageData && <img src={d.imageData} className="q-img mt1" alt="" />}
+              {d.imageData && <div className="mt1"><DiagramViewer src={d.imageData} alt={d.title || 'Study document'} maxThumbHeight={200} /></div>}
             </div>
           ))}
           <div className="flex g1 mt2">

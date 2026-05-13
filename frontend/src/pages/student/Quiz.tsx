@@ -5,6 +5,7 @@ import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { fmtDate, launchConfetti } from '../../utils/helpers';
+import DiagramViewer from '../../components/DiagramViewer';
 
 // Default fallback when the backend doesn't provide expectedSeconds (legacy data)
 const DEFAULT_TIME_PER_Q = 60;
@@ -175,7 +176,7 @@ export default function StudentQuiz() {
               <div key={d.id} className="doc-vw">
                 <div className="doc-title">📄 {d.title}</div>
                 {d.content && <div className="doc-body">{d.content}</div>}
-                {d.imageData && <img src={d.imageData} className="q-img mt1" alt="" />}
+                {d.imageData && <div className="mt1"><DiagramViewer src={d.imageData} alt={d.title || 'Study document'} /></div>}
               </div>
             ))}
             <button className="btn bp mt2" onClick={() => setShowDocModal(false)}>Close</button>
@@ -236,7 +237,7 @@ export default function StudentQuiz() {
             <span className="sm ct2">Question {qIdx + 1} of {total}</span>
             <button className={`btn btn-sm ${flagged.has(qIdx) ? 'bng' : 'ba'}`} onClick={toggleFlag}>{flagged.has(qIdx) ? '🚩 Flagged' : '🏳 Flag'}</button>
           </div>
-          {current.imageData && <img src={current.imageData} className="q-img mb1" alt="" />}
+          {current.imageData && <div className="mb1"><DiagramViewer src={current.imageData} alt={`Question ${qIdx + 1} diagram`} maxThumbHeight={320} /></div>}
           <div className="qtxt mb2">{current.question}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {current.options.map((opt, i) => {

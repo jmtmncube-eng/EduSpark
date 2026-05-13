@@ -66,7 +66,16 @@ const ACCEPTED_MIMES = new Set([
 ]);
 const HEIC_PATTERN = /\.(heic|heif)$/i;
 
-export function compressImage(file: File, maxDim = 400): Promise<string> {
+/**
+ * For question diagrams, use `compressDiagram(file)` — it keeps a much larger
+ * max dimension (1400 px) and higher JPEG quality (88 %) so equations and
+ * fine labels stay legible when zoomed.
+ */
+export function compressDiagram(file: File): Promise<string> {
+  return compressImage(file, 1400, 0.88);
+}
+
+export function compressImage(file: File, maxDim = 400, quality = 0.78): Promise<string> {
   return new Promise((resolve, reject) => {
     // HEIC guardrail — most browsers can't decode this natively
     if (HEIC_PATTERN.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif') {
@@ -109,7 +118,7 @@ export function compressImage(file: File, maxDim = 400): Promise<string> {
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', 0.78));
+          resolve(canvas.toDataURL('image/jpeg', quality));
         } catch (err) {
           reject(err instanceof Error ? err : new Error('Image compression failed.'));
         }

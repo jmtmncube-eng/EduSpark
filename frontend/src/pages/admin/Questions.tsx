@@ -4,7 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Question, Pack } from '../../types';
-import { compressImage } from '../../utils/helpers';
+import { compressDiagram } from '../../utils/helpers';
+import DiagramViewer from '../../components/DiagramViewer';
 import { diffMeta } from '../../utils/difficulty';
 import DifficultyKey from '../../components/DifficultyKey';
 import QuestionGenerator, { SUBJECT_THEME } from '../../components/QuestionGenerator';
@@ -115,7 +116,7 @@ export default function AdminQuestions() {
 
   async function handleImgUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.[0]) return;
-    const b64 = await compressImage(e.target.files[0]);
+    const b64 = await compressDiagram(e.target.files[0]);
     setForm((f) => ({ ...f, imageData: b64 }));
   }
 
@@ -241,7 +242,7 @@ export default function AdminQuestions() {
                   <button className="btn ba btn-sm" onClick={() => delQ(q.id)} title="Delete">🗑</button>
                 </div>
               </div>
-              {q.imageData && <img src={q.imageData} className="q-img" alt="Question diagram" />}
+              {q.imageData && <div style={{ marginTop: 6 }}><DiagramViewer src={q.imageData} alt="Question diagram" maxThumbHeight={220} /></div>}
               <div className="qtxt">{q.question}</div>
               <div className="qopts">{q.options.map((o, i) => <span key={i} className="qopt">{String.fromCharCode(65 + i)}. {o}</span>)}</div>
               {expanded.has(q.id) && (

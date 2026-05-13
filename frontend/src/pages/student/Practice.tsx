@@ -5,6 +5,7 @@ import type { Pack, Question } from '../../types';
 import { showToast } from '../../components/Toast';
 import { launchConfetti } from '../../utils/helpers';
 import { diffMeta } from '../../utils/difficulty';
+import DiagramViewer from '../../components/DiagramViewer';
 
 export default function StudentPractice() {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -141,6 +142,7 @@ function PracticeSession({ pack, onExit }: { pack: Pack; onExit: () => void }) {
                 background: ok ? 'rgba(34,197,94,.05)' : 'rgba(239,68,68,.05)',
               }}>
                 <div className="xs ct3">Q{i + 1} · {ok ? '✅ Correct' : '❌ Incorrect'}</div>
+                {qq.imageData && <div className="mt1"><DiagramViewer src={qq.imageData} alt={`Question ${i + 1} diagram`} maxThumbHeight={200} /></div>}
                 <div className="sm bold mt1">{qq.question}</div>
                 <div className="xs mt1"><b>Your answer:</b> {sel || '—'}</div>
                 {!ok && <div className="xs mt1"><b>Correct answer:</b> {qq.answer}</div>}
@@ -180,6 +182,7 @@ function PracticeSession({ pack, onExit }: { pack: Pack; onExit: () => void }) {
       <div className="xs ct3">
         {q.topic} · {(() => { const m = diffMeta(q.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}
       </div>
+      {q.imageData && <div style={{ margin: '8px 0' }}><DiagramViewer src={q.imageData} alt={`Question ${idx + 1} diagram`} maxThumbHeight={300} /></div>}
       <div style={{ fontFamily: 'var(--fh)', fontSize: 17, fontWeight: 700, margin: '8px 0 14px' }}>{q.question}</div>
 
       <div style={{ display: 'grid', gap: 8 }}>

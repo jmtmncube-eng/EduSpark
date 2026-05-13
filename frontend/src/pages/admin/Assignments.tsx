@@ -4,8 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, Question } from '../../types';
-import { subjectBadge, fmtDate, compressImage } from '../../utils/helpers';
+import { subjectBadge, fmtDate, compressImage, compressDiagram } from '../../utils/helpers';
 import { diffMeta } from '../../utils/difficulty';
+import DiagramViewer from '../../components/DiagramViewer';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: { 10: ['Algebra','Functions & Graphs','Trigonometry','Statistics','Finance & Growth','Euclidean Geometry'], 11: ['Quadratic Equations','Trigonometric Functions','Analytical Geometry','Finance','Counting & Probability','Inequalities'], 12: ['Differential Calculus','Sequences & Series','Polynomials','Exponential & Logarithms','Regression Analysis','Trigonometry Advanced'] },
@@ -91,7 +92,8 @@ export default function AdminAssignments() {
 
   async function handleDocImg(i: number, e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.[0]) return;
-    const b64 = await compressImage(e.target.files[0]);
+    const b64 = await compressDiagram(e.target.files[0]);
+    void compressImage;
     setDocs((d) => d.map((doc, idx) => idx === i ? { ...doc, imageData: b64 } : doc));
   }
 
@@ -277,7 +279,7 @@ export default function AdminAssignments() {
                 <div key={d.id} className="doc-vw">
                   <div className="doc-title">📄 {d.title}</div>
                   {d.content && <div className="doc-body">{d.content}</div>}
-                  {d.imageData && <img src={d.imageData} className="q-img mt1" alt="Document" />}
+                  {d.imageData && <div className="mt1"><DiagramViewer src={d.imageData} alt={d.title || 'Document'} maxThumbHeight={220} /></div>}
                 </div>
               ))}
             </>
@@ -285,7 +287,7 @@ export default function AdminAssignments() {
           <div className="sec-h mt2">📝 Questions ({viewAssign.questions.length})</div>
           {viewAssign.questions.map(({ question: q }, i) => (
             <div key={q.id} className="qcard" style={{ marginBottom: 8 }}>
-              {q.imageData && <img src={q.imageData} className="q-img" alt="" />}
+              {q.imageData && <div className="mt1"><DiagramViewer src={q.imageData} alt="Question diagram" maxThumbHeight={220} /></div>}
               <div className="qtxt" style={{ fontWeight: 600 }}>{i + 1}. {q.question}</div>
             </div>
           ))}

@@ -8,6 +8,7 @@ import type { Assignment, QuizResult } from '../../types';
 import { getLvl, calcStreak, fmtDate, subjectBadge } from '../../utils/helpers';
 import SmartCoach from '../../components/SmartCoach';
 import ClockWeather from '../../components/ClockWeather';
+import DiagramViewer from '../../components/DiagramViewer';
 
 const MOTIVATIONS = [
   { msg: 'Keep going! Every quiz builds your knowledge. 💡', ico: '🔥' },
@@ -154,7 +155,7 @@ export default function StudentDashboard() {
             <div key={d.id} className="doc-vw">
               <div className="doc-title">📄 {d.title}</div>
               {d.content && <div className="doc-body">{d.content}</div>}
-              {d.imageData && <img src={d.imageData} className="q-img mt1" alt="" />}
+              {d.imageData && <div className="mt1"><DiagramViewer src={d.imageData} alt={d.title || 'Document'} maxThumbHeight={200} /></div>}
             </div>
           ))}
           <div className="flex g1 mt2">

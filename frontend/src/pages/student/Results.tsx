@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { results as resultsApi } from '../../services/api';
+import DiagramViewer from '../../components/DiagramViewer';
 import type { QuizResult } from '../../types';
 import { fmtDate, launchConfetti } from '../../utils/helpers';
 
@@ -86,7 +87,7 @@ export default function StudentResults() {
                   <span className="sm bold">{i + 1}. {d.isCorrect ? '✅ Correct' : '❌ Incorrect'}</span>
                   <span className="xs ct3">{d.difficulty}</span>
                 </div>
-                {d.imageData && <img src={d.imageData} className="q-img mb1" alt="" />}
+                {d.imageData && <div className="mb1"><DiagramViewer src={d.imageData} alt={`Question ${i + 1} diagram`} /></div>}
                 <div className="qtxt mb2">{d.questionText}</div>
                 {opts ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

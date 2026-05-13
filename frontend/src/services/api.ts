@@ -383,6 +383,22 @@ export const audit = {
     }>(`/audit${qs ? '?' + qs : ''}`);
   },
   actions: () => request<string[]>('/audit/actions'),
+  entities: () => request<string[]>('/audit/entities'),
+  summary: () => request<{ total: number; last7d: number; today: number; topActions: { action: string; count: number }[] }>('/audit/summary'),
+  /** Trigger a CSV download honouring the current filters. */
+  downloadCsv: async (params: Record<string, string>) => {
+    const token = localStorage.getItem('es_token');
+    const qs = new URLSearchParams({ ...params, format: 'csv' }).toString();
+    const res = await fetch(`/api/audit?${qs}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error('Could not export CSV');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `eduspark-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
 };
 
 // ─── SmartCoach — A-Student Recommendations ───────────────────────

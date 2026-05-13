@@ -4,6 +4,7 @@ import { authMiddleware, adminOrTutorOnly } from '../middleware/auth';
 import { generateQuestion, expectedSecondsFor } from '../utils/questionGenerators';
 import { Difficulty, Subject } from '@prisma/client';
 import { notifyMany } from '../utils/notify';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -196,6 +197,10 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
       })));
     } catch (e) { console.error('[notify on assignment create]', e); }
 
+    await audit(req, 'assignment.create', 'Assignment', assignment.id, {
+      title: assignment.title, subject: assignment.subject, grade: assignment.grade,
+      topic: assignment.topic, assignTo: assignment.assignTo, dueDate: assignment.dueDate,
+    });
     return res.status(201).json(assignment);
   } catch (err) {
     console.error(err);
@@ -240,6 +245,7 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
       },
     });
 
+    await audit(req, 'assignment.update', 'Assignment', assignment.id, { title: assignment.title });
     return res.json(assignment);
   } catch (err) {
     console.error(err);
@@ -257,6 +263,7 @@ router.delete('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res
       }
     }
     await prisma.assignment.delete({ where: { id: req.params.id } });
+    await audit(req, 'assignment.delete', 'Assignment', req.params.id);
     return res.json({ success: true });
   } catch (err) {
     console.error(err);

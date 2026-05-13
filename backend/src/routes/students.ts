@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 import { makeUniquePin, generatePin, generateTutorPin } from '../utils/pinGenerator';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -102,10 +103,14 @@ router.get('/available', authMiddleware, adminOrTutorOnly, async (req: Request, 
 router.patch('/:id/assign-tutor', authMiddleware, adminOnly, async (req: Request, res: Response) => {
   try {
     const { tutorId } = req.body as { tutorId: string | null };
+    const before = await prisma.user.findUnique({ where: { id: req.params.id }, select: { teacherId: true } });
     const updated = await prisma.user.update({
       where: { id: req.params.id },
       data: { teacherId: tutorId ?? null },
       include: { teacher: { select: { id: true, name: true } } },
+    });
+    await audit(req, 'user.assign-tutor', 'User', req.params.id, {
+      before: before?.teacherId ?? null, after: tutorId ?? null,
     });
     return res.json(updated);
   } catch (err) {
@@ -120,6 +125,9 @@ router.patch('/tutors/:id/toggle-active', authMiddleware, adminOnly, async (req:
     const tutor = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!tutor || tutor.role !== 'TUTOR') return res.status(404).json({ error: 'Tutor not found' });
     const updated = await prisma.user.update({ where: { id: req.params.id }, data: { active: !tutor.active } });
+    await audit(req, updated.active ? 'user.update' : 'user.deactivate', 'User', updated.id, {
+      role: 'TUTOR', active: updated.active,
+    });
     return res.json(updated);
   } catch (err) {
     console.error(err);
@@ -154,6 +162,9 @@ router.patch('/:id/toggle-active', authMiddleware, adminOnly, async (req: Reques
     const student = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!student) return res.status(404).json({ error: 'Not found' });
     const updated = await prisma.user.update({ where: { id: req.params.id }, data: { active: !student.active } });
+    await audit(req, updated.active ? 'user.update' : 'user.deactivate', 'User', updated.id, {
+      role: 'STUDENT', active: updated.active,
+    });
     return res.json(updated);
   } catch (err) {
     console.error(err);
@@ -213,6 +224,7 @@ router.post('/:id/reset-pin', authMiddleware, adminOrTutorOnly, async (req: Requ
     }
 
     const updated = await prisma.user.update({ where: { id: req.params.id }, data: { pin: newPin } });
+    await audit(req, 'user.update', 'User', req.params.id, { action: 'reset-pin', role: target.role });
     return res.json({ pin: newPin, user: updated });
   } catch (err) {
     console.error(err);

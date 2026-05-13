@@ -202,6 +202,7 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
       include: packInclude,
     });
 
+    await audit(req, 'pack.update', 'Pack', pack.id, { title: pack.title });
     return res.json(pack);
   } catch (err) {
     console.error(err);
@@ -271,6 +272,7 @@ router.delete('/:id/share/:tutorId', authMiddleware, adminOnly, async (req: Requ
     await prisma.packShare.delete({
       where: { packId_tutorId: { packId: req.params.id, tutorId: req.params.tutorId } },
     });
+    await audit(req, 'pack.unshare', 'Pack', req.params.id, { tutorId: req.params.tutorId });
     return res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -338,6 +340,7 @@ router.delete('/:id/unlock/:studentId', authMiddleware, async (req: Request, res
     if (!unlock) return res.status(404).json({ error: 'Not unlocked' });
     if (unlock.unlockedById !== req.user!.userId) return res.status(403).json({ error: 'Not yours' });
     await prisma.studentUnlock.delete({ where: { id: unlock.id } });
+    await audit(req, 'pack.revoke', 'Pack', req.params.id, { studentId: req.params.studentId });
     return res.json({ success: true });
   } catch (err) {
     console.error(err);

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOrTutorOnly, adminOnly } from '../middleware/auth';
 import { notify, notifyMany } from '../utils/notify';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -178,6 +179,9 @@ router.post('/notes', authMiddleware, adminOrTutorOnly, async (req: Request, res
       }
     } catch (e) { console.error('[calendar notify]', e); }
 
+    await audit(req, 'calendar.note.create', 'CalendarNote', note.id, {
+      date: note.date, title: note.title, kind: note.kind, sharedWithAdmin: note.sharedWithAdmin,
+    });
     return res.status(201).json(note);
   } catch (err) {
     console.error(err);
@@ -226,6 +230,7 @@ router.put('/notes/:id', authMiddleware, adminOrTutorOnly, async (req: Request, 
       },
       include: { tutor: { select: { id: true, name: true } }, student: { select: { id: true, name: true } } },
     });
+    await audit(req, 'calendar.note.update', 'CalendarNote', note.id, { date: note.date, title: note.title });
     return res.json(note);
   } catch (err) {
     console.error(err);
@@ -245,6 +250,7 @@ router.delete('/notes/:id', authMiddleware, adminOrTutorOnly, async (req: Reques
       return res.status(403).json({ error: "Cannot delete a tutor's note" });
     }
     await prisma.calendarNote.delete({ where: { id: req.params.id } });
+    await audit(req, 'calendar.note.delete', 'CalendarNote', req.params.id, { title: existing.title, date: existing.date });
     return res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -318,6 +324,9 @@ router.post('/requests', authMiddleware, async (req: Request, res: Response) => 
       });
     }
 
+    await audit(req, 'calendar.request.create', 'CalendarRequest', request.id, {
+      type: rt, proposedDate: proposedDate ?? null, tutorId: targetTutorId,
+    });
     return res.status(201).json(request);
   } catch (err) {
     console.error(err);
@@ -403,6 +412,9 @@ router.patch('/requests/:id', authMiddleware, adminOrTutorOnly, async (req: Requ
       body: request.message,
       link: '/app/calendar',
     });
+
+    await audit(req, status === 'approved' ? 'calendar.request.approve' : 'calendar.request.deny',
+      'CalendarRequest', updated.id, { type: request.requestType, studentId: request.studentId });
 
     return res.json(updated);
   } catch (err) {

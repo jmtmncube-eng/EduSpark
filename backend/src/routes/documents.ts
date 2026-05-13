@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly } from '../middleware/auth';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -97,6 +98,9 @@ router.post('/upload', authMiddleware, adminOnly, upload.single('file'), async (
       },
     });
 
+    await audit(req, 'document.upload', 'PdfDocument', doc.id, {
+      title: doc.title, fileSize: doc.fileSize, pageCount: doc.pageCount, kind: doc.documentKind,
+    });
     return res.status(201).json(doc);
   } catch (err: unknown) {
     console.error(err);
@@ -176,6 +180,7 @@ router.delete('/:id', authMiddleware, adminOnly, async (req: Request, res: Respo
       try { fs.unlinkSync(fp); } catch (e) { console.error('unlink failed', e); }
     }
     await prisma.pdfDocument.delete({ where: { id: req.params.id } });
+    await audit(req, 'document.delete', 'PdfDocument', req.params.id, { title: doc.title });
     return res.json({ success: true });
   } catch (err) {
     console.error(err);

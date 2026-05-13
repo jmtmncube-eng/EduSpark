@@ -268,6 +268,7 @@ router.post('/security-question', authMiddleware, async (req: Request, res: Resp
       where: { id: req.user!.userId },
       data: { securityQuestion: question.trim().slice(0, 200), securityAnswerHash: hash },
     });
+    await audit(req, 'security.set-question', 'User', req.user!.userId, { questionLength: question.trim().length });
     return res.json({ ok: true });
   } catch (err) {
     console.error('[security-question]', err);

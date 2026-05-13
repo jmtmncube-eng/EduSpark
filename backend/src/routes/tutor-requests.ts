@@ -58,6 +58,8 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
       include: { tutor: { select: { id: true, name: true } }, student: { select: { id: true, name: true, grade: true } } },
     });
 
+    await audit(req, 'tutorRequest.create', 'TutorRequest', request.id, { studentId, note: note ?? null });
+
     // Notify all admins
     const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
     await Promise.all(admins.map((a) => notify({

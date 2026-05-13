@@ -36,6 +36,20 @@ export const auth = {
     request<{ token: string; user: object; isNew: boolean }>(
       '/auth/register-tutor', { method: 'POST', body: JSON.stringify({ name, subjects, teachGrades }) }
     ),
+  // ─── PIN recovery via security question ────────────────────────
+  recoverLookup: (name: string, role: 'student' | 'tutor' | 'admin') =>
+    request<{ ok: true; question: string }>(
+      '/auth/recover/lookup', { method: 'POST', body: JSON.stringify({ name, role }) }
+    ),
+  recoverVerify: (name: string, role: 'student' | 'tutor' | 'admin', answer: string) =>
+    request<{ ok: true; pin: string; name: string }>(
+      '/auth/recover/verify', { method: 'POST', body: JSON.stringify({ name, role, answer }) }
+    ),
+  setSecurityQuestion: (question: string, answer: string) =>
+    request<{ ok: true }>(
+      '/auth/security-question', { method: 'POST', body: JSON.stringify({ question, answer }) }
+    ),
+  securityStatus: () => request<{ set: boolean; question: string | null }>('/auth/security-status'),
 };
 
 // ─── Questions ────────────────────────────────────────────────────
@@ -110,15 +124,23 @@ export const results = {
 // ─── Calendar ─────────────────────────────────────────────────────
 export const calendar = {
   notes: () => request<object[]>('/calendar/notes'),
-  createNote: (data: object) =>
+  createNote: (data: {
+    date: string; title: string; content?: string; color?: string;
+    studentId?: string | null; kind?: string; sharedWithAdmin?: boolean;
+  }) =>
     request<object>('/calendar/notes', { method: 'POST', body: JSON.stringify(data) }),
   updateNote: (id: string, data: object) =>
     request<object>(`/calendar/notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteNote: (id: string) =>
     request<{ success: boolean }>(`/calendar/notes/${id}`, { method: 'DELETE' }),
+
   // Change requests
-  createRequest: (noteId: string, message: string) =>
-    request<object>('/calendar/requests', { method: 'POST', body: JSON.stringify({ noteId, message }) }),
+  createRequest: (data: {
+    noteId?: string; message: string;
+    requestType?: 'move' | 'new' | 'cancel';
+    proposedDate?: string; proposedTitle?: string;
+  }) =>
+    request<object>('/calendar/requests', { method: 'POST', body: JSON.stringify(data) }),
   getRequests: () => request<object[]>('/calendar/requests'),
   updateRequest: (id: string, status: 'approved' | 'denied') =>
     request<object>(`/calendar/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
@@ -132,6 +154,21 @@ export const analytics = {
   weeklyActivity: () => request<object[]>('/analytics/weekly-activity'),
   difficultyBreakdown: () => request<object>('/analytics/difficulty-breakdown'),
   studentReport: (id: string) => request<object>(`/analytics/student-report/${id}`),
+  aStudentFactory: () => request<{
+    totals: { students: number; withAttempts: number };
+    tiers: { a: number; b: number; c: number; d: number; none: number };
+    velocity: {
+      avgSlope: number;
+      risers: { id: string; name: string; grade: number; avg: number; slope: number }[];
+      strugglers: { id: string; name: string; grade: number; avg: number; slope: number }[];
+    };
+    recovery: { rate: number; wins: number; total: number };
+    activity: { practiceLast7: number; assignmentsLast7: number };
+    gradeSegments: { grade: number; students: number; avgScore: number; activeLast7: number; activeRatio: number }[];
+  }>('/analytics/a-student-factory'),
+  gradeSegments: () => request<{
+    segments: { grade: number; students: { id: string; name: string; grade: number; xp: number; pin: string; teacher: { id: string; name: string } | null }[] }[];
+  }>('/analytics/grade-segments'),
 };
 
 // ─── Parent Access ────────────────────────────────────────────────
@@ -171,4 +208,119 @@ export const tutors = {
     request<object>(`/students/tutors/${id}/toggle-active`, { method: 'PATCH' }),
   assignStudent: (studentId: string, tutorId: string | null) =>
     request<object>(`/students/${studentId}/assign-tutor`, { method: 'PATCH', body: JSON.stringify({ tutorId }) }),
+};
+
+// ─── Packs (Phase 1: shared question/document bundles) ────────────
+export const packs = {
+  list: () => request<object[]>('/packs'),
+  get: (id: string) => request<object>(`/packs/${id}`),
+  create: (data: object) =>
+    request<object>('/packs', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: object) =>
+    request<object>(`/packs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/packs/${id}`, { method: 'DELETE' }),
+  share: (id: string, tutorIds: string[], note?: string) =>
+    request<{ shared: number }>(`/packs/${id}/share`, { method: 'POST', body: JSON.stringify({ tutorIds, note }) }),
+  unshare: (id: string, tutorId: string) =>
+    request<{ success: boolean }>(`/packs/${id}/share/${tutorId}`, { method: 'DELETE' }),
+  unlock: (id: string, studentIds: string[]) =>
+    request<{ unlocked: number }>(`/packs/${id}/unlock`, { method: 'POST', body: JSON.stringify({ studentIds }) }),
+  revokeUnlock: (id: string, studentId: string) =>
+    request<{ success: boolean }>(`/packs/${id}/unlock/${studentId}`, { method: 'DELETE' }),
+  listUnlocks: (id: string) => request<object[]>(`/packs/${id}/unlocks`),
+  /**
+   * Trigger a branded PDF download. The browser handles the byte stream — we just
+   * need to attach the auth token via a one-off fetch and force a blob download.
+   */
+  downloadPdf: async (id: string, mode: 'worksheet' | 'memo', filenameHint?: string) => {
+    const token = localStorage.getItem('es_token');
+    const res = await fetch(`${BASE}/packs/${id}/pdf?mode=${mode}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Could not export PDF');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(filenameHint || 'pack').replace(/[^a-zA-Z0-9._-]/g, '_')}_${mode}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+  },
+};
+
+// ─── PDF Documents (Phase 2) ──────────────────────────────────────
+export const documents = {
+  list: () => request<object[]>('/documents'),
+  upload: async (file: File, meta: { title?: string; description?: string; documentKind?: string } = {}) => {
+    const token = localStorage.getItem('es_token');
+    const fd = new FormData();
+    fd.append('file', file);
+    if (meta.title) fd.append('title', meta.title);
+    if (meta.description) fd.append('description', meta.description);
+    if (meta.documentKind) fd.append('documentKind', meta.documentKind);
+    const res = await fetch(`${BASE}/documents/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Upload failed');
+    }
+    return res.json();
+  },
+  fileUrl: (id: string) => {
+    const token = localStorage.getItem('es_token') || '';
+    return `${BASE}/documents/${id}/file?token=${encodeURIComponent(token)}`;
+  },
+  update: (id: string, data: object) =>
+    request<object>(`/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/documents/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Notifications (Phase 4) ──────────────────────────────────────
+export const notifications = {
+  list: () => request<{ list: object[]; unread: number }>('/notifications'),
+  unreadCount: () => request<{ unread: number }>('/notifications/unread-count'),
+  markRead: (id: string) =>
+    request<object>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllRead: () =>
+    request<{ success: boolean }>('/notifications/read-all', { method: 'PATCH' }),
+  delete: (id: string) =>
+    request<{ success: boolean }>(`/notifications/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Onboarding (Phase 5) ─────────────────────────────────────────
+export const onboarding = {
+  get: () => request<{ completedSteps: string[]; dismissed: boolean }>('/onboarding'),
+  patch: (data: { step?: string; dismissed?: boolean }) =>
+    request<object>('/onboarding', { method: 'PATCH', body: JSON.stringify(data) }),
+};
+
+// ─── SmartCoach — A-Student Recommendations ───────────────────────
+export const recommendations = {
+  me: () => request<{
+    weakTopics: { topic: string; subject: string; avgScore: number; trend: string; suggestedPack: { id: string; title: string; coverEmoji: string; topic: string } | null }[];
+    strongTopics: { topic: string; avgScore: number }[];
+    mastery: { topic: string; subject: string; avgScore: number; attempts: number; trend: string }[];
+    dailyGoal: { target: number; done: number; minutesToday: number; complete: boolean };
+    streak: number;
+    nextPack: { id: string; title: string; coverEmoji: string; topic: string | null } | null;
+    totalAttempts: number;
+    avgScore: number;
+  }>('/recommendations/me'),
+  spotlight: () => request<{
+    id: string; name: string; grade: number; xp: number;
+    status: 'at_risk' | 'inactive' | 'on_track' | 'thriving' | 'new';
+    reason: string; avg: number; attempts: number;
+    lastAttempt: string | null; daysSince: number;
+    weakestTopic: string | null;
+  }[]>('/recommendations/spotlight'),
 };

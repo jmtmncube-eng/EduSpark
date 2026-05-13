@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOrTutorOnly } from '../middleware/auth';
-import { generateQuestion } from '../utils/questionGenerators';
+import { generateQuestion, expectedSecondsFor } from '../utils/questionGenerators';
 import { Difficulty, Subject } from '@prisma/client';
+import { notifyMany } from '../utils/notify';
 
 const router = Router();
 
@@ -106,7 +107,15 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'You can only view your own assignments' });
     }
 
-    return res.json(assignment);
+    // Enrich with expectedSeconds per question for the live timer
+    const enriched = {
+      ...assignment,
+      questions: assignment.questions.map((aq) => ({
+        ...aq,
+        question: { ...aq.question, expectedSeconds: expectedSecondsFor(aq.question) },
+      })),
+    };
+    return res.json(enriched);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -167,6 +176,25 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
         documents: true,
       },
     });
+
+    // ─── Phase 4: notify affected students ─────────────────────────────
+    try {
+      const studentFilter: Record<string, unknown> = { role: 'STUDENT', active: true };
+      if (isTutor) studentFilter.teacherId = req.user!.userId;
+      if (assignment.assignTo === 'gr10') studentFilter.grade = 10;
+      else if (assignment.assignTo === 'gr11') studentFilter.grade = 11;
+      else if (assignment.assignTo === 'gr12') studentFilter.grade = 12;
+      else if (assignment.assignTo !== 'all') studentFilter.id = assignment.assignTo;
+
+      const students = await prisma.user.findMany({ where: studentFilter, select: { id: true } });
+      await notifyMany(students.map((s) => ({
+        userId: s.id,
+        type: 'assignment_new' as const,
+        title: `📋 New assignment: ${assignment.title}`,
+        body: `Due ${new Date(assignment.dueDate).toLocaleDateString('en-ZA')} · ${assignment.topic}`,
+        link: '/app/my-work',
+      })));
+    } catch (e) { console.error('[notify on assignment create]', e); }
 
     return res.status(201).json(assignment);
   } catch (err) {

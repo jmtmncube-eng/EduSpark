@@ -6,7 +6,8 @@ import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { fmtDate, launchConfetti } from '../../utils/helpers';
 
-const TIME_PER_Q = 60;
+// Default fallback when the backend doesn't provide expectedSeconds (legacy data)
+const DEFAULT_TIME_PER_Q = 60;
 
 export default function StudentQuiz() {
   const { assignmentId: id } = useParams<{ assignmentId: string }>();
@@ -17,7 +18,7 @@ export default function StudentQuiz() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [timeLeft, setTimeLeft] = useState(TIME_PER_Q);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_TIME_PER_Q);
   const [showDocModal, setShowDocModal] = useState(false);
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
 
@@ -36,17 +37,35 @@ export default function StudentQuiz() {
   const attemptsLeft = maxAttempts - attemptsDone;
   const thisAttempt = attemptsDone + 1;
 
+  // Per-question time budget — the backend computes this from text length + difficulty.
+  // Fallback: 60s for legacy questions without the hint.
+  const budgetFor = useCallback((i: number): number => {
+    const q = questions[i] as (typeof questions)[number] & { expectedSeconds?: number } | undefined;
+    return q?.expectedSeconds && q.expectedSeconds > 0 ? q.expectedSeconds : DEFAULT_TIME_PER_Q;
+  }, [questions]);
+  const currentBudget = budgetFor(qIdx);
+
   const nextQ = useCallback(() => {
-    if (qIdx < total - 1) { setQIdx((i) => i + 1); setTimeLeft(TIME_PER_Q); }
-  }, [qIdx, total]);
+    if (qIdx < total - 1) {
+      const ni = qIdx + 1;
+      setQIdx(ni);
+      setTimeLeft(budgetFor(ni));
+    }
+  }, [qIdx, total, budgetFor]);
+
+  // Reset the timer when we hit a new question, so the budget is fresh
+  useEffect(() => {
+    if (phase === 'quiz') setTimeLeft(currentBudget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qIdx, phase]);
 
   useEffect(() => {
     if (phase !== 'quiz') return;
     const t = setInterval(() => {
-      setTimeLeft((prev) => { if (prev <= 1) { nextQ(); return TIME_PER_Q; } return prev - 1; });
+      setTimeLeft((prev) => { if (prev <= 1) { nextQ(); return budgetFor(qIdx + 1); } return prev - 1; });
     }, 1000);
     return () => clearInterval(t);
-  }, [phase, nextQ]);
+  }, [phase, nextQ, budgetFor, qIdx]);
 
   async function submit() {
     if (!assign || isSubmitting) return;
@@ -73,8 +92,10 @@ export default function StudentQuiz() {
 
   const answered = Object.keys(answers).length;
   const pct = total ? Math.round((answered / total) * 100) : 0;
-  const timerPct = (timeLeft / TIME_PER_Q) * 100;
-  const timerCol = timeLeft <= 10 ? 'var(--dr)' : timeLeft <= 20 ? 'var(--wr)' : 'var(--p)';
+  const timerPct = (timeLeft / Math.max(1, currentBudget)) * 100;
+  const dangerThreshold = Math.max(8, Math.round(currentBudget * 0.2));
+  const warnThreshold = Math.max(15, Math.round(currentBudget * 0.4));
+  const timerCol = timeLeft <= dangerThreshold ? 'var(--dr)' : timeLeft <= warnThreshold ? 'var(--wr)' : 'var(--p)';
 
   // Best previous score
   const bestPrev = prevResults.length ? Math.max(...prevResults.map((r) => r.score)) : null;
@@ -114,7 +135,7 @@ export default function StudentQuiz() {
           )}
 
           <div className="stats" style={{ marginBottom: 18 }}>
-            {[{ ico: '❓', val: total, lbl: 'Questions' }, { ico: '⏱', val: `${TIME_PER_Q}s`, lbl: 'Per question' }, { ico: '⚡', val: `${total * 10}+`, lbl: 'XP Available' }].map((s) => (
+            {[{ ico: '❓', val: total, lbl: 'Questions' }, { ico: '⏱', val: `~${budgetFor(qIdx)}s`, lbl: 'Per question' }, { ico: '⚡', val: `${total * 10}+`, lbl: 'XP Available' }].map((s) => (
               <div key={s.lbl} className="scard"><div className="sico">{s.ico}</div><div className="sv">{s.val}</div><div className="sl">{s.lbl}</div></div>
             ))}
           </div>
@@ -135,7 +156,7 @@ export default function StudentQuiz() {
           ) : total === 0 ? (
             <p className="sm ct2">No questions attached to this assignment yet.</p>
           ) : (
-            <button className="btn bp" style={{ fontSize: 16, padding: '12px 32px' }} onClick={() => { setPhase('quiz'); setTimeLeft(TIME_PER_Q); }}>
+            <button className="btn bp" style={{ fontSize: 16, padding: '12px 32px' }} onClick={() => { setPhase('quiz'); setTimeLeft(budgetFor(qIdx)); }}>
               🚀 {thisAttempt === 1 ? 'Start Quiz' : `Start Attempt ${thisAttempt}`}
             </button>
           )}
@@ -194,7 +215,7 @@ export default function StudentQuiz() {
           const col = i === qIdx || ans ? '#fff' : isFlag ? '#fff' : 'var(--t2)';
           return (
             <button key={i} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: bg, color: col, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
-              onClick={() => { setQIdx(i); setTimeLeft(TIME_PER_Q); }}>
+              onClick={() => { setQIdx(i); setTimeLeft(budgetFor(qIdx)); }}>
               {i + 1}
             </button>
           );
@@ -226,7 +247,7 @@ export default function StudentQuiz() {
 
       {/* Navigation */}
       <div className="flex jb ia">
-        <button className="btn bg-btn" disabled={qIdx === 0} onClick={() => { setQIdx((i) => i - 1); setTimeLeft(TIME_PER_Q); }}>← Prev</button>
+        <button className="btn bg-btn" disabled={qIdx === 0} onClick={() => { setQIdx((i) => i - 1); setTimeLeft(budgetFor(qIdx)); }}>← Prev</button>
         <div className="flex g1">
           {qIdx < total - 1
             ? <button className="btn bp" onClick={nextQ}>{answers[current?.id || ''] ? 'Next →' : 'Skip →'}</button>

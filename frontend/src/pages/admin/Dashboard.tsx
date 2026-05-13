@@ -3,6 +3,9 @@ import { Bar, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend } from 'chart.js';
 import { analytics } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import TutorSpotlight from '../../components/TutorSpotlight';
+import AStudentFactory from '../../components/AStudentFactory';
+import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend);
 
@@ -54,6 +57,8 @@ export default function AdminDashboard() {
   return (
     <div>
       <div className="ph"><h2>📊 Dashboard</h2><p>Platform overview</p></div>
+      <AdminOrTutor />
+      <TutorSpotlight />
       <div className="stats">
         {stats.map((s) => (
           <div className="scard" key={s.lbl}>
@@ -91,4 +96,11 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
+}
+
+// Show A-Student Factory only for admins (the endpoint enforces it too,
+// but rendering it for tutors would just show a silent failure card)
+function AdminOrTutor() {
+  const { user } = useAuth();
+  return user?.role === 'ADMIN' ? <AStudentFactory /> : null;
 }

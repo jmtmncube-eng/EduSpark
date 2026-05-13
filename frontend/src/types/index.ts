@@ -106,17 +106,29 @@ export interface CalendarNote {
   content: string | null;
   color: string;
   createdAt: string;
+  // Phase 7
+  kind?: string;
+  tutorId?: string | null;
+  studentId?: string | null;
+  sharedWithAdmin?: boolean;
+  tutor?: { id: string; name: string } | null;
+  student?: { id: string; name: string } | null;
 }
 
 export interface CalendarRequest {
   id: string;
-  noteId: string;
+  noteId: string | null;
   studentId: string;
   studentName: string;
   message: string;
   status: 'pending' | 'approved' | 'denied';
   createdAt: string;
-  note?: { title: string; date: string };
+  requestType?: 'move' | 'new' | 'cancel';
+  proposedDate?: string | null;
+  proposedTitle?: string | null;
+  tutorId?: string | null;
+  note?: { title: string; date: string } | null;
+  student?: { id: string; name: string; grade: number };
 }
 
 export interface TutorRequest {
@@ -146,4 +158,70 @@ export interface Level {
   ic: string;
   min: number;
   next: number;
+}
+
+// ─── Phase 1: Packs & Sharing ─────────────────────────────────────
+export interface PdfDocument {
+  id: string;
+  title: string;
+  description: string | null;
+  filePath: string;
+  fileSize: number;
+  pageCount: number;
+  documentKind: string;
+  uploadedById: string;
+  createdAt: string;
+  uploadedBy?: { id: string; name: string };
+}
+
+export interface PackQuestionItem {
+  questionId: string;
+  order: number;
+  question: Question;
+}
+
+export interface PackDocumentItem {
+  documentId: string;
+  order: number;
+  document: PdfDocument;
+}
+
+export interface Pack {
+  id: string;
+  title: string;
+  description: string | null;
+  subject: Subject;
+  grade: number;
+  topic: string | null;
+  coverEmoji: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdById: string;
+  createdBy?: { id: string; name: string; role: Role };
+  questions: PackQuestionItem[];
+  documents: PackDocumentItem[];
+  _count?: { shares: number; unlocks: number };
+  sharedAt?: string;
+  shareNote?: string | null;
+  unlockedAt?: string;
+  source?: 'own' | 'admin';
+}
+
+// ─── Phase 4: Notifications ───────────────────────────────────────
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+// ─── Phase 5: Onboarding ──────────────────────────────────────────
+export interface OnboardingState {
+  completedSteps: string[];
+  dismissed: boolean;
 }

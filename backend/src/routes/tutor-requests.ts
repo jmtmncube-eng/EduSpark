@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -55,6 +56,17 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
       data: { tutorId: req.user!.userId, studentId, note: note ?? null },
       include: { tutor: { select: { id: true, name: true } }, student: { select: { id: true, name: true, grade: true } } },
     });
+
+    // Notify all admins
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+    await Promise.all(admins.map((a) => notify({
+      userId: a.id,
+      type: 'tutor_requested',
+      title: `🙋 ${request.tutor.name} requested ${request.student.name}`,
+      body: note || 'Pending your approval.',
+      link: '/app/tutors',
+    })));
+
     return res.status(201).json(request);
   } catch (err) {
     console.error(err);
@@ -96,6 +108,17 @@ router.patch('/:id', authMiddleware, adminOnly, async (req: Request, res: Respon
         data: { status: 'denied' },
       });
     }
+
+    // Notify tutor of the decision
+    await notify({
+      userId: request.tutorId,
+      type: status === 'approved' ? 'tutor_approved' : 'tutor_denied',
+      title: status === 'approved'
+        ? `✅ Approved: ${request.student.name} is now your student`
+        : `❌ Request denied: ${request.student.name}`,
+      body: status === 'approved' ? 'You can now share packs and create assignments for them.' : undefined,
+      link: '/app/students',
+    });
 
     return res.json(updated);
   } catch (err) {

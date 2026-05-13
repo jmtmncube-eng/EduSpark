@@ -9,15 +9,23 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function fmtD(d: Date) { return d.toISOString().split('T')[0]; }
 
+type RequestMode =
+  | { type: 'move'; note: CalendarNote }
+  | { type: 'cancel'; note: CalendarNote }
+  | { type: 'new'; preselectDate?: string };
+
 export default function StudentCalendar() {
   const [calDate, setCalDate] = useState(new Date());
   const [selDay, setSelDay] = useState('');
   const [asgns, setAsgns] = useState<Assignment[]>([]);
   const [notes, setNotes] = useState<CalendarNote[]>([]);
   const [results, setResults] = useState<QuizResult[]>([]);
-  const [requestNote, setRequestNote] = useState<CalendarNote | null>(null);
-  const [requestMsg, setRequestMsg] = useState('');
-  const [requestLoading, setRequestLoading] = useState(false);
+
+  const [mode, setMode] = useState<RequestMode | null>(null);
+  const [msg, setMsg] = useState('');
+  const [proposedDate, setProposedDate] = useState('');
+  const [proposedTitle, setProposedTitle] = useState('Tutoring session');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     assignmentsApi.list().then((d) => setAsgns(d as Assignment[]));
@@ -41,30 +49,70 @@ export default function StudentCalendar() {
   });
   notes.forEach((n) => {
     if (!evMap[n.date]) evMap[n.date] = [];
-    evMap[n.date].push({ title: n.title, cl: n.color || 'note' });
+    const prefix = n.kind === 'broadcast' ? '📢 ' : n.kind === 'session' ? '🎓 ' : '';
+    evMap[n.date].push({ title: prefix + n.title, cl: n.color || 'note' });
   });
 
   const dayAsgns = asgns.filter((a) => a.dueDate.split('T')[0] === selDay);
   const dayNotes = notes.filter((n) => n.date === selDay);
 
-  async function submitRequest() {
-    if (!requestNote || !requestMsg.trim()) { showToast('Enter a message', 'warn'); return; }
-    setRequestLoading(true);
-    try {
-      await calendar.createRequest(requestNote.id, requestMsg);
-      showToast('Request sent to your teacher! ✅');
-      setRequestNote(null);
-      setRequestMsg('');
-    } catch {
-      showToast('Could not send request — try again', 'err');
-    } finally {
-      setRequestLoading(false);
+  function openRequest(m: RequestMode) {
+    setMode(m);
+    setMsg('');
+    if (m.type === 'new') {
+      setProposedDate(m.preselectDate || selDay || fmtD(now));
+      setProposedTitle('Tutoring session');
+    } else if (m.type === 'move') {
+      setProposedDate(m.note.date);
     }
+  }
+
+  async function submitRequest() {
+    if (!mode) return;
+    if (!msg.trim()) { showToast('Add a short message', 'warn'); return; }
+    setBusy(true);
+    try {
+      if (mode.type === 'move') {
+        if (!proposedDate) { showToast('Pick a new date', 'warn'); setBusy(false); return; }
+        await calendar.createRequest({
+          noteId: mode.note.id,
+          requestType: 'move',
+          proposedDate,
+          message: msg.trim(),
+        });
+      } else if (mode.type === 'cancel') {
+        await calendar.createRequest({
+          noteId: mode.note.id,
+          requestType: 'cancel',
+          message: msg.trim(),
+        });
+      } else {
+        if (!proposedDate) { showToast('Pick a date', 'warn'); setBusy(false); return; }
+        await calendar.createRequest({
+          requestType: 'new',
+          proposedDate,
+          proposedTitle: proposedTitle.trim() || 'Tutoring session',
+          message: msg.trim(),
+        });
+      }
+      showToast('Request sent — your tutor will respond.', 'success');
+      setMode(null);
+    } catch (e) {
+      showToast(String((e as Error).message), 'err');
+    } finally { setBusy(false); }
   }
 
   return (
     <div>
-      <div className="ph"><h2>📅 My Schedule</h2><p>Assignment deadlines and class notes</p></div>
+      <div className="ph"><h2>📅 My Schedule</h2><p>Assignment deadlines, class notes and tutoring sessions</p></div>
+
+      <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <button className="btn bg-btn btn-sm" onClick={() => openRequest({ type: 'new', preselectDate: selDay })}>
+          🆕 Request new session
+        </button>
+        <div className="xs ct3">💡 Tap any note for options · 🎓 sessions · 📢 broadcasts</div>
+      </div>
+
       <div className="cal-layout">
         <div className="cal-main">
           <div className="cal-hd">
@@ -87,7 +135,7 @@ export default function StudentCalendar() {
                 <div key={day} className={`cal-day ${isT ? 'today' : ''} ${selDay === ds ? 'sel' : ''} ${evs.length ? 'hev' : ''}`} onClick={() => setSelDay(ds)}>
                   <div className="cal-dn">{day}</div>
                   <div className="cal-pills">
-                    {evs.slice(0, 2).map((e, j) => <div key={j} className={`cal-pill ${e.cl}`}>{e.title.slice(0, 11)}</div>)}
+                    {evs.slice(0, 2).map((e, j) => <div key={j} className={`cal-pill ${e.cl}`}>{e.title.slice(0, 13)}</div>)}
                     {evs.length > 2 && <div className="cal-pill note">+{evs.length - 2}</div>}
                   </div>
                 </div>
@@ -95,11 +143,19 @@ export default function StudentCalendar() {
             })}
           </div>
         </div>
+
         <div className="cal-side">
           <div className="cal-side-t">{selDay ? new Date(selDay + 'T00:00').toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Select a day'}</div>
-          {!selDay ? <p className="sm ct3">Click any day to view assignments.</p> : (
+          {!selDay ? <p className="sm ct3">Click any day to view what's scheduled.</p> : (
             <>
-              {!dayAsgns.length && !dayNotes.length && <p className="sm ct3">Nothing scheduled for this day.</p>}
+              {!dayAsgns.length && !dayNotes.length && (
+                <>
+                  <p className="sm ct3">Nothing scheduled for this day.</p>
+                  <button className="btn ba btn-sm wf" style={{ justifyContent: 'center', marginTop: 10 }} onClick={() => openRequest({ type: 'new', preselectDate: selDay })}>
+                    🆕 Request a session on this day
+                  </button>
+                </>
+              )}
               {dayAsgns.map((a) => {
                 const done = doneIds.includes(a.id);
                 const ov = new Date(a.dueDate) < now && !done;
@@ -113,18 +169,26 @@ export default function StudentCalendar() {
                   </div>
                 );
               })}
-              {dayNotes.map((n) => (
-                <div key={n.id} className="cal-ev">
-                  <div className="flex jb ia" style={{ marginBottom: 4 }}>
-                    <div className="cal-ev-t">📌 {n.title}</div>
-                    <span className={`cal-pill ${n.color}`}>Note</span>
+              {dayNotes.map((n) => {
+                const isSession = n.kind === 'session';
+                const isBroadcast = n.kind === 'broadcast';
+                return (
+                  <div key={n.id} className="cal-ev">
+                    <div className="flex jb ia" style={{ marginBottom: 4 }}>
+                      <div className="cal-ev-t">{isSession ? '🎓' : isBroadcast ? '📢' : '📌'} {n.title}</div>
+                      <span className={`cal-pill ${n.color}`}>{n.kind || 'note'}</span>
+                    </div>
+                    {n.content && <div className="cal-ev-s" style={{ marginBottom: 6 }}>{n.content}</div>}
+                    {n.tutor && <div className="xs ct3">From 📚 {n.tutor.name}</div>}
+                    {!isBroadcast && n.tutorId && (
+                      <div className="flex g1" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                        <button className="btn ba btn-sm" style={{ fontSize: 10.5 }} onClick={() => openRequest({ type: 'move', note: n })}>↔ Move</button>
+                        <button className="btn ba btn-sm" style={{ fontSize: 10.5 }} onClick={() => openRequest({ type: 'cancel', note: n })}>❌ Request cancel</button>
+                      </div>
+                    )}
                   </div>
-                  {n.content && <div className="cal-ev-s" style={{ marginBottom: 6 }}>{n.content}</div>}
-                  <button className="btn ba btn-sm" style={{ fontSize: 10.5 }} onClick={() => { setRequestNote(n); setRequestMsg(''); }}>
-                    📝 Request Change
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>
@@ -134,30 +198,59 @@ export default function StudentCalendar() {
         {[['var(--dr)', 'Overdue'], ['var(--p)', 'Pending'], ['var(--s)', 'Completed'], ['var(--a)', 'Note']].map(([c, l]) => (
           <div key={l} className="flex ia" style={{ gap: 5, fontSize: 11, color: 'var(--t2)' }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />{l}</div>
         ))}
-        <div className="sm ct3" style={{ marginLeft: 'auto' }}>💡 Click 📝 on notes to request a schedule change from your teacher</div>
       </div>
 
-      {requestNote && (
-        <Modal title="📝 Request Schedule Change" onClose={() => setRequestNote(null)}>
-          <div style={{ marginBottom: 14 }}>
-            <div className="sm ct2 mb1">Requesting change for: <strong className="cp">{requestNote.title}</strong></div>
-            <div className="xs ct3">Your teacher will review your request and get back to you.</div>
-          </div>
+      {mode && (
+        <Modal
+          title={
+            mode.type === 'move'   ? '↔ Request to move this session'
+            : mode.type === 'cancel' ? '❌ Request to cancel'
+            : '🆕 Request a new tutoring session'
+          }
+          onClose={() => setMode(null)}
+        >
+          {mode.type !== 'new' && (
+            <div className="sm ct2 mb2">
+              Re: <strong>{mode.note.title}</strong> on {mode.note.date}
+            </div>
+          )}
+
+          {mode.type === 'new' && (
+            <>
+              <div className="fg">
+                <label className="lbl">Session title</label>
+                <input className="input" value={proposedTitle} onChange={(e) => setProposedTitle(e.target.value)} placeholder="e.g. Algebra catch-up" />
+              </div>
+            </>
+          )}
+
+          {(mode.type === 'new' || mode.type === 'move') && (
+            <div className="fg">
+              <label className="lbl">{mode.type === 'new' ? 'Preferred date' : 'New date'}</label>
+              <input type="date" className="input" value={proposedDate} onChange={(e) => setProposedDate(e.target.value)} />
+            </div>
+          )}
+
           <div className="fg">
-            <label className="lbl">Your Message</label>
+            <label className="lbl">Message to your tutor</label>
             <textarea
               className="textarea"
-              value={requestMsg}
-              onChange={(e) => setRequestMsg(e.target.value)}
-              placeholder="Explain why you need this changed (e.g. I have a sports event, family commitment, etc.)"
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              placeholder={
+                mode.type === 'new'
+                  ? "Why this session matters (e.g. I'm stuck on factorising)"
+                  : "Why you need this change (e.g. I have a sports event)"
+              }
               style={{ minHeight: 90 }}
             />
           </div>
+
           <div className="flex g1 mt1">
-            <button className="btn bp" onClick={submitRequest} disabled={requestLoading}>
-              {requestLoading ? '…' : '📨 Send Request'}
+            <button className="btn bg-btn wf" onClick={submitRequest} disabled={busy}>
+              {busy ? '…' : '📨 Send request'}
             </button>
-            <button className="btn bg-btn" onClick={() => setRequestNote(null)}>Cancel</button>
+            <button className="btn ba wf" onClick={() => setMode(null)}>Cancel</button>
           </div>
         </Modal>
       )}

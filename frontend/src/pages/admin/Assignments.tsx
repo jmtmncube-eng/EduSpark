@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { assignments as assignmentsApi, questions as questionsApi, studentSearch } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, Question } from '../../types';
@@ -13,6 +14,8 @@ const TOPICS: Record<string, Record<number, string[]>> = {
 interface DocForm { id?: string; title: string; content: string; imageData: string; }
 
 export default function AdminAssignments() {
+  const { user } = useAuth();
+  const isTutor = user?.role === 'TUTOR';
   const [list, setList] = useState<Assignment[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [viewAssign, setViewAssign] = useState<Assignment | null>(null);
@@ -95,10 +98,28 @@ export default function AdminAssignments() {
 
   return (
     <div>
-      <div className="ph"><h2>📋 Assignments</h2><p>Create quizzes, attach documents &amp; images, then allocate to students</p></div>
+      <div className="ph"><h2>📋 Assignments</h2><p>Timed quizzes with a due date — built from your question pool.</p></div>
+
+      {/* Flow hint */}
+      <div className="ca" style={{
+        padding: '10px 14px', marginBottom: 12,
+        background: 'linear-gradient(135deg, rgba(20,184,166,.06), rgba(14,165,233,.04))',
+        border: '1px solid var(--bd)',
+      }}>
+        <div className="flex ia g2" style={{ fontSize: 12 }}>
+          <span style={{ fontSize: 18 }}>💡</span>
+          <div className="ct2" style={{ flex: 1, lineHeight: 1.45 }}>
+            {isTutor
+              ? <>Your question pool below is scoped to <b>📦 Packs admin shared with you</b>. To get more questions, ask admin to share another Pack.</>
+              : <>Assignments are graded events with a due date. For open-ended practice use <b>📦 Packs</b> instead — students access them without deadlines.</>
+            }
+          </div>
+        </div>
+      </div>
+
       <div className="flex jb ia mb2">
         <span className="sm ct2">{list.length} assignment(s)</span>
-        <button className="btn bp" onClick={openCreate}>+ Create Assignment</button>
+        <button className="btn bg-btn" onClick={openCreate}>+ Create assignment</button>
       </div>
 
       {list.length === 0 ? (

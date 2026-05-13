@@ -27,6 +27,12 @@ model User {
   // For students: whether tutor has unlocked exam readiness view
   examReadinessUnlocked Boolean @default(false)
 
+  // ─── PIN recovery (Phase 8) ──────────────────────────────────
+  // Both fields are optional so existing users keep working until they opt in.
+  // securityAnswerHash stores a bcrypt hash — answers are never stored plain text.
+  securityQuestion    String?
+  securityAnswerHash  String?
+
   // For students: which tutor manages them
   teacherId String?
   teacher   User?   @relation("TutorStudents", fields: [teacherId], references: [id])
@@ -40,6 +46,20 @@ model User {
   parentAccesses     ParentAccess[]    @relation("ParentAccess")
   tutorRequests      TutorRequest[]    @relation("TutorRequests")
   studentRequests    TutorRequest[]    @relation("StudentRequests")
+
+  // Phase 7: calendar scoping
+  tutorCalendarNotes   CalendarNote[]  @relation("TutorCalendarNotes")
+  studentCalendarNotes CalendarNote[]  @relation("StudentCalendarNotes")
+
+  // Phase 1-5 additions
+  createdPacks       Pack[]            @relation("PackCreator")
+  packShares         PackShare[]       @relation("TutorShares")
+  sharesGiven        PackShare[]       @relation("PackSharedBy")
+  studentUnlocks     StudentUnlock[]   @relation("StudentUnlocks")
+  unlocksGiven       StudentUnlock[]   @relation("UnlockedBy")
+  uploadedDocs       PdfDocument[]     @relation("DocumentUploader")
+  notifications      Notification[]    @relation("Notifications")
+  onboarding         OnboardingState?  @relation("Onboarding")
 
   @@map("users")
 }
@@ -64,6 +84,7 @@ model Question {
 
   assignmentQuestions AssignmentQuestion[]
   resultDetails       ResultDetail[]
+  packQuestions       PackQuestion[]
 
   @@map("questions")
 }
@@ -166,14 +187,30 @@ model CalendarNote {
   createdBy   User   @relation(fields: [createdById], references: [id])
   createdById String
 
+  // ─── Scoping (Phase 7) ─────────────────────────────────────────
+  // tutorId  : owner if note was created by a tutor (null = admin/global note)
+  // studentId: if set, scoped to this single student; if null, broadcast to
+  //            the whole class of that tutor (or all students if admin)
+  // kind     : 'class' (regular event) | 'session' (tutoring session)
+  //            | 'maintenance' (visible to admin) | 'broadcast' (admin → everyone)
+  // sharedWithAdmin: tutor flag to surface this note in admin's calendar
+  tutorId         String?
+  tutor           User?   @relation("TutorCalendarNotes", fields: [tutorId], references: [id], onDelete: Cascade)
+  studentId       String?
+  student         User?   @relation("StudentCalendarNotes", fields: [studentId], references: [id], onDelete: Cascade)
+  kind            String  @default("note")
+  sharedWithAdmin Boolean @default(false)
+
   requests CalendarRequest[]
 
+  @@index([tutorId])
+  @@index([studentId])
   @@map("calendar_notes")
 }
 
 model CalendarRequest {
   id          String   @id @default(cuid())
-  noteId      String
+  noteId      String?
   studentId   String
   studentName String
   message     String   @db.Text
@@ -181,8 +218,19 @@ model CalendarRequest {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  note    CalendarNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  student User         @relation("CalendarRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  // ─── Extended request types (Phase 7) ──────────────────────────
+  // requestType: 'move' (change date of existing note)
+  //            | 'new'  (request new tutoring session — noteId null)
+  //            | 'cancel' (request to cancel)
+  // proposedDate / proposedTitle: hints used when approving 'move' or 'new'
+  // tutorId:    addressee — the tutor who owns/will own the session
+  requestType   String  @default("move")
+  proposedDate  String?
+  proposedTitle String?
+  tutorId       String?
+
+  note    CalendarNote? @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  student User          @relation("CalendarRequests", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("calendar_requests")
 }
@@ -244,4 +292,134 @@ enum Visibility {
 enum ResultType {
   ASSIGNMENT
   PRACTICE
+}
+
+// ─── Phase 1: Sharing & Content Packs ─────────────────────────────
+
+model Pack {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  subject     Subject
+  grade       Int
+  topic       String?
+  coverEmoji  String   @default("📦")
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User   @relation("PackCreator", fields: [createdById], references: [id])
+  createdById String
+
+  questions PackQuestion[]
+  documents PackDocument[]
+  shares    PackShare[]
+  unlocks   StudentUnlock[]
+
+  @@map("packs")
+}
+
+model PackQuestion {
+  pack       Pack     @relation(fields: [packId], references: [id], onDelete: Cascade)
+  packId     String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  order      Int      @default(0)
+
+  @@id([packId, questionId])
+  @@map("pack_questions")
+}
+
+model PackDocument {
+  pack       Pack        @relation(fields: [packId], references: [id], onDelete: Cascade)
+  packId     String
+  document   PdfDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  order      Int         @default(0)
+
+  @@id([packId, documentId])
+  @@map("pack_documents")
+}
+
+model PackShare {
+  id         String   @id @default(cuid())
+  packId     String
+  tutorId    String
+  sharedById String
+  note       String?  @db.Text
+  sharedAt   DateTime @default(now())
+
+  pack     Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  tutor    User @relation("TutorShares", fields: [tutorId], references: [id], onDelete: Cascade)
+  sharedBy User @relation("PackSharedBy", fields: [sharedById], references: [id])
+
+  @@unique([packId, tutorId])
+  @@map("pack_shares")
+}
+
+model StudentUnlock {
+  id           String   @id @default(cuid())
+  studentId    String
+  packId       String
+  unlockedById String
+  unlockedAt   DateTime @default(now())
+
+  student    User @relation("StudentUnlocks", fields: [studentId], references: [id], onDelete: Cascade)
+  pack       Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  unlockedBy User @relation("UnlockedBy", fields: [unlockedById], references: [id])
+
+  @@unique([studentId, packId])
+  @@map("student_unlocks")
+}
+
+// ─── Phase 2: PDF Documents ───────────────────────────────────────
+
+model PdfDocument {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?  @db.Text
+  filePath      String
+  fileSize      Int      @default(0)
+  pageCount     Int      @default(0)
+  extractedText String?  @db.Text
+  documentKind  String   @default("practice") // practice | test | notes
+  uploadedById  String
+  createdAt     DateTime @default(now())
+
+  uploadedBy User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  packs      PackDocument[]
+
+  @@map("pdf_documents")
+}
+
+// ─── Phase 4: Notifications ───────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String    // pack_shared | pack_unlocked | assignment_new | tutor_approved | tutor_denied | result_posted | due_soon
+  title     String
+  body      String?   @db.Text
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation("Notifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// ─── Phase 5: Onboarding ──────────────────────────────────────────
+
+model OnboardingState {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  completedSteps String[]
+  dismissed      Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+
+  user User @relation("Onboarding", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_states")
 }

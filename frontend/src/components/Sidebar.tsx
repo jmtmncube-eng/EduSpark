@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { fmtDate, getLvl, compressImage } from '../utils/helpers';
-import { students as studentsApi, tutorRequests as requestsApi, assignments as assignmentsApi, results as resultsApi } from '../services/api';
+import { students as studentsApi, tutorRequests as requestsApi, assignments as assignmentsApi, results as resultsApi, auth as authApi } from '../services/api';
 import { showToast } from './Toast';
 
 export default function Sidebar({ onToggle, open }: { onToggle: () => void; open: boolean }) {
@@ -14,6 +14,51 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
   const [theme, setTheme] = useState(() => localStorage.getItem('es_theme') || 'light');
   const [pendingCount, setPendingCount] = useState(0);
   const [workBadge, setWorkBadge] = useState(0);
+
+  // Security question (recovery)
+  const [secStatus, setSecStatus] = useState<{ set: boolean; question: string | null } | null>(null);
+  const [showSecModal, setShowSecModal] = useState(false);
+  const [secQ, setSecQ] = useState('');
+  const [secCustom, setSecCustom] = useState('');
+  const [secA, setSecA] = useState('');
+  const [secSaving, setSecSaving] = useState(false);
+
+  const SEC_OPTIONS = [
+    "What's the name of your first pet?",
+    "What's your favourite band or artist?",
+    "What primary school did you go to?",
+    "What's the name of the street you grew up on?",
+    "What's your favourite movie?",
+    "What's your favourite sports team?",
+    "What's the name of your best friend in primary school?",
+  ];
+
+  useEffect(() => {
+    if (!showProfile) return;
+    authApi.securityStatus().then(setSecStatus).catch(() => setSecStatus({ set: false, question: null }));
+  }, [showProfile]);
+
+  function openSecModal() {
+    setSecQ(secStatus?.question || SEC_OPTIONS[0]);
+    setSecCustom('');
+    setSecA('');
+    setShowSecModal(true);
+  }
+
+  async function saveSec() {
+    const q = secQ === '__custom__' ? secCustom.trim() : secQ;
+    if (!q) { showToast('Pick a question or write your own.', 'warn'); return; }
+    if (!secA.trim() || secA.trim().length < 2) { showToast('Answer is too short.', 'warn'); return; }
+    setSecSaving(true);
+    try {
+      await authApi.setSecurityQuestion(q, secA.trim());
+      showToast('Recovery question saved 🔒', 'success');
+      setSecStatus({ set: true, question: q });
+      setShowSecModal(false);
+    } catch (e) {
+      showToast(String((e as Error).message), 'err');
+    } finally { setSecSaving(false); }
+  }
 
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
@@ -47,10 +92,17 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.[0] || !user) return;
-    const b64 = await compressImage(e.target.files[0]);
-    await studentsApi.updatePhoto(user.id, b64);
-    updateUser({ photo: b64 });
-    showToast('Profile photo updated! 📷');
+    const file = e.target.files[0];
+    try {
+      const b64 = await compressImage(file);
+      await studentsApi.updatePhoto(user.id, b64);
+      updateUser({ photo: b64 });
+      showToast('Profile photo updated! 📷', 'success');
+    } catch (err) {
+      showToast(String((err as Error).message), 'err');
+    } finally {
+      e.target.value = ''; // allow re-picking the same file after an error
+    }
   }
 
   if (!user) return null;
@@ -58,33 +110,36 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
   const lv = getLvl(user.xp || 0);
 
   const adminLinks = [
-    { to: '/app/dashboard', ico: '🏠', label: 'Dashboard', section: 'Main' },
-    { to: '/app/questions', ico: '📝', label: 'Question Bank' },
+    { to: '/app/dashboard',   ico: '🏠', label: 'Dashboard', section: 'Main' },
+    { to: '/app/questions',   ico: '📝', label: 'Question Bank', section: 'Content' },
+    { to: '/app/packs',       ico: '📦', label: 'Content Packs' },
+    { to: '/app/library',     ico: '📄', label: 'PDF Library' },
     { to: '/app/assignments', ico: '📋', label: 'Assignments', section: 'Management' },
-    { to: '/app/students', ico: '👥', label: 'Students & PINs' },
-    { to: '/app/tutors', ico: '📚', label: 'Tutors' },
+    { to: '/app/students',    ico: '👥', label: 'Students & PINs' },
+    { to: '/app/tutors',      ico: '📚', label: 'Tutors' },
     { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
-    { to: '/app/analytics', ico: '📈', label: 'Analytics', section: 'Reports' },
-    { to: '/app/calendar', ico: '📅', label: 'Calendar' },
+    { to: '/app/analytics',   ico: '📈', label: 'Analytics', section: 'Reports' },
+    { to: '/app/calendar',    ico: '📅', label: 'Calendar' },
   ];
 
   const tutorLinks = [
-    { to: '/app/dashboard', ico: '🏠', label: 'Dashboard', section: 'Main' },
-    { to: '/app/questions', ico: '📝', label: 'Question Bank' },
+    { to: '/app/dashboard',   ico: '🏠', label: 'Dashboard', section: 'Main' },
+    { to: '/app/library',     ico: '📦', label: 'My Library', section: 'Content' },
+    { to: '/app/questions',   ico: '📝', label: 'Question Bank' },
     { to: '/app/assignments', ico: '📋', label: 'Assignments', section: 'My Class' },
-    { to: '/app/students', ico: '👥', label: 'My Students' },
+    { to: '/app/students',    ico: '👥', label: 'My Students' },
     { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
-    { to: '/app/analytics', ico: '📈', label: 'Analytics', section: 'Reports' },
-    { to: '/app/calendar', ico: '📅', label: 'Calendar' },
+    { to: '/app/analytics',   ico: '📈', label: 'Analytics', section: 'Reports' },
+    { to: '/app/calendar',    ico: '📅', label: 'Calendar' },
   ];
   const studentLinks = [
-    { to: '/app/dashboard', ico: '🏠', label: 'Dashboard', section: 'Main' },
-    { to: '/app/my-work', ico: '📋', label: 'My Work', section: 'Learning' },
-    { to: '/app/questions', ico: '📚', label: 'Question Bank' },
-    { to: '/app/progress', ico: '📈', label: 'My Progress' },
-    { to: '/app/history', ico: '🗂', label: 'Quiz History' },
+    { to: '/app/dashboard',      ico: '🏠', label: 'Dashboard', section: 'Main' },
+    { to: '/app/my-work',        ico: '📋', label: 'My Work', section: 'Learning' },
+    { to: '/app/practice',       ico: '📚', label: 'Practice' },
+    { to: '/app/progress',       ico: '📈', label: 'My Progress' },
+    { to: '/app/history',        ico: '🗂', label: 'Quiz History' },
     { to: '/app/exam-readiness', ico: '🎯', label: 'Exam Readiness' },
-    { to: '/app/calendar', ico: '📅', label: 'My Schedule' },
+    { to: '/app/calendar',       ico: '📅', label: 'My Schedule' },
   ];
   const isTutor = user.role === 'TUTOR';
   const links = isAdmin ? adminLinks : isTutor ? tutorLinks : studentLinks;
@@ -187,6 +242,32 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
                   </div>
                 )}
               </div>
+
+              {/* Recovery question card */}
+              <div style={{
+                marginTop: 12,
+                background: secStatus?.set ? 'rgba(34,197,94,.06)' : 'rgba(251,191,36,.10)',
+                border: `1px solid ${secStatus?.set ? 'rgba(34,197,94,.3)' : 'rgba(251,191,36,.35)'}`,
+                borderRadius: 12, padding: 14,
+              }}>
+                <div className="flex jb ia">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="sm bold">🔒 PIN Recovery Question</div>
+                    {secStatus?.set ? (
+                      <div className="xs ct3 mt1" style={{ wordBreak: 'break-word' }}>
+                        Current: <strong>{secStatus.question}</strong>
+                      </div>
+                    ) : (
+                      <div className="xs" style={{ color: '#a16207', marginTop: 2 }}>
+                        ⚠️ Not set. Without this, you can't recover a lost PIN.
+                      </div>
+                    )}
+                  </div>
+                  <button className="btn ba btn-sm" onClick={openSecModal} style={{ marginLeft: 8 }}>
+                    {secStatus?.set ? '✏️ Update' : '+ Set up'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -214,6 +295,53 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
             }
           </div>
           <button className="btn bg-btn wf mt2" style={{ justifyContent: 'center' }} onClick={() => { setShowProfile(false); setShowPin(false); }}>Close</button>
+        </Modal>
+      )}
+
+      {showSecModal && (
+        <Modal title={secStatus?.set ? '🔒 Update recovery question' : '🔒 Set recovery question'} onClose={() => setShowSecModal(false)}>
+          <p className="sm ct2 mb2">
+            Pick a question only <strong>you</strong> know the answer to. If you ever forget your PIN,
+            this lets you recover it.
+          </p>
+
+          <label className="lbl">Question</label>
+          <select className="select" value={secQ} onChange={(e) => setSecQ(e.target.value)}>
+            {SEC_OPTIONS.map((q) => <option key={q} value={q}>{q}</option>)}
+            <option value="__custom__">✏️ Write my own question</option>
+          </select>
+
+          {secQ === '__custom__' && (
+            <div className="fg mt2">
+              <input
+                className="input"
+                value={secCustom}
+                onChange={(e) => setSecCustom(e.target.value)}
+                placeholder="e.g. What's my grandmother's first name?"
+                maxLength={200}
+              />
+            </div>
+          )}
+
+          <div className="fg mt2">
+            <label className="lbl">Your answer</label>
+            <input
+              type="text"
+              className="input"
+              value={secA}
+              onChange={(e) => setSecA(e.target.value)}
+              placeholder="Something specific only you know"
+              autoComplete="off"
+            />
+            <div className="xs ct3 mt1">Case and spacing don't matter. Encrypted at rest.</div>
+          </div>
+
+          <div className="flex g1 mt2">
+            <button className="btn ba wf" onClick={() => setShowSecModal(false)}>Cancel</button>
+            <button className="btn bg-btn wf" onClick={saveSec} disabled={secSaving}>
+              {secSaving ? '…' : '🔒 Save'}
+            </button>
+          </div>
         </Modal>
       )}
     </>

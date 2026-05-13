@@ -290,10 +290,11 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
 
     const assignmentAttemptMap: Record<string, { assignmentTitle: string; scores: number[] }> = {};
     results.forEach((r) => {
-      if (!assignmentAttemptMap[r.assignmentId]) {
-        assignmentAttemptMap[r.assignmentId] = { assignmentTitle: r.assignment.title, scores: [] };
+      const key = r.assignmentId ?? '_practice';
+      if (!assignmentAttemptMap[key]) {
+        assignmentAttemptMap[key] = { assignmentTitle: r.assignment?.title ?? 'Practice', scores: [] };
       }
-      assignmentAttemptMap[r.assignmentId].scores.push(r.score);
+      assignmentAttemptMap[key].scores.push(r.score);
     });
     const attemptStats = Object.values(assignmentAttemptMap).map(({ assignmentTitle, scores }) => ({
       assignmentTitle, attempts: scores.length,
@@ -337,6 +338,157 @@ router.get('/student-report/:id', authMiddleware, async (req: Request, res: Resp
       recommendations, recentResults, attemptStats, trend,
       practiceSummary, totalPracticeSessions: practiceResults.length,
     });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── A-Student factory (admin only) ───────────────────────────────
+// Polls indicators that actually predict who's becoming an A student:
+//   • Mastery layers — % of students at <50, 50-69, 70-84, 85+
+//   • Recovery rate — re-attempts that improved
+//   • Practice intensity — practice sessions / 7 days
+//   • Velocity — slope of last 5 scores
+//   • Grade-level segmentation with per-grade averages
+router.get('/a-student-factory', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admins only' });
+
+    const [students, results] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: 'STUDENT', active: true },
+        select: { id: true, name: true, grade: true, xp: true, createdAt: true, teacherId: true },
+      }),
+      prisma.quizResult.findMany({
+        select: {
+          id: true, score: true, completedAt: true, userId: true,
+          resultType: true, assignmentId: true,
+        },
+        orderBy: { completedAt: 'asc' },
+      }),
+    ]);
+
+    // Index results by student
+    const byUser = new Map<string, typeof results>();
+    results.forEach((r) => {
+      const arr = byUser.get(r.userId) || [];
+      arr.push(r); byUser.set(r.userId, arr);
+    });
+
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const tier = (avg: number) =>
+      avg >= 85 ? 'a' : avg >= 70 ? 'b' : avg >= 50 ? 'c' : 'd';
+
+    let recoveryWins = 0, recoveryTotal = 0;
+    const tierCounts: Record<'a' | 'b' | 'c' | 'd' | 'none', number> = { a: 0, b: 0, c: 0, d: 0, none: 0 };
+    const gradeBuckets: Record<number, { count: number; avg: number; total: number; activeLast7: number }> = {};
+    const slopes: number[] = [];
+    let practiceLast7Total = 0;
+    let assignmentsLast7Total = 0;
+
+    const studentRows = students.map((s) => {
+      const rs = byUser.get(s.id) || [];
+      const avg = rs.length ? rs.reduce((sum, r) => sum + r.score, 0) / rs.length : 0;
+      const t = rs.length ? tier(avg) : 'none';
+      tierCounts[t]++;
+
+      // Activity in last 7 days
+      const last7 = rs.filter((r) => now - r.completedAt.getTime() < SEVEN_DAYS);
+      practiceLast7Total += last7.filter((r) => r.resultType === 'PRACTICE').length;
+      assignmentsLast7Total += last7.filter((r) => r.resultType === 'ASSIGNMENT').length;
+
+      // Grade segmentation
+      const g = s.grade ?? 0;
+      const gb = gradeBuckets[g] ||= { count: 0, avg: 0, total: 0, activeLast7: 0 };
+      gb.count++;
+      gb.total += avg;
+      if (last7.length > 0) gb.activeLast7++;
+
+      // Velocity: linear regression slope on the last 5 scores (positive = improving)
+      const tail = rs.slice(-5);
+      let slope = 0;
+      if (tail.length >= 3) {
+        const n = tail.length;
+        const xs = Array.from({ length: n }, (_, i) => i);
+        const ys = tail.map((r) => r.score);
+        const meanX = xs.reduce((a, b) => a + b, 0) / n;
+        const meanY = ys.reduce((a, b) => a + b, 0) / n;
+        const num = xs.reduce((acc, x, i) => acc + (x - meanX) * (ys[i] - meanY), 0);
+        const den = xs.reduce((acc, x) => acc + (x - meanX) ** 2, 0);
+        slope = den === 0 ? 0 : num / den;
+        slopes.push(slope);
+      }
+
+      // Recovery: did a re-attempt of the same assignment beat the previous?
+      const byAssignment = new Map<string, typeof rs>();
+      for (const r of rs) {
+        if (!r.assignmentId) continue;
+        const a = byAssignment.get(r.assignmentId) || [];
+        a.push(r); byAssignment.set(r.assignmentId, a);
+      }
+      for (const [, attempts] of byAssignment) {
+        if (attempts.length < 2) continue;
+        const sorted = attempts.slice().sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
+        for (let i = 1; i < sorted.length; i++) {
+          recoveryTotal++;
+          if (sorted[i].score > sorted[i - 1].score) recoveryWins++;
+        }
+      }
+
+      return { id: s.id, name: s.name, grade: s.grade, xp: s.xp, attempts: rs.length, avg: Math.round(avg), tier: t, slope: Number(slope.toFixed(2)), last7: last7.length };
+    });
+
+    // Finalise grade buckets
+    const gradeSegments = Object.entries(gradeBuckets).map(([g, b]) => ({
+      grade: Number(g),
+      students: b.count,
+      avgScore: b.count ? Math.round(b.total / b.count) : 0,
+      activeLast7: b.activeLast7,
+      activeRatio: b.count ? Math.round((b.activeLast7 / b.count) * 100) : 0,
+    })).sort((a, b) => a.grade - b.grade);
+
+    // Risers & strugglers
+    const risers = studentRows.filter((s) => s.slope >= 4).sort((a, b) => b.slope - a.slope).slice(0, 5);
+    const strugglers = studentRows.filter((s) => s.slope <= -4).sort((a, b) => a.slope - b.slope).slice(0, 5);
+
+    const avgVelocity = slopes.length ? Number((slopes.reduce((a, b) => a + b, 0) / slopes.length).toFixed(2)) : 0;
+    const recoveryRate = recoveryTotal ? Math.round((recoveryWins / recoveryTotal) * 100) : 0;
+
+    return res.json({
+      totals: { students: students.length, withAttempts: students.length - tierCounts.none },
+      tiers: tierCounts, // a / b / c / d / none
+      velocity: { avgSlope: avgVelocity, risers, strugglers },
+      recovery: { rate: recoveryRate, wins: recoveryWins, total: recoveryTotal },
+      activity: { practiceLast7: practiceLast7Total, assignmentsLast7: assignmentsLast7Total },
+      gradeSegments,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Grade segmentation list (admin) — students grouped by grade for easy allocation
+router.get('/grade-segments', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admins only' });
+    const students = await prisma.user.findMany({
+      where: { role: 'STUDENT', active: true },
+      select: {
+        id: true, name: true, grade: true, xp: true, pin: true,
+        teacherId: true,
+        teacher: { select: { id: true, name: true } },
+      },
+      orderBy: [{ grade: 'asc' }, { name: 'asc' }],
+    });
+    const byGrade: Record<number, typeof students> = {};
+    students.forEach((s) => {
+      const g = s.grade ?? 0;
+      (byGrade[g] ||= []).push(s);
+    });
+    return res.json({ segments: Object.entries(byGrade).map(([g, list]) => ({ grade: Number(g), students: list })) });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

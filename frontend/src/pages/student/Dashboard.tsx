@@ -6,6 +6,7 @@ import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { getLvl, calcStreak, fmtDate, subjectBadge } from '../../utils/helpers';
+import SmartCoach from '../../components/SmartCoach';
 
 const MOTIVATIONS = [
   { msg: 'Keep going! Every quiz builds your knowledge. 💡', ico: '🔥' },
@@ -45,6 +46,7 @@ export default function StudentDashboard() {
         <h2>👋 Welcome back, {user.name}!</h2>
         <p>Your learning hub — quizzes, progress and schedule</p>
       </div>
+      <SmartCoach />
 
       {/* Motivational banner */}
       <div className="motivational-banner mb2">

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
-import { authMiddleware, adminOnly } from '../middleware/auth';
-import { generateQuestion, CAPS_TOPICS } from '../utils/questionGenerators';
+import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
+import { generateQuestion, CAPS_TOPICS, expectedSecondsFor } from '../utils/questionGenerators';
 import { Difficulty, Subject, Visibility } from '@prisma/client';
 
 const router = Router();
@@ -20,6 +20,9 @@ const visMap: Record<string, Visibility> = {
 };
 
 // GET /api/questions
+// ADMIN: full bank
+// TUTOR: questions inside packs shared with them
+// STUDENT: questions inside packs unlocked for them by their tutor
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { subject, visibility, search, grade, topic } = req.query;
@@ -33,18 +36,47 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     if (visibility && user.role === 'ADMIN') where.visibility = visMap[visibility as string] || visibility;
 
-    // Students only see visible questions for their grade
-    if (user.role === 'STUDENT') {
+    // ─── Scope by pack membership for non-admins ────────────────────
+    if (user.role === 'TUTOR') {
+      const shares = await prisma.packShare.findMany({
+        where: { tutorId: user.userId },
+        include: { pack: { include: { questions: { select: { questionId: true } } } } },
+      });
+      const qIds = new Set<string>();
+      shares.forEach((s) => s.pack.questions.forEach((pq) => qIds.add(pq.questionId)));
+      // Tutor sees: questions in shared packs  OR  questions they created themselves
+      where.OR = [
+        { id: { in: Array.from(qIds) } },
+        { createdById: user.userId },
+      ];
+    } else if (user.role === 'STUDENT') {
+      const unlocks = await prisma.studentUnlock.findMany({
+        where: { studentId: user.userId },
+        include: { pack: { include: { questions: { select: { questionId: true } } } } },
+      });
+      const qIds = new Set<string>();
+      unlocks.forEach((u) => u.pack.questions.forEach((pq) => qIds.add(pq.questionId)));
+      // Backwards-compat: also include legacy visibility-based access until packs are fully populated
       const studentData = await prisma.user.findUnique({ where: { id: user.userId } });
       const g = studentData?.grade || 10;
-      where.visibility = { in: ['ALL', `GR${g}` as Visibility] };
+      where.OR = [
+        { id: { in: Array.from(qIds) } },
+        { visibility: { in: ['ALL', `GR${g}` as Visibility] } },
+      ];
     }
 
     if (search) {
-      where.OR = [
-        { question: { contains: search as string, mode: 'insensitive' } },
-        { topic: { contains: search as string, mode: 'insensitive' } },
+      const searchClause = [
+        { question: { contains: search as string, mode: 'insensitive' as const } },
+        { topic: { contains: search as string, mode: 'insensitive' as const } },
       ];
+      if (Array.isArray(where.OR)) {
+        // combine: each existing OR AND search match
+        where.AND = [{ OR: where.OR }, { OR: searchClause }];
+        delete where.OR;
+      } else {
+        where.OR = searchClause;
+      }
     }
 
     const questions = await prisma.question.findMany({
@@ -52,7 +84,13 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.json(questions);
+    // Annotate each with its expectedSeconds so the frontend timer has a fair budget
+    const enriched = questions.map((q) => ({
+      ...q,
+      expectedSeconds: expectedSecondsFor(q),
+    }));
+
+    return res.json(enriched);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -69,7 +107,7 @@ router.get('/topics', authMiddleware, async (req: Request, res: Response) => {
 });
 
 // POST /api/questions/generate
-router.post('/generate', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { subject, grade, topic, count = 5 } = req.body;
     const sub = subjectMap[subject as string] || 'MATHEMATICS';
@@ -102,8 +140,8 @@ router.post('/generate', authMiddleware, adminOnly, async (req: Request, res: Re
   }
 });
 
-// POST /api/questions
-router.post('/', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+// POST /api/questions   (admin or tutor — tutor's questions are private to them until added to a pack)
+router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData } = req.body;
 
@@ -131,8 +169,17 @@ router.post('/', authMiddleware, adminOnly, async (req: Request, res: Response) 
 });
 
 // PUT /api/questions/:id
-router.put('/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
+    // Tutors can only edit questions they created
+    if (req.user!.role === 'TUTOR') {
+      const existing = await prisma.question.findUnique({ where: { id: req.params.id }, select: { createdById: true } });
+      if (!existing) return res.status(404).json({ error: 'Not found' });
+      if (existing.createdById !== req.user!.userId) {
+        return res.status(403).json({ error: 'You can only edit questions you created' });
+      }
+    }
+
     const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData } = req.body;
 
     const q = await prisma.question.update({
@@ -180,8 +227,15 @@ router.patch('/:id/visibility', authMiddleware, adminOnly, async (req: Request, 
 });
 
 // DELETE /api/questions/:id
-router.delete('/:id', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
+    if (req.user!.role === 'TUTOR') {
+      const existing = await prisma.question.findUnique({ where: { id: req.params.id }, select: { createdById: true } });
+      if (!existing) return res.status(404).json({ error: 'Not found' });
+      if (existing.createdById !== req.user!.userId) {
+        return res.status(403).json({ error: 'You can only delete your own questions' });
+      }
+    }
     await prisma.question.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
   } catch (err) {
@@ -191,7 +245,7 @@ router.delete('/:id', authMiddleware, adminOnly, async (req: Request, res: Respo
 });
 
 // POST /api/questions/import — bulk text import
-router.post('/import', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+router.post('/import', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const { text } = req.body as { text: string };
     if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });

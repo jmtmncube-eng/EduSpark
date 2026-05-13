@@ -5,6 +5,65 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.0.0] — 2026-05-13 — Packs, PDFs, SmartCoach, PIN Recovery, Production Deploy
+
+Major release intended for the VPS hand-off.
+
+### Added — Content distribution
+- **Content Packs** model (`Pack` / `PackQuestion` / `PackDocument` / `PackShare` / `StudentUnlock`) — admin curates, tutors share, students unlock
+- `GET /api/packs/:id/pdf?mode=worksheet|memo` — EduSpark-branded PDF export via pdfkit (minimalist white + teal accent)
+- Tutors can now create their own custom packs and questions (own library tab)
+- `PdfDocument` model + `/api/documents` with pdf-parse text indexing
+- Question Bank repositioned as Pack source pool with multi-select → "Add to Pack"
+
+### Added — Engagement & outcomes
+- `Notification` model + bell with unread badge; hooks wired into every state change
+- `OnboardingState` + one-shot `<OnboardingModal>` on login (auto-dismiss when complete)
+- `/api/recommendations/me` — SmartCoach (daily goal, streak, weak/strong topics, suggested next pack, trend arrows)
+- `/api/recommendations/spotlight` — Class Spotlight (at-risk / inactive / new / on-track / thriving)
+- `/api/analytics/a-student-factory` — admin: mastery tiers, class velocity, recovery rate, risers/strugglers, grade segments
+- `/api/analytics/grade-segments` — grade-grouped allocation view
+
+### Added — Calendar
+- Role-scoped visibility (`tutorId`, `studentId`, `kind`, `sharedWithAdmin`)
+- Student requests: `move` / `new` / `cancel` with proposed date + auto-applied side effects on approval
+
+### Added — Security & recovery
+- `securityQuestion` + bcrypt `securityAnswerHash` on User
+- PIN recovery via security question (`/api/auth/recover/lookup` + `/verify`)
+- "I'm returning" vs "I'm new" stance on login with explicit confirm modal
+
+### Added — Content
+- 14 new CAPS/IEB topic generators (Euclidean Geometry, Counting & Probability, Vectors, Electrodynamics, Optical Phenomena, etc.)
+- `expectedSecondsFor()` — per-question time budgets from difficulty + text length + options count; Quiz timer uses these
+
+### Added — Scale
+- `express-rate-limit` (300 req/min general, 20/min auth, 30/5min generators)
+- Indexes on Notification + CalendarNote
+
+### Added — Image upload
+- All common formats accepted (PNG/JPG/GIF/WebP/BMP/SVG/AVIF); HEIC rejected with clear iOS hint
+
+### Added — Deployment (DEPLOY.md)
+- Production `docker-compose.yml` rebuilt for VPS co-existence (default `APP_PORT=3007`, named volumes for `pgdata` + `uploads`)
+- Backend Dockerfile: non-root, openssl, multi-stage, `prisma migrate deploy` on boot
+- Consolidated migration `20260513120000_v6_packs_pdfs_notifications_calendar_recovery`
+- `.env.production.example` + deployment guide with reverse-proxy snippet
+
+### Changed
+- Question CRUD opened to tutors (scoped to own)
+- `GET /api/questions` for tutors returns own questions OR questions in shared packs
+- Sidebar reorganised: Admin = Packs/PDF Library; Tutor = My Library + Question Bank; Student = Practice
+- TutorSpotlight compacted (collapsed header by default, one-line rows)
+- Onboarding moved off dashboards into a one-shot login modal
+
+### Fixed
+- Pre-existing analytics nullable `assignmentId` crash
+- Vite dev server bound to `127.0.0.1` (matches Edge IPv4 resolution)
+- Container watch via `usePolling` for Windows host bind mounts
+
+---
+
 ## [1.6.0] — 2026-04-21 — Practice Result Tracking, Tutor Result Scope & Free-Text Topics
 
 ### Added — Backend

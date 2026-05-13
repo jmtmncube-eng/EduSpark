@@ -1,7 +1,13 @@
 import { Router, Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import prisma from '../db/client';
-import { signToken } from '../middleware/auth';
+import { signToken, authMiddleware } from '../middleware/auth';
 import { makeUniquePin, generateTutorPin } from '../utils/pinGenerator';
+
+// Normalise security answers so case + spacing don't matter
+function normalizeAnswer(s: string): string {
+  return s.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 const router = Router();
 
@@ -161,7 +167,121 @@ router.post('/register-tutor', async (req: Request, res: Response) => {
 });
 
 function sanitize(u: Record<string, unknown>) {
-  return { ...u };
+  // Never leak the security answer hash to clients
+  const out = { ...u };
+  delete out.securityAnswerHash;
+  return out;
 }
+
+// ─── PIN Recovery via Security Question ──────────────────────────
+//
+// Step 1: POST /api/auth/recover/lookup { name, role }
+//          → returns { ok: true, question: "..." } if a single match has one,
+//            or { ok: false, hint: "no security question set" } / 404 if not found.
+//
+// Step 2: POST /api/auth/recover/verify { name, role, answer }
+//          → on match, returns the PIN. Rate-limit happens via the global /auth limiter.
+
+router.post('/recover/lookup', async (req: Request, res: Response) => {
+  try {
+    const { name, role } = req.body as { name: string; role: 'student' | 'tutor' | 'admin' };
+    if (!name?.trim()) return res.status(400).json({ error: 'Please enter the name you signed up with.' });
+    const wantedRole = role === 'admin' ? 'ADMIN' : role === 'tutor' ? 'TUTOR' : 'STUDENT';
+
+    const user = await prisma.user.findFirst({
+      where: {
+        role: wantedRole,
+        name: { equals: name.trim(), mode: 'insensitive' },
+      },
+      select: { id: true, securityQuestion: true, securityAnswerHash: true, active: true },
+    });
+
+    if (!user) {
+      // Don't reveal whether the name exists — keep responses uniform
+      return res.status(404).json({ error: 'No account with that name. Check the spelling you signed up with.' });
+    }
+    if (!user.active) {
+      return res.status(403).json({ error: 'Account deactivated. Please contact an admin.' });
+    }
+    if (!user.securityQuestion || !user.securityAnswerHash) {
+      return res.status(409).json({
+        error: "This account doesn't have a recovery question set. Please ask an admin to reset your PIN.",
+        hint: 'no_question',
+      });
+    }
+
+    return res.json({ ok: true, question: user.securityQuestion });
+  } catch (err) {
+    console.error('[recover/lookup]', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/recover/verify', async (req: Request, res: Response) => {
+  try {
+    const { name, role, answer } = req.body as { name: string; role: 'student' | 'tutor' | 'admin'; answer: string };
+    if (!name?.trim() || !answer?.trim()) return res.status(400).json({ error: 'Please complete all fields.' });
+
+    const wantedRole = role === 'admin' ? 'ADMIN' : role === 'tutor' ? 'TUTOR' : 'STUDENT';
+    const user = await prisma.user.findFirst({
+      where: {
+        role: wantedRole,
+        name: { equals: name.trim(), mode: 'insensitive' },
+      },
+    });
+    if (!user || !user.securityAnswerHash || !user.pin) {
+      return res.status(404).json({ error: 'Recovery not available for this account.' });
+    }
+
+    const ok = await bcrypt.compare(normalizeAnswer(answer), user.securityAnswerHash);
+    if (!ok) return res.status(401).json({ error: 'That answer doesn\'t match. Please try again.' });
+
+    // Don't auto-log in — return the PIN and let the user sign in normally
+    return res.json({ ok: true, pin: user.pin, name: user.name });
+  } catch (err) {
+    console.error('[recover/verify]', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── Authed: set / update own security question ───────────────────
+router.post('/security-question', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { question, answer } = req.body as { question: string; answer: string };
+    if (!question?.trim() || !answer?.trim()) {
+      return res.status(400).json({ error: 'Both question and answer are required.' });
+    }
+    if (answer.trim().length < 2) {
+      return res.status(400).json({ error: 'Answer is too short.' });
+    }
+
+    const hash = await bcrypt.hash(normalizeAnswer(answer), 10);
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { securityQuestion: question.trim().slice(0, 200), securityAnswerHash: hash },
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[security-question]', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── Authed: status — does this user have a security question set? ─
+router.get('/security-status', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { securityQuestion: true, securityAnswerHash: true },
+    });
+    return res.json({
+      set: !!(u?.securityQuestion && u?.securityAnswerHash),
+      question: u?.securityQuestion ?? null,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware } from '../middleware/auth';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -77,6 +78,17 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     await prisma.user.update({ where: { id: userId }, data: { xp: { increment: xpEarned } } });
+
+    // Notify the tutor (if any) that the student submitted
+    if (student?.teacherId) {
+      await notify({
+        userId: student.teacherId,
+        type: 'result_posted',
+        title: `📊 ${student.name} completed "${assignment.title}"`,
+        body: `Scored ${score}% (${correct}/${questions.length})`,
+        link: `/app/report/${userId}`,
+      });
+    }
 
     return res.status(201).json(result);
   } catch (err) {

@@ -248,7 +248,176 @@ const QG: Record<string, GeneratorFn> = {
     sol: `Formula: Boiling point is determined by the strength of intermolecular forces — stronger forces require more energy (higher temperature) to overcome\nStep 1: Identify the type of intermolecular forces in each substance:\n  • H₂O: Hydrogen bonding (strongest type of dipole–dipole interaction)\n  • CH₄: London dispersion forces only (weakest, non-polar molecule)\n  • CO₂: London dispersion forces + weak dipole interactions (linear, non-polar overall)\n  • N₂: London dispersion forces only (very weak, small non-polar molecule)\nStep 2: Hydrogen bonding occurs when H is bonded to a highly electronegative atom (F, O, or N) — in H₂O, the O–H bonds create strong intermolecular attractions\nStep 3: Rank intermolecular forces from strongest to weakest: Hydrogen bonds > Dipole–dipole > London dispersion\nStep 4: The stronger the intermolecular forces, the more energy is needed to separate molecules into the gas phase, resulting in a higher boiling point\nStep 5: Water's boiling point is 100°C; methane boils at −161°C; CO₂ sublimes at −78.5°C; N₂ boils at −196°C\nTherefore: Water (H₂O) has the highest boiling point due to its strong hydrogen bonding`,
     diff: 'Easy',
   }),
+  // ─── Extended generators (2026 CAPS / IEB / NSC / Cambridge IGCSE) ───
+  'Euclidean Geometry': () => {
+    const a = Ri(20, 70), b = Ri(20, 70); const c = 180 - a - b;
+    return {
+      q: `Triangle has angles ${a}° and ${b}°. Find the third angle.`,
+      opts: [`${c}°`, `${a + b}°`, `${180 - a}°`, `${a - b}°`],
+      ans: `${c}°`,
+      sol: `Formula: Sum of interior angles of a triangle = 180°\nStep 1: Add the two known angles: ${a}° + ${b}° = ${a + b}°\nStep 2: Subtract from 180°: 180° − ${a + b}° = ${c}°\nTherefore: third angle = ${c}°`,
+      diff: 'Easy',
+    };
+  },
+  'Trigonometric Functions': () => {
+    const A = [30, 60, 90, 120, 150]; const a = A[Ri(0, 4)];
+    const v = Math.sin(a * Math.PI / 180).toFixed(2);
+    return {
+      q: `Evaluate sin(${a}°) to 2 decimal places.`,
+      opts: [v, (1 - +v).toFixed(2), (+v * 2).toFixed(2), `${a / 100}`],
+      ans: v,
+      sol: `Formula: sin θ for special angles\nStep 1: Recognise ${a}° as a reference angle.\nStep 2: Use the unit circle: sin(${a}°) ≈ ${v}\nTherefore: sin(${a}°) = ${v}`,
+      diff: 'Medium',
+    };
+  },
+  'Analytical Geometry': () => {
+    const x1 = Ri(-5, 5), y1 = Ri(-5, 5), x2 = Ri(-5, 5), y2 = Ri(-5, 5);
+    const d = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2).toFixed(2);
+    return {
+      q: `Distance between (${x1},${y1}) and (${x2},${y2})?`,
+      opts: [`d=${d}`, `d=${Math.abs(x2 - x1)}`, `d=${Math.abs(y2 - y1)}`, `d=${x1 + y1}`],
+      ans: `d=${d}`,
+      sol: `Formula: d = √((x₂−x₁)² + (y₂−y₁)²)\nStep 1: Δx = ${x2 - x1}, Δy = ${y2 - y1}\nStep 2: Δx² + Δy² = ${(x2 - x1) ** 2} + ${(y2 - y1) ** 2} = ${(x2 - x1) ** 2 + (y2 - y1) ** 2}\nStep 3: Take square root: d = √${(x2 - x1) ** 2 + (y2 - y1) ** 2} ≈ ${d}\nTherefore: d ≈ ${d}`,
+      diff: 'Medium',
+    };
+  },
+  Finance: () => {
+    const P = Ri(5, 50) * 1000, r = Rf(5, 18, 1), n = Ri(2, 10);
+    const A = (P * (1 + (r / 100) * n)).toFixed(2);
+    return {
+      q: `Simple interest on R${P.toLocaleString()} at ${r}% for ${n} years?`,
+      opts: [`R${A}`, `R${(P * Math.pow(1 + r / 100, n)).toFixed(2)}`, `R${(P * r * n / 100).toFixed(2)}`, `R${P * 2}`],
+      ans: `R${A}`,
+      sol: `Formula: A = P(1 + rn) for simple interest\nStep 1: Factor: 1 + (${r / 100})(${n}) = ${(1 + (r / 100) * n).toFixed(4)}\nStep 2: A = ${P} × ${(1 + (r / 100) * n).toFixed(4)} = R${A}\nTherefore: Amount = R${A}`,
+      diff: 'Easy',
+    };
+  },
+  'Counting & Probability': () => {
+    const n = Ri(3, 6), r = Ri(2, n);
+    const C = factorial(n) / (factorial(r) * factorial(n - r));
+    return {
+      q: `How many ways to choose ${r} items from ${n}?`,
+      opts: [`${C}`, `${n * r}`, `${factorial(n) / factorial(n - r)}`, `${n + r}`],
+      ans: `${C}`,
+      sol: `Formula: C(n,r) = n! / (r!(n−r)!)\nStep 1: n! = ${factorial(n)}, r! = ${factorial(r)}, (n−r)! = ${factorial(n - r)}\nStep 2: C(${n},${r}) = ${factorial(n)} / (${factorial(r)} × ${factorial(n - r)}) = ${C}\nTherefore: ${C} ways.`,
+      diff: 'Medium',
+    };
+  },
+  Inequalities: () => {
+    const a = Ri(2, 6), b = Ri(1, 10), c = Ri(b + 1, 30);
+    const x = ((c - b) / a).toFixed(2);
+    return {
+      q: `Solve: ${a}x + ${b} > ${c}`,
+      opts: [`x > ${x}`, `x < ${x}`, `x ≥ ${x}`, `x = ${x}`],
+      ans: `x > ${x}`,
+      sol: `Formula: Inequalities work like equations except the sign flips on multiplying/dividing by a negative\nStep 1: Subtract ${b}: ${a}x > ${c - b}\nStep 2: Divide by ${a} (positive — sign stays): x > ${x}\nTherefore: x > ${x}`,
+      diff: 'Easy',
+    };
+  },
+  Polynomials: () => {
+    const r = Ri(1, 5);
+    return {
+      q: `Factor: x³ − ${3 * r}x² + ${3 * r * r}x − ${r * r * r}`,
+      opts: [`(x − ${r})³`, `(x + ${r})³`, `(x − ${r})(x² − ${r}x + 1)`, `x(x − ${r})²`],
+      ans: `(x − ${r})³`,
+      sol: `Formula: (x − a)³ = x³ − 3ax² + 3a²x − a³\nStep 1: Match the pattern with a = ${r}\nStep 2: 3a = ${3 * r}, 3a² = ${3 * r * r}, a³ = ${r * r * r} — all match ✓\nTherefore: (x − ${r})³`,
+      diff: 'Hard',
+    };
+  },
+  'Exponential & Logarithms': () => {
+    const b = [2, 3, 5, 10][Ri(0, 3)], e = Ri(2, 5);
+    const v = Math.pow(b, e);
+    return {
+      q: `Solve: log${sub(b)}(${v}) = ?`,
+      opts: [`${e}`, `${b}`, `${v - b}`, `${b * e}`],
+      ans: `${e}`,
+      sol: `Formula: log_b(x) = y  ⇔  b^y = x\nStep 1: Recognise ${v} as ${b}^${e}\nStep 2: Therefore log${sub(b)}(${v}) = ${e}\nTherefore: ${e}`,
+      diff: 'Medium',
+    };
+  },
+  'Regression Analysis': () => {
+    const m = Rf(1.5, 4.5, 2), c = Ri(2, 8), x = Ri(3, 10);
+    const y = (m * x + c).toFixed(2);
+    return {
+      q: `Line of best fit: y = ${m}x + ${c}. Predict y when x = ${x}.`,
+      opts: [`y = ${y}`, `y = ${(m * x).toFixed(2)}`, `y = ${(m + c).toFixed(2)}`, `y = ${(x + c).toFixed(2)}`],
+      ans: `y = ${y}`,
+      sol: `Formula: ŷ = mx + c, where m is slope, c is y-intercept\nStep 1: Substitute x = ${x}: y = ${m}(${x}) + ${c}\nStep 2: Calculate: ${(m * x).toFixed(2)} + ${c} = ${y}\nTherefore: y = ${y}`,
+      diff: 'Easy',
+    };
+  },
+  'Trigonometry Advanced': () => {
+    return {
+      q: `Identify: sin²θ + cos²θ ≡ ?`,
+      opts: ['1', '0', 'tan θ', '2'],
+      ans: '1',
+      sol: `Formula: Pythagorean Identity: sin²θ + cos²θ = 1\nDerived from x² + y² = 1 on the unit circle.\nTherefore: identity equals 1.`,
+      diff: 'Easy',
+    };
+  },
+  'Vectors & Scalars': () => {
+    const ax = Ri(-6, 6), ay = Ri(-6, 6);
+    const mag = Math.sqrt(ax * ax + ay * ay).toFixed(2);
+    return {
+      q: `Magnitude of vector (${ax}, ${ay})?`,
+      opts: [`|a| = ${mag}`, `|a| = ${Math.abs(ax) + Math.abs(ay)}`, `|a| = ${ax + ay}`, `|a| = ${ax * ay}`],
+      ans: `|a| = ${mag}`,
+      sol: `Formula: |a| = √(aₓ² + aᵧ²)\nStep 1: aₓ² = ${ax * ax}, aᵧ² = ${ay * ay}\nStep 2: Sum = ${ax * ax + ay * ay}, √${ax * ax + ay * ay} ≈ ${mag}\nTherefore: |a| ≈ ${mag}`,
+      diff: 'Easy',
+    };
+  },
+  'Vertical Projectile Motion': () => {
+    const v0 = Ri(15, 40), g = 9.8;
+    const tUp = (v0 / g).toFixed(2);
+    return {
+      q: `Ball thrown up at ${v0} m/s. Time to reach max height? (g = 9.8 m/s²)`,
+      opts: [`t = ${tUp} s`, `t = ${(v0 / 2).toFixed(2)} s`, `t = ${(v0 * g).toFixed(2)} s`, `t = ${v0 - g} s`],
+      ans: `t = ${tUp} s`,
+      sol: `Formula: v = u − gt; at max height v = 0\nStep 1: 0 = ${v0} − 9.8t  →  t = ${v0}/9.8\nStep 2: t = ${tUp} s\nTherefore: t = ${tUp} s`,
+      diff: 'Medium',
+    };
+  },
+  Electrodynamics: () => {
+    const N = Ri(50, 500), B = Rf(0.05, 1.5, 2), A = Rf(0.005, 0.05, 4), dt = Rf(0.01, 0.5, 2);
+    const emf = ((N * B * A) / dt).toFixed(2);
+    return {
+      q: `${N} turns, B=${B}T, A=${A}m², Δt=${dt}s. Induced EMF?`,
+      opts: [`ε = ${emf} V`, `ε = ${(N * B).toFixed(2)} V`, `ε = ${(B * A).toFixed(4)} V`, `ε = ${(N / dt).toFixed(2)} V`],
+      ans: `ε = ${emf} V`,
+      sol: `Formula: Faraday's Law: ε = N·ΔΦ/Δt = N·B·A / Δt (full collapse of flux)\nStep 1: N·B·A = ${N} × ${B} × ${A} = ${(N * B * A).toFixed(4)} Wb\nStep 2: Divide by Δt: ${(N * B * A).toFixed(4)} / ${dt} = ${emf} V\nTherefore: ε = ${emf} V`,
+      diff: 'Hard',
+    };
+  },
+  'Optical Phenomena': () => {
+    const f = Rf(4e14, 8e14, 2);
+    const h = 6.63e-34;
+    const E = (h * f).toExponential(2);
+    return {
+      q: `Photon energy at f = ${f.toExponential(2)} Hz? (h = 6.63×10⁻³⁴ J·s)`,
+      opts: [`E = ${E} J`, `E = ${(f / h).toExponential(2)} J`, `E = ${h} J`, `E = ${f} J`],
+      ans: `E = ${E} J`,
+      sol: `Formula: E = hf (Planck's relation)\nStep 1: Multiply h × f: ${h} × ${f.toExponential(2)}\nStep 2: E = ${E} J\nTherefore: E = ${E} J`,
+      diff: 'Medium',
+    };
+  },
+  'Chemistry: Matter': () => {
+    const A: [string, number][] = [['H', 1], ['C', 12], ['O', 16], ['N', 14], ['Na', 23], ['Cl', 35.5]];
+    const a = A[Ri(0, A.length - 1)];
+    return {
+      q: `Atomic mass of ${a[0]}?`,
+      opts: [`${a[1]}`, `${a[1] * 2}`, `${a[1] + 1}`, `${a[1] - 1}`],
+      ans: `${a[1]}`,
+      sol: `Formula: Atomic masses come from the periodic table.\nStep 1: ${a[0]} has atomic mass ≈ ${a[1]} u\nTherefore: ${a[1]}`,
+      diff: 'Easy',
+    };
+  },
 };
+
+// Helpers used by the new generators
+function factorial(n: number): number { return n <= 1 ? 1 : n * factorial(n - 1); }
+function sub(n: number): string {
+  return String(n).split('').map((c) => '₀₁₂₃₄₅₆₇₈₉'[+c] || c).join('');
+}
 
 export function generateQuestion(topic: string, subject: string, grade: number): GeneratedQuestion {
   const fn = QG[topic];
@@ -257,6 +426,35 @@ export function generateQuestion(topic: string, subject: string, grade: number):
     if (r) return r;
   }
   return subject === 'mathematics' ? QG['Algebra']() : QG["Newton's Laws"]();
+}
+
+/**
+ * Compute a fair per-question time-limit (in seconds) for the live quiz timer.
+ * Considers: difficulty level, number of options, question text length, and presence of an image.
+ * Caps to a sensible range — never less than 25s, never more than 4 minutes.
+ */
+export function expectedSecondsFor(input: {
+  difficulty?: string | null;
+  question?: string;
+  options?: string[];
+  solution?: string | null;
+  imageData?: string | null;
+}): number {
+  const diff = (input.difficulty || 'EASY').toUpperCase();
+  const base = diff === 'HARD' ? 120 : diff === 'MEDIUM' ? 75 : 45;
+  // +0.4s per word of question text (read time)
+  const words = (input.question || '').trim().split(/\s+/).length;
+  const readBonus = Math.min(60, Math.round(words * 0.4));
+  // +5s per option (consider each)
+  const optBonus = Math.min(25, ((input.options?.length ?? 0) - 4) * 5);
+  // +20s if the question carries a diagram
+  const imgBonus = input.imageData ? 20 : 0;
+  // +0.2s per word in the solution (proxy for complexity)
+  const solWords = (input.solution || '').trim().split(/\s+/).length;
+  const complexity = Math.min(40, Math.round(solWords * 0.2));
+
+  const total = base + readBonus + optBonus + imgBonus + complexity;
+  return Math.max(25, Math.min(240, total));
 }
 
 export const CAPS_TOPICS: Record<string, Record<number, string[]>> = {

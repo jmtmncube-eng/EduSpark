@@ -61,6 +61,10 @@ model User {
   notifications      Notification[]    @relation("Notifications")
   onboarding         OnboardingState?  @relation("Onboarding")
 
+  // Phase 9
+  generationBatches  QuestionBatch[]   @relation("BatchCreator")
+  auditTrail         AuditLog[]        @relation("AuditActor")
+
   @@map("users")
 }
 
@@ -85,6 +89,7 @@ model Question {
   assignmentQuestions AssignmentQuestion[]
   resultDetails       ResultDetail[]
   packQuestions       PackQuestion[]
+  batchItems          QuestionBatchItem[] @relation("BatchedQuestions")
 
   @@map("questions")
 }
@@ -408,6 +413,61 @@ model Notification {
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// ─── Phase 9: Generation batch history ────────────────────────────
+// Every "⚡ Generate" click on the wizard creates one of these so tutors/admins
+// can find what they generated again — re-bundle into a Pack, re-share, etc.
+
+model QuestionBatch {
+  id            String   @id @default(cuid())
+  createdById   String
+  subject       Subject
+  grade         Int
+  topic         String
+  requestedCount Int     @default(0)
+  difficulty    String?  // 'MIXED' / 'EASY' / 'MEDIUM' / 'HARD' — the wizard's mix selector
+  note          String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  createdBy User             @relation("BatchCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  items     QuestionBatchItem[]
+
+  @@index([createdById, createdAt])
+  @@map("question_batches")
+}
+
+model QuestionBatchItem {
+  batchId    String
+  questionId String
+  order      Int    @default(0)
+
+  batch    QuestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  question Question      @relation("BatchedQuestions", fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, questionId])
+  @@map("question_batch_items")
+}
+
+// ─── Phase 9: Audit log ───────────────────────────────────────────
+// Admin can answer "who changed X and when?" — pivotal for trust + dispute resolution
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  // null if the system performed the action
+  action     String   // e.g. user.create · pack.share · tutorRequest.approve
+  entityType String   // 'User' · 'Pack' · 'TutorRequest' · ...
+  entityId   String?
+  meta       Json?    // arbitrary JSON: { before: ..., after: ..., target: ... }
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // ─── Phase 5: Onboarding ──────────────────────────────────────────

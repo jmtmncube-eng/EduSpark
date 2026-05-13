@@ -120,6 +120,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
     { to: '/app/parent-pins', ico: '🔑', label: 'Parent Access' },
     { to: '/app/analytics',   ico: '📈', label: 'Analytics', section: 'Reports' },
     { to: '/app/calendar',    ico: '📅', label: 'Calendar' },
+    { to: '/app/audit',       ico: '🕵️', label: 'Audit Log' },
   ];
 
   const tutorLinks = [

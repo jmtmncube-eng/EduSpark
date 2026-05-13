@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 import { generateQuestion, CAPS_TOPICS, expectedSecondsFor } from '../utils/questionGenerators';
+import { audit } from '../utils/audit';
 import { Difficulty, Subject, Visibility } from '@prisma/client';
 
 const router = Router();
@@ -109,7 +110,9 @@ router.get('/topics', authMiddleware, async (req: Request, res: Response) => {
 // POST /api/questions/generate
 router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const { subject, grade, topic, count = 5 } = req.body;
+    const { subject, grade, topic, count = 5, difficulty } = req.body as {
+      subject: string; grade: number; topic: string; count?: number; difficulty?: string;
+    };
     const sub = subjectMap[subject as string] || 'MATHEMATICS';
     const n = Math.min(Number(count), 20);
     const created = [];
@@ -133,7 +136,29 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
       created.push(q);
     }
 
-    return res.json({ created, count: created.length });
+    // ─── Record the batch so it can be revisited / reused ───────────
+    let batch: { id: string } | null = null;
+    if (created.length > 0) {
+      batch = await prisma.questionBatch.create({
+        data: {
+          createdById: req.user!.userId,
+          subject: sub as Subject,
+          grade: Number(grade),
+          topic,
+          requestedCount: n,
+          difficulty: (difficulty || 'MIXED').toUpperCase(),
+          items: {
+            create: created.map((q, order) => ({ questionId: q.id, order })),
+          },
+        },
+      });
+      await audit(req, 'questions.generate', 'QuestionBatch', batch.id, {
+        subject, grade: Number(grade), topic, requested: n, produced: created.length,
+        difficulty: difficulty || 'MIXED',
+      });
+    }
+
+    return res.json({ created, count: created.length, batchId: batch?.id ?? null });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -293,6 +318,74 @@ router.post('/import', authMiddleware, adminOrTutorOnly, async (req: Request, re
     }
 
     return res.json({ created, count: created.length });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── Generation batches (history) ────────────────────────────────
+// GET /api/questions/batches  — current user's recent generation batches
+router.get('/batches', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const batches = await prisma.questionBatch.findMany({
+      where: { createdById: req.user!.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        _count: { select: { items: true } },
+      },
+    });
+    return res.json(batches.map((b) => ({
+      id: b.id, subject: b.subject, grade: b.grade, topic: b.topic,
+      requestedCount: b.requestedCount, difficulty: b.difficulty,
+      createdAt: b.createdAt, questionCount: b._count.items,
+    })));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/questions/batches/:id  — the questions inside a batch
+router.get('/batches/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const batch = await prisma.questionBatch.findUnique({
+      where: { id: req.params.id },
+      include: {
+        items: { include: { question: true }, orderBy: { order: 'asc' } },
+        createdBy: { select: { id: true, name: true, role: true } },
+      },
+    });
+    if (!batch) return res.status(404).json({ error: 'Not found' });
+    if (req.user!.role !== 'ADMIN' && batch.createdById !== req.user!.userId) {
+      return res.status(403).json({ error: 'Not your batch' });
+    }
+    return res.json({
+      id: batch.id, subject: batch.subject, grade: batch.grade, topic: batch.topic,
+      requestedCount: batch.requestedCount, difficulty: batch.difficulty,
+      createdAt: batch.createdAt, createdBy: batch.createdBy,
+      questions: batch.items.map((i) => ({
+        ...i.question,
+        expectedSeconds: expectedSecondsFor(i.question),
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/questions/batches/:id  — drop the batch record (does NOT delete the questions)
+router.delete('/batches/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const batch = await prisma.questionBatch.findUnique({ where: { id: req.params.id } });
+    if (!batch) return res.status(404).json({ error: 'Not found' });
+    if (req.user!.role !== 'ADMIN' && batch.createdById !== req.user!.userId) {
+      return res.status(403).json({ error: 'Not your batch' });
+    }
+    await prisma.questionBatch.delete({ where: { id: req.params.id } });
+    return res.json({ success: true });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

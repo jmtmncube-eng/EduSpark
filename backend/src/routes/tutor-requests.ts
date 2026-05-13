@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
 import { notify } from '../utils/notify';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -108,6 +109,9 @@ router.patch('/:id', authMiddleware, adminOnly, async (req: Request, res: Respon
         data: { status: 'denied' },
       });
     }
+
+    await audit(req, status === 'approved' ? 'tutorRequest.approve' : 'tutorRequest.deny',
+      'TutorRequest', request.id, { tutorId: request.tutorId, studentId: request.studentId });
 
     // Notify tutor of the decision
     await notify({

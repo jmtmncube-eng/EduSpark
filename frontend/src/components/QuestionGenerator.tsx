@@ -4,6 +4,7 @@ import { showToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 import { ALL_DIFFICULTIES, diffMeta } from '../utils/difficulty';
 import type { Question } from '../types';
+import Modal from './Modal';
 
 /**
  * Guided generator panel.
@@ -70,6 +71,19 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
   const [mix, setMix] = useState<Mix>('MIXED');
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<Question[]>([]);
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batches, setBatches] = useState<Awaited<ReturnType<typeof questionsApi.listBatches>>>([]);
+  const [viewBatchId, setViewBatchId] = useState<string | null>(null);
+  const [showAllBatches, setShowAllBatches] = useState(false);
+
+  // Load recent batches on mount so the tutor can revisit past generations
+  useEffect(() => {
+    questionsApi.listBatches().then(setBatches).catch(() => setBatches([]));
+  }, []);
+
+  async function refreshBatches() {
+    try { setBatches(await questionsApi.listBatches()); } catch { /* ignore */ }
+  }
 
   const topics = useMemo(() => subject ? TOPICS[subject][grade] ?? [] : [], [subject, grade]);
 
@@ -82,14 +96,14 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
     if (!topic) { showToast('Pick a topic', 'warn'); return; }
     setBusy(true);
     setRecent([]);
+    setBatchId(null);
     try {
-      // The backend doesn't filter by difficulty yet — it generates whatever
-      // the topic generator produces. We send `count` and surface the chosen
-      // mix to the tutor as a hint; future versions can pass `mix` server-side.
-      const r = await questionsApi.generate(subject, grade, topic, count) as { count: number; created: Question[] };
+      const r = await questionsApi.generate(subject, grade, topic, count, mix);
       showToast(`Generated ${r.count} ${SUBJECT_THEME[subject].short} question(s)`, 'success');
-      setRecent(r.created);
-      onDone?.(r.created);
+      setRecent(r.created as Question[]);
+      setBatchId(r.batchId);
+      onDone?.(r.created as Question[]);
+      refreshBatches();
     } catch (e) {
       showToast(String((e as Error).message), 'err');
     } finally { setBusy(false); }
@@ -265,7 +279,19 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
 
           {recent.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div className="sm bold mb1">✅ Just generated · {recent.length}</div>
+              <div className="flex jb ia mb1">
+                <div className="sm bold">✅ Just generated · {recent.length}</div>
+                {batchId && (
+                  <a
+                    href={`#batch-${batchId}`}
+                    onClick={(e) => { e.preventDefault(); setViewBatchId(batchId); }}
+                    className="xs bold"
+                    style={{ color: theme!.fg, textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    🔗 View this batch →
+                  </a>
+                )}
+              </div>
               <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
                 {recent.map((q, i) => {
                   const meta = diffMeta(q.difficulty);
@@ -288,6 +314,137 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
           )}
         </>
       )}
+
+      {/* Past batches — generation history */}
+      {batches.length > 0 && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--bd)' }}>
+          <div className="flex jb ia mb1">
+            <div className="sm bold">🗂 Recent generations · {batches.length}</div>
+            <button
+              type="button"
+              className="xs ct3"
+              onClick={() => setShowAllBatches((v) => !v)}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {showAllBatches ? 'Show recent' : 'Show all'}
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {(showAllBatches ? batches : batches.slice(0, 5)).map((b) => {
+              const subj = b.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+              const ago = relTime(b.createdAt);
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => setViewBatchId(b.id)}
+                  style={{
+                    background: 'var(--bg)', cursor: 'pointer',
+                    border: '1px solid var(--bd)', borderRadius: 10,
+                    padding: '8px 12px', textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 18 }}>{subj.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="sm bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.topic} · Gr {b.grade}
+                    </div>
+                    <div className="xs ct3">
+                      {b.questionCount} question{b.questionCount === 1 ? '' : 's'} · {b.difficulty || 'MIXED'} · {ago}
+                    </div>
+                  </div>
+                  <span className="xs ct3" style={{ whiteSpace: 'nowrap' }}>View →</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {viewBatchId && (
+        <BatchViewer id={viewBatchId} onClose={() => setViewBatchId(null)} onDelete={() => { setViewBatchId(null); refreshBatches(); }} />
+      )}
     </div>
+  );
+}
+
+function relTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString('en-ZA');
+}
+
+// ─── Batch viewer modal ─────────────────────────────────────────────
+function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => void; onDelete: () => void }) {
+  const [batch, setBatch] = useState<Awaited<ReturnType<typeof questionsApi.getBatch>> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    questionsApi.getBatch(id)
+      .then(setBatch)
+      .catch((e) => { showToast(String((e as Error).message), 'err'); onClose(); })
+      .finally(() => setLoading(false));
+  }, [id, onClose]);
+
+  async function remove() {
+    if (!confirm('Remove this batch record? The individual questions stay in your bank.')) return;
+    try {
+      await questionsApi.deleteBatch(id);
+      showToast('Batch record removed (questions kept)', 'info');
+      onDelete();
+    } catch (e) { showToast(String((e as Error).message), 'err'); }
+  }
+
+  if (loading || !batch) {
+    return <Modal title="Loading batch…" onClose={onClose}><div className="ct3" style={{ padding: 20, textAlign: 'center' }}>…</div></Modal>;
+  }
+
+  const theme = batch.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+  return (
+    <Modal title={`🗂 Batch · ${batch.topic}`} onClose={onClose}>
+      <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <div className="sm" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>{theme.icon}</span>
+            <span className="bold">{theme.label} · Grade {batch.grade}</span>
+          </div>
+          <div className="xs ct3 mt1">
+            By {batch.createdBy.name} ({batch.createdBy.role.toLowerCase()}) · {new Date(batch.createdAt).toLocaleString('en-ZA')}
+          </div>
+        </div>
+        <button className="btn ba btn-sm" onClick={remove} title="Remove this batch record">🗑 Remove batch</button>
+      </div>
+
+      <div className="xs ct3 mb2">
+        💡 These questions are already in your Question Bank — you can add them to a Pack from there.
+      </div>
+
+      <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
+        {batch.questions.map((q, i) => {
+          const meta = diffMeta(q.difficulty);
+          return (
+            <div key={q.id} style={{ padding: 10, borderBottom: '1px solid var(--bd)' }}>
+              <div className="flex jb ia">
+                <span className="xs ct3">Q{i + 1} · ~{q.expectedSeconds}s</span>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 99,
+                  fontSize: 10.5, fontWeight: 700,
+                  background: meta.bg, color: meta.fg, border: `1px solid ${meta.borderColor}`,
+                }}>{meta.icon} {meta.label}</span>
+              </div>
+              <div className="sm" style={{ fontWeight: 600, marginTop: 4 }}>{q.question}</div>
+              <div className="xs ct2 mt1">Answer: <span style={{ fontWeight: 600 }}>{q.answer}</span></div>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
   );
 }

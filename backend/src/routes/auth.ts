@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '../db/client';
 import { signToken, authMiddleware } from '../middleware/auth';
 import { makeUniquePin, generateTutorPin } from '../utils/pinGenerator';
+import { audit } from '../utils/audit';
 
 // Normalise security answers so case + spacing don't matter
 function normalizeAnswer(s: string): string {
@@ -56,6 +57,8 @@ router.post('/login', async (req: Request, res: Response) => {
       if (user) {
         if (!user.active) return res.status(403).json({ error: 'Account deactivated. Contact the admin.' });
         const token = signToken({ userId: user.id, role: user.role as 'STUDENT' | 'TUTOR' | 'ADMIN' });
+        req.user = { userId: user.id, role: user.role as 'STUDENT' | 'TUTOR' | 'ADMIN' };
+        await audit(req, 'auth.login', 'User', user.id);
         return res.json({ token, user: sanitize(user) });
       }
       return res.status(401).json({ error: 'PIN not found. Check your PIN and try again.' });
@@ -118,6 +121,8 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     const token = signToken({ userId: user.id, role: 'STUDENT' });
+    req.user = { userId: user.id, role: 'STUDENT' };
+    await audit(req, 'auth.register', 'User', user.id, { name: user.name, grade: user.grade });
     return res.json({ token, user: sanitize(user), isNew: true });
   } catch (err) {
     console.error(err);
@@ -159,6 +164,8 @@ router.post('/register-tutor', async (req: Request, res: Response) => {
     });
 
     const token = signToken({ userId: tutor.id, role: 'TUTOR' });
+    req.user = { userId: tutor.id, role: 'TUTOR' };
+    await audit(req, 'auth.register', 'User', tutor.id, { name: tutor.name, role: 'TUTOR' });
     return res.json({ token, user: sanitize(tutor), isNew: true });
   } catch (err) {
     console.error(err);
@@ -236,6 +243,7 @@ router.post('/recover/verify', async (req: Request, res: Response) => {
     const ok = await bcrypt.compare(normalizeAnswer(answer), user.securityAnswerHash);
     if (!ok) return res.status(401).json({ error: 'That answer doesn\'t match. Please try again.' });
 
+    await audit(null, 'auth.recover.success', 'User', user.id);
     // Don't auto-log in — return the PIN and let the user sign in normally
     return res.json({ ok: true, pin: user.pin, name: user.name });
   } catch (err) {

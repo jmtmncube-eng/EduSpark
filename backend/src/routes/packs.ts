@@ -4,6 +4,7 @@ import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth'
 import { Subject } from '@prisma/client';
 import { notify } from '../utils/notify';
 import { renderPackPdf } from '../utils/pdfRenderer';
+import { audit } from '../utils/audit';
 
 const router = Router();
 
@@ -145,6 +146,7 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
       include: packInclude,
     });
 
+    await audit(req, 'pack.create', 'Pack', pack.id, { title: pack.title, subject: pack.subject, grade: pack.grade });
     return res.status(201).json(pack);
   } catch (err) {
     console.error(err);
@@ -216,6 +218,7 @@ router.delete('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res
       return res.status(403).json({ error: 'Not your pack' });
     }
     await prisma.pack.delete({ where: { id: req.params.id } });
+    await audit(req, 'pack.delete', 'Pack', req.params.id);
     return res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -254,6 +257,7 @@ router.post('/:id/share', authMiddleware, adminOnly, async (req: Request, res: R
       });
     }
 
+    await audit(req, 'pack.share', 'Pack', pack.id, { tutorIds, count: tutors.length, note });
     return res.json({ shared: tutors.length });
   } catch (err) {
     console.error(err);
@@ -316,6 +320,7 @@ router.post('/:id/unlock', authMiddleware, async (req: Request, res: Response) =
       });
     }
 
+    await audit(req, 'pack.unlock', 'Pack', pack.id, { studentIds, count: students.length });
     return res.json({ unlocked: students.length });
   } catch (err) {
     console.error(err);

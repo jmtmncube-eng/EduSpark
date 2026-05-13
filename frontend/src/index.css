@@ -156,12 +156,12 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 @keyframes mu{from{transform:translateY(26px) scale(.95);opacity:0}to{transform:none;opacity:1}}
 
 /* ── STATS CARDS ────────────────────────────────────────────────── */
-.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:13px;margin-bottom:22px}
-.scard{background:var(--cm);backdrop-filter:blur(20px);border:1.5px solid var(--bd);border-radius:var(--r);padding:18px;box-shadow:0 4px 18px var(--sh),inset 0 1px 0 var(--glow);transition:var(--tr);position:relative;overflow:hidden}
-.scard:hover{transform:translateY(-3px);box-shadow:0 9px 32px var(--sh)}
-.scard::after{content:'';position:absolute;bottom:-16px;right:-16px;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,.10),transparent)}
-.sico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:11px;background:linear-gradient(135deg,rgba(20,184,166,.15),rgba(16,185,129,.09));box-shadow:inset 0 1px 0 rgba(255,255,255,.38)}
-.sv{font-family:var(--fh);font-size:28px;font-weight:700}.sl{font-size:12px;color:var(--t2);margin-top:2px}.sch{font-size:11px;color:var(--p);font-weight:600;margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.scard{background:var(--cm);backdrop-filter:blur(20px);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;box-shadow:0 2px 10px var(--sh),inset 0 1px 0 var(--glow);transition:var(--tr);position:relative;overflow:hidden}
+.scard:hover{transform:translateY(-2px);box-shadow:0 6px 22px var(--sh)}
+.scard::after{content:'';position:absolute;bottom:-12px;right:-12px;width:48px;height:48px;border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,.08),transparent)}
+.sico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:8px;background:linear-gradient(135deg,rgba(20,184,166,.15),rgba(16,185,129,.09));box-shadow:inset 0 1px 0 rgba(255,255,255,.38)}
+.sv{font-family:var(--fh);font-size:22px;font-weight:700;line-height:1.1}.sl{font-size:11px;color:var(--t2);margin-top:2px}.sch{font-size:10.5px;color:var(--p);font-weight:600;margin-top:3px}
 
 /* ── PROGRESS BAR ───────────────────────────────────────────────── */
 .pb-w{background:var(--bg2);border-radius:99px;overflow:hidden;height:8px}

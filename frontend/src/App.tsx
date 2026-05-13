@@ -23,6 +23,7 @@ import AdminParentPins from './pages/admin/ParentPins';
 import AdminTutors from './pages/admin/Tutors';
 import AdminPacks from './pages/admin/Packs';
 import AdminPdfLibrary from './pages/admin/PdfLibrary';
+import AdminAuditLog from './pages/admin/AuditLog';
 import ParentView from './pages/ParentView';
 import ParentSession from './pages/ParentSession';
 
@@ -56,6 +57,7 @@ function AppShell() {
     '/app/calendar': '📅 Calendar',
     '/app/parent-pins': '🔑 Parent Access',
     '/app/tutors': '📚 Tutors',
+    '/app/audit': '🕵️ Audit Log',
     '/app/my-work': '📋 My Work',
     '/app/practice': '📚 Practice',
     '/app/progress': '📈 My Progress',
@@ -128,6 +130,7 @@ function AppShell() {
                 <Route path="report/:studentId" element={<AdminStudentReport />} />
                 <Route path="parent-pins" element={<AdminParentPins />} />
                 {isAdmin && <Route path="tutors" element={<AdminTutors />} />}
+                {isAdmin && <Route path="audit" element={<AdminAuditLog />} />}
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </>
             ) : (

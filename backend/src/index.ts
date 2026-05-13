@@ -17,6 +17,7 @@ import documentsRouter from './routes/documents';
 import notificationsRouter from './routes/notifications';
 import onboardingRouter from './routes/onboarding';
 import recommendationsRouter from './routes/recommendations';
+import auditRouter from './routes/audit';
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -70,6 +71,7 @@ app.use('/api/documents', documentsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/audit', auditRouter);
 
 // 404 handler
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

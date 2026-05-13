@@ -106,10 +106,13 @@ export const questions = {
   },
   topics: (subject: string, grade: number) =>
     request<string[]>(`/questions/topics?subject=${subject}&grade=${grade}`),
-  generate: (subject: string, grade: number, topic: string, count: number) =>
-    request<{ created: object[]; count: number }>(
-      '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count }) }
+  generate: (subject: string, grade: number, topic: string, count: number, difficulty?: string) =>
+    request<{ created: object[]; count: number; batchId: string | null }>(
+      '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count, difficulty }) }
     ),
+  listBatches: () => request<{ id: string; subject: string; grade: number; topic: string; requestedCount: number; difficulty: string | null; createdAt: string; questionCount: number }[]>('/questions/batches'),
+  getBatch: (id: string) => request<{ id: string; subject: string; grade: number; topic: string; createdAt: string; createdBy: { name: string; role: string }; questions: { id: string; question: string; difficulty: string; topic: string; subject: string; options: string[]; answer: string; expectedSeconds: number }[] }>(`/questions/batches/${id}`),
+  deleteBatch: (id: string) => request<{ success: boolean }>(`/questions/batches/${id}`, { method: 'DELETE' }),
   create: (data: object) =>
     request<object>('/questions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: object) =>
@@ -364,6 +367,22 @@ export const onboarding = {
   get: () => request<{ completedSteps: string[]; dismissed: boolean }>('/onboarding'),
   patch: (data: { step?: string; dismissed?: boolean }) =>
     request<object>('/onboarding', { method: 'PATCH', body: JSON.stringify(data) }),
+};
+
+// ─── Audit log (admin only) ───────────────────────────────────────
+export const audit = {
+  list: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<{
+      total: number; limit: number; offset: number;
+      entries: {
+        id: string; action: string; entityType: string; entityId: string | null;
+        meta: Record<string, unknown> | null; ip: string | null; createdAt: string;
+        actor: { id: string; name: string; role: string } | null;
+      }[];
+    }>(`/audit${qs ? '?' + qs : ''}`);
+  },
+  actions: () => request<string[]>('/audit/actions'),
 };
 
 // ─── SmartCoach — A-Student Recommendations ───────────────────────

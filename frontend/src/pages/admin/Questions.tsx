@@ -4,7 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Question, Pack } from '../../types';
-import { subjectBadge, diffBadge, compressImage } from '../../utils/helpers';
+import { compressImage } from '../../utils/helpers';
+import { diffMeta } from '../../utils/difficulty';
+import DifficultyKey from '../../components/DifficultyKey';
+import QuestionGenerator, { SUBJECT_THEME } from '../../components/QuestionGenerator';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: {
@@ -44,12 +47,6 @@ export default function AdminQuestions() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [attachOpen, setAttachOpen] = useState(false);
 
-  // Generate
-  const [genSub, setGenSub] = useState('mathematics');
-  const [genGr, setGenGr] = useState(defaultGrade);
-  const [genTp, setGenTp] = useState('Algebra');
-  const [genCt, setGenCt] = useState('5');
-
   const load = useCallback(async () => {
     const params: Record<string, string> = {};
     if (filterSub) params.subject = filterSub.toUpperCase();
@@ -63,17 +60,8 @@ export default function AdminQuestions() {
   useEffect(() => { load(); }, [load]);
 
   const filterTopics = filterSub && filterGrade ? TOPICS[filterSub]?.[Number(filterGrade)] || [] : [];
-  const genTopics = TOPICS[genSub]?.[Number(genGr)] || [];
   const formTopics = TOPICS[form.subject]?.[Number(form.grade)] || [];
   const gradeOptions = isTutor && user?.teachGrades?.length ? (user.teachGrades as number[]).sort() : [10, 11, 12];
-
-  async function generate() {
-    try {
-      const r = await questionsApi.generate(genSub, Number(genGr), genTp, Number(genCt)) as { count: number };
-      showToast(`Generated ${r.count} question(s)`, 'success');
-      load();
-    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
-  }
 
   async function saveQ() {
     if (!form.topic || !form.question || !form.answer) { showToast('Fill required fields', 'warn'); return; }
@@ -162,42 +150,23 @@ export default function AdminQuestions() {
         </div>
       </div>
 
-      {/* Generate */}
-      <div className="card mb2">
-        <div className="sec-h">⚡ Generate Questions</div>
-        <div className="grid2" style={{ gap: 10, marginBottom: 12 }}>
-          <div className="fg"><label className="lbl">Subject</label>
-            <select className="select" value={genSub} onChange={(e) => { setGenSub(e.target.value); setGenTp(TOPICS[e.target.value]?.[Number(genGr)]?.[0] || ''); }}>
-              <option value="mathematics">Mathematics</option><option value="physical_sciences">Physical Sciences</option>
-            </select>
-          </div>
-          <div className="fg"><label className="lbl">Grade</label>
-            <select className="select" value={genGr} onChange={(e) => { setGenGr(e.target.value); setGenTp(TOPICS[genSub]?.[Number(e.target.value)]?.[0] || ''); }}>
-              {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
-            </select>
-          </div>
-          <div className="fg"><label className="lbl">Topic</label>
-            <input list="gen-topics-list" className="input" value={genTp} onChange={(e) => setGenTp(e.target.value)} placeholder="Pick a topic" />
-            <datalist id="gen-topics-list">{genTopics.map((t) => <option key={t} value={t} />)}</datalist>
-          </div>
-          <div className="fg"><label className="lbl">Count</label>
-            <select className="select" value={genCt} onChange={(e) => setGenCt(e.target.value)}>
-              <option value="5">5 Questions</option><option value="10">10 Questions</option><option value="20">20 Questions</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex g1 wrap">
-          <button className="btn bg-btn" onClick={generate}>⚡ Auto-Generate</button>
-          <button className="btn ba" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add Manually</button>
-          <button className="btn ba" onClick={() => setShowImport(true)}>📂 Import Text</button>
-          <button
-            className={`btn ${selectMode ? 'bg-btn' : 'ba'}`}
-            onClick={() => { setSelectMode((v) => !v); if (selectMode) setSelectedIds(new Set()); }}
-            title="Select multiple questions to add to a Pack"
-          >
-            {selectMode ? '✓ Selecting' : '☑ Multi-select'}
-          </button>
-        </div>
+      {/* Difficulty key — only shown to tutors/admins */}
+      <DifficultyKey />
+
+      {/* Guided generator */}
+      <QuestionGenerator onDone={() => load()} />
+
+      {/* Manual entry / import / multi-select toolbar */}
+      <div className="flex g1 wrap mb2">
+        <button className="btn ba" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add manually</button>
+        <button className="btn ba" onClick={() => setShowImport(true)}>📂 Import from text</button>
+        <button
+          className={`btn ${selectMode ? 'bg-btn' : 'ba'}`}
+          onClick={() => { setSelectMode((v) => !v); if (selectMode) setSelectedIds(new Set()); }}
+          title="Select multiple questions to add to a Pack"
+        >
+          {selectMode ? '✓ Selecting' : '☑ Multi-select for Pack'}
+        </button>
       </div>
 
       {/* Filters */}
@@ -240,8 +209,28 @@ export default function AdminQuestions() {
                       style={{ width: 18, height: 18, accentColor: 'var(--p)' }}
                     />
                   )}
-                  <span className={`badge ${subjectBadge(q.subject)}`}>{q.subject === 'MATHEMATICS' ? '📐 Maths' : '⚗️ Physics'}</span>
-                  <span className={`badge ${diffBadge(q.difficulty)}`}>{q.difficulty.charAt(0) + q.difficulty.slice(1).toLowerCase()}</span>
+                  {(() => {
+                    const subj = q.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 8px', borderRadius: 99,
+                        background: subj.bg, color: subj.fg, border: `1px solid ${subj.border}`,
+                        fontSize: 10.5, fontWeight: 700,
+                      }}>{subj.icon} {subj.short}</span>
+                    );
+                  })()}
+                  {(() => {
+                    const m = diffMeta(q.difficulty);
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 8px', borderRadius: 99,
+                        background: m.bg, color: m.fg, border: `1px solid ${m.borderColor}`,
+                        fontSize: 10.5, fontWeight: 700,
+                      }}>{m.icon} {m.label}</span>
+                    );
+                  })()}
                   <span className="badge btl">Gr{q.grade}</span>
                   <span className="xs ct3">{q.topic}</span>
                   {q.imageData && <span className="badge bcy">🖼 Image</span>}

@@ -5,7 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [2.1.0] — 2026-05-14 — Offline-first, Clock & Weather, Mobile polish, Demo seed
+## [2.2.0] — 2026-05-14 — Guided generator, friendly difficulty, PDF-in-tab
+
+### Added
+- **`QuestionGenerator` wizard** replaces the cramped 4-input row on the Question Bank page. Sequential prompts: Subject → Grade → Topic → Count → Difficulty mix. Each subject has a distinct visual identity (📐 teal for Maths, ⚗️ purple for Physical Sciences) reused on every question/pack card site-wide via `SUBJECT_THEME`.
+- **Friendly difficulty labels** (`utils/difficulty.ts`):
+  - `EASY` → 🌱 Warm-up (recall + 1-step · ≈ 45s · builds confidence)
+  - `MEDIUM` → 🎯 Core (exam-typical · 2–3 steps · ≈ 75s)
+  - `HARD` → 🚀 Stretch (multi-step reasoning · ≈ 2 min+ · top distinctions)
+  - Database keeps the academic codes — only the UI rebrands.
+- **`DifficultyKey` cheatsheet** — collapsible card shown to tutors/admins on the Question Bank explaining what the friendly labels translate to academically.
+
+### Changed
+- **PDF buttons open in a new tab** (`packs.openPdf`). Browser's built-in PDF viewer renders the worksheet/memo and exposes its own Download / Print buttons — which is what users actually wanted. Pop-up-blocker fallback drops a direct download.
+- Difficulty propagated everywhere a student or tutor sees a question: Practice screen, Pack editor preview, Tutor Library preview, Admin Assignments question picker.
+- Old single-row "Generate" block (subject/grade/topic input/count) removed in favour of the wizard panel.
+
+### Notes
+- Backend question-generator API unchanged — the wizard sends the same payload. The "Difficulty mix" selector is a UX hint for now; a follow-up will pass the chosen tier to the server-side generator so output respects it.
 
 ### Added
 - **Offline write queue** (`frontend/src/services/offlineQueue.ts`) — any non-GET request that fails with a network error is persisted to `localStorage`, retried on `window.online`, on user sign-in, and every 30 s while connected. Mutations stay queued through 5xx errors; 4xx are dropped. Quiz submissions in particular now survive flaky connections — the student sees "Saved offline — will submit when you reconnect" and can move on.

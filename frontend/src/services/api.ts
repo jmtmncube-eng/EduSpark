@@ -276,10 +276,17 @@ export const packs = {
     request<{ success: boolean }>(`/packs/${id}/unlock/${studentId}`, { method: 'DELETE' }),
   listUnlocks: (id: string) => request<object[]>(`/packs/${id}/unlocks`),
   /**
-   * Trigger a branded PDF download. The browser handles the byte stream — we just
-   * need to attach the auth token via a one-off fetch and force a blob download.
+   * Open a branded PDF in a new browser tab.
+   *
+   * We fetch with the auth header (the endpoint requires Bearer auth), then
+   * convert the byte stream to a blob URL and `window.open` it. The browser's
+   * built-in PDF viewer renders the document and exposes its own "Download" /
+   * "Print" buttons, which is what most users actually want.
+   *
+   * Pop-up-blocker fallback: if `window.open` returns null we trigger the
+   * direct-download `<a download>` flow so the user still gets the file.
    */
-  downloadPdf: async (id: string, mode: 'worksheet' | 'memo', filenameHint?: string) => {
+  openPdf: async (id: string, mode: 'worksheet' | 'memo', filenameHint?: string) => {
     const token = localStorage.getItem('es_token');
     const res = await fetch(`${BASE}/packs/${id}/pdf?mode=${mode}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -290,13 +297,22 @@ export const packs = {
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(filenameHint || 'pack').replace(/[^a-zA-Z0-9._-]/g, '_')}_${mode}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 500);
+    const filename = `${(filenameHint || 'pack').replace(/[^a-zA-Z0-9._-]/g, '_')}_${mode}.pdf`;
+
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) {
+      // Pop-up blocked — fall back to direct download
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    // Keep the blob alive long enough for the new tab to load it
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
+  // Keep `downloadPdf` as an alias for any caller that still expects the
+  // forced-download behaviour. Both go through `openPdf` now.
+  downloadPdf: async (id: string, mode: 'worksheet' | 'memo', filenameHint?: string) => {
+    return packs.openPdf(id, mode, filenameHint);
   },
 };
 

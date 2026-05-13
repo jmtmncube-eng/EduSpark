@@ -9,6 +9,7 @@ import type { Pack, User, Question } from '../../types';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import { useAuth } from '../../context/AuthContext';
+import { diffMeta } from '../../utils/difficulty';
 
 const EMOJIS = ['📦', '📚', '🧮', '⚗️', '🔬', '📐', '🎯', '🏆', '🧠', '✨'];
 
@@ -207,8 +208,8 @@ function PackDetail({ pack, isOwner, onClose, onDeleted }: { pack: Pack; isOwner
   async function exportPdf(mode: 'worksheet' | 'memo') {
     setBusy(true);
     try {
-      await packsApi.downloadPdf(pack.id, mode, pack.title);
-      showToast(`${mode === 'memo' ? 'Memo' : 'Worksheet'} downloaded`, 'success');
+      await packsApi.openPdf(pack.id, mode, pack.title);
+      showToast(`${mode === 'memo' ? 'Memo' : 'Worksheet'} opened in new tab — use the browser Save button to download.`, 'info');
     } catch (e) { showToast(String((e as Error).message), 'err'); }
     finally { setBusy(false); }
   }
@@ -255,7 +256,7 @@ function PackDetail({ pack, isOwner, onClose, onDeleted }: { pack: Pack; isOwner
               <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
                 {pack.questions.map((q, i) => (
                   <div key={q.questionId} style={{ padding: 10, borderBottom: '1px solid var(--bd)' }}>
-                    <div className="xs ct3">Q{i + 1} · {q.question.difficulty}</div>
+                    <div className="xs ct3">Q{i + 1} · {(() => { const m = diffMeta(q.question.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}</div>
                     <div className="sm" style={{ fontWeight: 600, marginTop: 2 }}>{q.question.question}</div>
                   </div>
                 ))}
@@ -313,8 +314,8 @@ function PackDetail({ pack, isOwner, onClose, onDeleted }: { pack: Pack; isOwner
       {tab === 'export' && (
         <div>
           <div className="sm ct2 mb2">
-            Download a printable PDF with EduSpark branding. <b>Worksheet</b> has space for students to write;
-            <b> Memo</b> includes answers and step-by-step solutions.
+            Open a branded PDF in a new tab. Use your browser's <b>Save</b> button to download it.
+            <b> Worksheet</b> has space for students to write; <b>Memo</b> includes answers and step-by-step solutions.
           </div>
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <button
@@ -460,7 +461,7 @@ function CustomPackEditor({ onClose, onSaved }: { onClose: () => void; onSaved: 
               />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="sm" style={{ fontWeight: 600 }}>{q.question}</div>
-                <div className="xs ct3 mt1">{q.topic} · {q.difficulty}</div>
+                <div className="xs ct3 mt1">{q.topic} · {(() => { const m = diffMeta(q.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}</div>
               </div>
             </label>
           );

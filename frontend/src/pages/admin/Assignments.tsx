@@ -5,6 +5,7 @@ import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import type { Assignment, Question } from '../../types';
 import { subjectBadge, fmtDate, compressImage } from '../../utils/helpers';
+import { diffMeta } from '../../utils/difficulty';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: { 10: ['Algebra','Functions & Graphs','Trigonometry','Statistics','Finance & Growth','Euclidean Geometry'], 11: ['Quadratic Equations','Trigonometric Functions','Analytical Geometry','Finance','Counting & Probability','Inequalities'], 12: ['Differential Calculus','Sequences & Series','Polynomials','Exponential & Logarithms','Regression Analysis','Trigonometry Advanced'] },
@@ -234,7 +235,7 @@ export default function AdminAssignments() {
                     <input type="checkbox" checked={selQIds.has(q.id)} onChange={() => toggleQ(q.id)} style={{ accentColor: 'var(--p)', width: 16, height: 16 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="sm bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.question}</div>
-                      <div className="xs ct3">{q.subject === 'MATHEMATICS' ? '📐' : '⚗️'} Gr{q.grade} · {q.topic} · {q.difficulty}</div>
+                      <div className="xs ct3">{q.subject === 'MATHEMATICS' ? '📐' : '⚗️'} Gr{q.grade} · {q.topic} · {(() => { const m = diffMeta(q.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}</div>
                     </div>
                   </label>
                 ))}

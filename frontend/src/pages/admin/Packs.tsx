@@ -3,6 +3,7 @@ import { packs as packsApi, documents as docsApi, questions as questionsApi, tut
 import type { Pack, Question, PdfDocument } from '../../types';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
+import { diffMeta } from '../../utils/difficulty';
 
 const SUBJECTS = ['MATHEMATICS', 'PHYSICAL_SCIENCES'] as const;
 const EMOJIS = ['📦', '📚', '🧮', '⚗️', '🔬', '📐', '🎯', '🏆', '🧠', '✨'];
@@ -129,8 +130,8 @@ function PackCard({ pack, onEdit, onShare, onDelete }: { pack: Pack; onEdit: () 
           disabled={pack.questions.length === 0}
           onClick={async () => {
             try {
-              await packsApi.downloadPdf(pack.id, 'worksheet', pack.title);
-              showToast('Worksheet downloaded', 'success');
+              await packsApi.openPdf(pack.id, 'worksheet', pack.title);
+              showToast('Worksheet opened in new tab — use the browser Save button to download.', 'info');
             } catch (e) { showToast(String((e as Error).message), 'err'); }
           }}
           title="Download branded worksheet PDF"
@@ -141,8 +142,8 @@ function PackCard({ pack, onEdit, onShare, onDelete }: { pack: Pack; onEdit: () 
           disabled={pack.questions.length === 0}
           onClick={async () => {
             try {
-              await packsApi.downloadPdf(pack.id, 'memo', pack.title);
-              showToast('Memo downloaded', 'success');
+              await packsApi.openPdf(pack.id, 'memo', pack.title);
+              showToast('Memo opened in new tab — use the browser Save button to download.', 'info');
             } catch (e) { showToast(String((e as Error).message), 'err'); }
           }}
           title="Download branded memo PDF (with answers)"
@@ -289,7 +290,7 @@ function PackEditor({ pack, onClose, onSaved }: { pack: Pack | null; onClose: ()
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="sm" style={{ fontWeight: 600 }}>{q.question}</div>
-                    <div className="xs ct3 mt1">{q.topic} · {q.difficulty}</div>
+                    <div className="xs ct3 mt1">{q.topic} · {(() => { const m = diffMeta(q.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}</div>
                   </div>
                 </label>
               );

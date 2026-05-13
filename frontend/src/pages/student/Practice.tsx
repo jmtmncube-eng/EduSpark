@@ -4,6 +4,7 @@ import { packs as packsApi, documents as docsApi, results as resultsApi } from '
 import type { Pack, Question } from '../../types';
 import { showToast } from '../../components/Toast';
 import { launchConfetti } from '../../utils/helpers';
+import { diffMeta } from '../../utils/difficulty';
 
 export default function StudentPractice() {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -176,7 +177,9 @@ function PracticeSession({ pack, onExit }: { pack: Pack; onExit: () => void }) {
         <div style={{ width: `${((idx + 1) / total) * 100}%`, height: '100%', background: 'var(--p)', transition: 'width .2s' }} />
       </div>
 
-      <div className="xs ct3">{q.topic} · {q.difficulty}</div>
+      <div className="xs ct3">
+        {q.topic} · {(() => { const m = diffMeta(q.difficulty); return <span style={{ color: m.fg, fontWeight: 600 }}>{m.icon} {m.label}</span>; })()}
+      </div>
       <div style={{ fontFamily: 'var(--fh)', fontSize: 17, fontWeight: 700, margin: '8px 0 14px' }}>{q.question}</div>
 
       <div style={{ display: 'grid', gap: 8 }}>

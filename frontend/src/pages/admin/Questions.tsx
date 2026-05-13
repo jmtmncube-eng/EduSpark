@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { questions as questionsApi, packs as packsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
+import SnippetToolbar from '../../components/SnippetToolbar';
 import type { Question, Pack } from '../../types';
 import { compressDiagram } from '../../utils/helpers';
 import DiagramViewer from '../../components/DiagramViewer';
@@ -42,6 +43,10 @@ export default function AdminQuestions() {
   const [editId, setEditId] = useState('');
   const [importText, setImportText] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const questionRef = useRef<HTMLTextAreaElement>(null);
+  const optionsRef = useRef<HTMLTextAreaElement>(null);
+  const answerRef = useRef<HTMLInputElement>(null);
+  const solutionRef = useRef<HTMLTextAreaElement>(null);
 
   // Pack-attach flow
   const [selectMode, setSelectMode] = useState(false);
@@ -283,7 +288,11 @@ export default function AdminQuestions() {
               </select>
             </div>
           </div>
-          <div className="fg"><label className="lbl">Question</label><textarea className="textarea" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="Type the question here" /></div>
+          <div className="fg">
+            <label className="lbl">Question</label>
+            <textarea ref={questionRef} className="textarea" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="Type the question here" />
+            <SnippetToolbar targetRef={questionRef} value={form.question} onChange={(v) => setForm({ ...form, question: v })} />
+          </div>
           <div className="fg"><label className="lbl">Image (optional)</label>
             <div className="file-zone" onClick={() => document.getElementById('q-img-inp')?.click()}>
               <input type="file" id="q-img-inp" accept="image/*" style={{ display: 'none' }} onChange={handleImgUpload} />
@@ -291,9 +300,21 @@ export default function AdminQuestions() {
             </div>
             {form.imageData && <button className="btn ba btn-sm mt1" onClick={() => setForm({ ...form, imageData: '' })}>✕ Remove image</button>}
           </div>
-          <div className="fg"><label className="lbl">Options (one per line · prefix correct with ★)</label><textarea className="textarea" value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder={'★ x = 5\nx = 3\nx = 7\nx = 10'} style={{ minHeight: 88 }} /></div>
-          <div className="fg"><label className="lbl">Correct answer (must match one option exactly)</label><input type="text" className="input" value={form.answer} onChange={(e) => setForm({ ...form, answer: e.target.value })} placeholder="e.g. x = 5" /></div>
-          <div className="fg"><label className="lbl">Step-by-step solution</label><textarea className="textarea" value={form.solution} onChange={(e) => setForm({ ...form, solution: e.target.value })} placeholder={'Step 1: …\nStep 2: …'} style={{ minHeight: 85 }} /></div>
+          <div className="fg">
+            <label className="lbl">Options (one per line · prefix correct with ★)</label>
+            <textarea ref={optionsRef} className="textarea" value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder={'★ x = 5\nx = 3\nx = 7\nx = 10'} style={{ minHeight: 88 }} />
+            <SnippetToolbar targetRef={optionsRef} value={form.options} onChange={(v) => setForm({ ...form, options: v })} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Correct answer (must match one option exactly)</label>
+            <input ref={answerRef} type="text" className="input" value={form.answer} onChange={(e) => setForm({ ...form, answer: e.target.value })} placeholder="e.g. x = 5" />
+            <SnippetToolbar targetRef={answerRef} value={form.answer} onChange={(v) => setForm({ ...form, answer: v })} />
+          </div>
+          <div className="fg">
+            <label className="lbl">Step-by-step solution</label>
+            <textarea ref={solutionRef} className="textarea" value={form.solution} onChange={(e) => setForm({ ...form, solution: e.target.value })} placeholder={'Step 1: …\nStep 2: …'} style={{ minHeight: 85 }} />
+            <SnippetToolbar targetRef={solutionRef} value={form.solution} onChange={(v) => setForm({ ...form, solution: v })} />
+          </div>
           <div className="xs ct3 mb2">
             💡 Student visibility is governed by <b>📦 Packs</b>. Add this question to a Pack to control who sees it.
           </div>

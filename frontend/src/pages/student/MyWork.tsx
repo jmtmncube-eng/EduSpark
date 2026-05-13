@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { subjectBadge, fmtDate } from '../../utils/helpers';
 import DiagramViewer from '../../components/DiagramViewer';
+import { onDirty } from '../../services/events';
 
 type Filter = 'all' | 'pending' | 'done' | 'overdue';
 type SortKey = 'due' | 'title' | 'score';
@@ -25,20 +26,27 @@ export default function StudentMyWork() {
   const navigate = useNavigate();
   const [asgns, setAsgns] = useState<Assignment[]>([]);
   const [results, setResults] = useState<QuizResult[]>([]);
-  const [filter, setFilter] = useState<Filter>('all');
+  // Default landing on Pending — completed work moves to History so the
+  // active list doesn't get cluttered as the term progresses.
+  const [filter, setFilter] = useState<Filter>('pending');
   const [sort, setSort] = useState<SortKey>('due');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [viewDocs, setViewDocs] = useState<Assignment | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([assignmentsApi.list(), resultsApi.list()])
-      .then(([a, r]) => {
-        setAsgns(a as Assignment[]);
-        setResults(r as QuizResult[]);
-      })
-      .catch(() => showToast('Failed to load assignments', 'err'))
-      .finally(() => setLoading(false));
+    const load = () => {
+      Promise.all([assignmentsApi.list(), resultsApi.list()])
+        .then(([a, r]) => {
+          setAsgns(a as Assignment[]);
+          setResults(r as QuizResult[]);
+        })
+        .catch(() => showToast('Failed to load assignments', 'err'))
+        .finally(() => setLoading(false));
+    };
+    load();
+    // Live refresh when results / assignments change anywhere in the app
+    return onDirty(['results', 'assignments', 'all'], () => load());
   }, []);
 
   // Build lookup maps — skip practice results that have no assignmentId
@@ -96,10 +104,10 @@ export default function StudentMyWork() {
   }, [asgns, filter, sort, subjectFilter, results]);
 
   const FILTERS: { key: Filter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: total },
-    { key: 'pending', label: '⏳ Pending', count: pendingCount },
-    { key: 'done', label: '✅ Done', count: doneCount },
+    { key: 'pending', label: '⏳ To do', count: pendingCount },
     { key: 'overdue', label: '⚠️ Overdue', count: overdueCount },
+    { key: 'done', label: '🗂 History', count: doneCount },
+    { key: 'all', label: 'All', count: total },
   ];
 
   if (loading) return <div className="empty"><div className="eico">⏳</div><p>Loading…</p></div>;
@@ -165,9 +173,19 @@ export default function StudentMyWork() {
       {/* Assignment list */}
       {visible.length === 0 ? (
         <div className="empty">
-          <div className="eico">{filter === 'done' ? '🎉' : filter === 'overdue' ? '✅' : '📭'}</div>
-          <h3>{filter === 'done' ? 'Nothing completed yet' : filter === 'overdue' ? 'No overdue work!' : 'No assignments here'}</h3>
-          <p>{filter === 'pending' ? 'All caught up — great work!' : filter === 'overdue' ? 'Keep it up.' : 'Your teacher will assign quizzes soon.'}</p>
+          <div className="eico">{filter === 'done' ? '🗂' : filter === 'overdue' ? '✅' : filter === 'pending' ? '🎉' : '📭'}</div>
+          <h3>{
+            filter === 'done'     ? 'Nothing here yet'
+            : filter === 'overdue' ? 'No overdue work — great job!'
+            : filter === 'pending' ? 'All caught up!'
+            : 'No assignments yet'
+          }</h3>
+          <p>{
+            filter === 'pending' ? 'Anything new from your tutor will land here.'
+            : filter === 'overdue' ? 'Keep it up.'
+            : filter === 'done' ? 'Finished assignments move here once you complete them.'
+            : 'Your teacher will assign quizzes soon.'
+          }</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

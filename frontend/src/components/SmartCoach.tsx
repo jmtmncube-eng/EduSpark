@@ -4,16 +4,36 @@ import { recommendations as recApi } from '../services/api';
 
 type Rec = Awaited<ReturnType<typeof recApi.me>>;
 
+const COLLAPSED_KEY = 'es_sc_collapsed';
+
 export default function SmartCoach() {
   const navigate = useNavigate();
   const [rec, setRec] = useState<Rec | null>(null);
   const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState<boolean>(() =>
+    typeof window !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === '1'
+  );
 
+  function toggle() {
+    setCollapsed((v) => {
+      const next = !v;
+      try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  // Live refresh: any time the app fires `eduspark:data-dirty` we re-fetch
   useEffect(() => {
-    recApi.me()
-      .then(setRec)
-      .catch(() => setRec(null))
-      .finally(() => setLoading(false));
+    const load = () => {
+      recApi.me()
+        .then(setRec)
+        .catch(() => setRec(null))
+        .finally(() => setLoading(false));
+    };
+    load();
+    const handler = () => load();
+    window.addEventListener('eduspark:data-dirty', handler);
+    return () => window.removeEventListener('eduspark:data-dirty', handler);
   }, []);
 
   if (loading) return null;
@@ -55,24 +75,43 @@ export default function SmartCoach() {
 
   return (
     <div className="ca" style={{
-      padding: 18, marginBottom: 18,
+      padding: collapsed ? 14 : 18, marginBottom: 16,
       background: 'linear-gradient(135deg, rgba(20,184,166,.08), rgba(255,255,255,.0))',
       border: '1px solid rgba(20,184,166,.25)',
+      transition: 'padding .2s',
     }}>
-      {/* Header */}
-      <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
+      {/* Header — full row is clickable to collapse */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        style={{
+          display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between',
+          gap: 8, flexWrap: 'wrap',
+          background: 'transparent', border: 0, cursor: 'pointer',
+          color: 'inherit', padding: 0,
+          marginBottom: collapsed ? 0 : 14,
+          textAlign: 'left',
+        }}
+      >
         <div className="flex ia" style={{ gap: 10 }}>
           <span style={{ fontSize: 26 }}>🧠</span>
           <div>
             <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>SmartCoach</div>
-            <div className="xs ct3">Your personal study plan, updated after every quiz.</div>
+            <div className="xs ct3">Your personal study plan · updated after every quiz</div>
           </div>
         </div>
         <div className="flex ia g2" style={{ flexWrap: 'wrap' }}>
           <Pill icon="🔥" label={`${streak}-day streak`} tone={streak > 0 ? 'hot' : 'mute'} />
           <Pill icon="🎯" label={`${avgScore}% avg`} tone={avgScore >= 80 ? 'good' : avgScore >= 60 ? 'mid' : 'low'} />
+          <span aria-hidden style={{ fontSize: 14, color: 'var(--t3)', marginLeft: 4 }}>{collapsed ? '▾' : '▴'}</span>
         </div>
-      </div>
+      </button>
+
+      {collapsed && null}
+
+      {!collapsed && (<>
+
 
       {/* Daily goal */}
       <div style={{
@@ -154,6 +193,7 @@ export default function SmartCoach() {
           )}
         </div>
       </div>
+      </>)}
     </div>
   );
 }

@@ -1,4 +1,16 @@
 import { enqueue as enqueueOffline, queueSize } from './offlineQueue';
+import { emitDirty, type DirtyScope } from './events';
+
+// Auto-emit data-dirty events after successful mutations so dashboards refresh
+const DIRTY_RULES: { matches: (path: string, method: string) => boolean; scope: DirtyScope }[] = [
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/results'),         scope: 'results' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/assignments'),     scope: 'assignments' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/packs'),           scope: 'packs' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/calendar'),        scope: 'calendar' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/notifications'),   scope: 'notifications' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/tutor-requests'),  scope: 'tutors' },
+  { matches: (p, m) => m !== 'GET' && p.startsWith('/students'),        scope: 'users' },
+];
 
 const BASE = '/api';
 
@@ -46,7 +58,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || 'Request failed');
     }
-    return res.json();
+    const data = await res.json();
+    // Auto-emit data-dirty so listening components refresh
+    const rule = DIRTY_RULES.find((r) => r.matches(path, method));
+    if (rule) emitDirty(rule.scope, { path });
+    return data;
   } catch (err) {
     // Network/offline failure on a mutation → queue it and tell the caller
     if (isNetworkError(err) && SAFE_TO_QUEUE.has(method)) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendations as recApi } from '../services/api';
+import { onDirty } from '../services/events';
 
 type Student = Awaited<ReturnType<typeof recApi.spotlight>>[number];
 
@@ -20,10 +21,14 @@ export default function TutorSpotlight() {
   const [filter, setFilter] = useState<'flagged' | 'all' | Student['status']>('flagged');
 
   useEffect(() => {
-    recApi.spotlight()
-      .then(setList)
-      .catch(() => setList([]))
-      .finally(() => setLoading(false));
+    const load = () => {
+      recApi.spotlight()
+        .then(setList)
+        .catch(() => setList([]))
+        .finally(() => setLoading(false));
+    };
+    load();
+    return onDirty(['results', 'users', 'tutors', 'packs', 'all'], () => load());
   }, []);
 
   const counts = useMemo(() => list.reduce((acc, s) => {

@@ -1,28 +1,33 @@
 /* ── DESIGN TOKENS ─────────────────────────────────────────────── */
+/* Page tokens are tuned to hit WCAG AA contrast on text-on-bg.
+   Light theme: softer background, deeper muted-text. Dark theme: lighter
+   muted-text + warmer accent so chips/badges don't disappear. */
 :root{
-  --bg:#D4F4E8;--bg2:#BDE9D6;
-  --cs:rgba(255,255,255,.86);--cm:rgba(255,255,255,.20);
-  --bd:rgba(16,185,129,.22);--bd2:rgba(16,185,129,.42);
-  --sh:rgba(0,80,50,.12);--glow:rgba(255,255,255,.90);
-  --t:#061C12;--t2:#1A4A33;--t3:#5A9478;--t4:#A8D4BC;
+  --bg:#E8F7EF;--bg2:#D4EEDF;
+  --cs:rgba(255,255,255,.88);--cm:rgba(255,255,255,.55);
+  --bd:rgba(15,118,110,.22);--bd2:rgba(15,118,110,.44);
+  --sh:rgba(0,55,40,.10);--glow:rgba(255,255,255,.92);
+  /* Text scale — t (primary) → t2 (secondary) → t3 (muted) → t4 (very subtle) */
+  --t:#06140E;--t2:#1F4B38;--t3:#3F7A5C;--t4:#6F9F87;
   --p:#0D9488;--pl:#14B8A6;--pll:#5EEAD4;
   --s:#059669;--sl:#10B981;
-  --a:#0891B2;--al:#06B6D4;
-  --wr:#D97706;--dr:#DC2626;
+  --a:#0E7490;--al:#06B6D4;
+  --wr:#B45309;--dr:#B91C1C;
   --sw:270px;--r:18px;--rs:11px;--rx:7px;
   --fh:'Cormorant Garamond',serif;--fb:'Plus Jakarta Sans',sans-serif;
   --tr:all .25s cubic-bezier(.4,0,.2,1)
 }
 [data-theme=dark]{
-  --bg:#03080F;--bg2:#060F1C;
-  --cs:rgba(5,16,38,.94);--cm:rgba(10,28,60,.38);
-  --bd:rgba(20,184,166,.24);--bd2:rgba(20,184,166,.48);
-  --sh:rgba(0,0,0,.55);--glow:rgba(45,212,191,.12);
-  --t:#C8EDE4;--t2:#5FC4B2;--t3:#267060;--t4:#0C3028;
+  --bg:#06121A;--bg2:#0A1B26;
+  --cs:rgba(6,18,32,.94);--cm:rgba(14,30,52,.46);
+  --bd:rgba(94,234,212,.22);--bd2:rgba(94,234,212,.42);
+  --sh:rgba(0,0,0,.55);--glow:rgba(45,212,191,.10);
+  /* Light-text scale on dark bg — every step must be readable */
+  --t:#E2F5EE;--t2:#9BD9C8;--t3:#6BA89A;--t4:#3F6B5E;
   --p:#2DD4BF;--pl:#5EEAD4;--pll:#99F6E4;
   --s:#34D399;--sl:#6EE7B7;
-  --a:#22D3EE;--al:#67E8F9;
-  --wr:#FCD34D;--dr:#F87171
+  --a:#67E8F9;--al:#22D3EE;
+  --wr:#FBBF24;--dr:#F87171
 }
 
 /* ── RESET ─────────────────────────────────────────────────────── */
@@ -108,8 +113,9 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 .btn-lg{padding:13px 32px;font-size:15px}
 
 /* ── FORMS ──────────────────────────────────────────────────────── */
-.input,.select,.textarea{width:100%;padding:9px 13px;border:1.5px solid var(--bd2);border-radius:var(--rs);background:rgba(20,184,166,.08);backdrop-filter:blur(8px);color:var(--t);font-family:var(--fb);font-size:13px;transition:var(--tr);outline:none}
-[data-theme=dark] .input,[data-theme=dark] .select,[data-theme=dark] .textarea{background:rgba(4,20,48,.75);border-color:rgba(45,212,191,.35);color:var(--t)}
+.input,.select,.textarea{width:100%;padding:9px 13px;border:1.5px solid var(--bd2);border-radius:var(--rs);background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--t);font-family:var(--fb);font-size:13px;transition:var(--tr);outline:none}
+[data-theme=dark] .input,[data-theme=dark] .select,[data-theme=dark] .textarea{background:rgba(14,30,52,.85);border-color:rgba(94,234,212,.32);color:var(--t)}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(20,184,166,.18)}
 .input:focus,.select:focus,.textarea:focus{border-color:var(--pl);box-shadow:0 0 0 3px rgba(20,184,166,.18)}
 .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t2)}

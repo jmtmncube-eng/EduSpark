@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notifications as notifApi } from '../services/api';
+import { onDirty } from '../services/events';
 import type { Notification } from '../types';
 
 const POLL_MS = 30_000;
@@ -24,7 +25,10 @@ export default function NotificationBell() {
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, POLL_MS);
-    return () => clearInterval(t);
+    // Refresh immediately when any other component triggers a result / pack /
+    // tutor-request mutation — students see new notifications without polling.
+    const off = onDirty(['notifications', 'results', 'packs', 'tutors', 'calendar', 'all'], () => refresh());
+    return () => { clearInterval(t); off(); };
   }, []);
 
   // Close on outside click

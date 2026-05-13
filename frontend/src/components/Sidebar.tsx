@@ -228,7 +228,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
                 <div className="flex jb ia" style={{ marginBottom: showPin ? 8 : 0 }}>
                   <div>
                     <div className="sm bold">Your Login PIN</div>
-                    <div className="xs ct3">{isTutor ? 'TCH-XXXX — used to sign in' : 'SPK-XXXX — used to sign in'}</div>
+                    <div className="xs ct3">Used to sign in — keep it safe</div>
                   </div>
                   <button className="btn ba btn-sm" onClick={() => setShowPin((v) => !v)}>
                     {showPin ? '🙈 Hide' : '👁 Reveal'}

@@ -104,6 +104,43 @@ if [ -d "$(dirname "$ENV_FILE")" ] && command -v docker >/dev/null; then
   echo "→ Restarting eduspark backend"
   cd "$(dirname "$ENV_FILE")"
   docker compose -f docker-compose.yml --env-file .env restart backend
+
+  # ── 6b. Wait for backend to actually be ready ────────────────────
+  echo "→ Waiting for backend to be ready"
+  for i in $(seq 1 30); do
+    sleep 1
+    if curl -s --max-time 3 "https://${DOMAIN}/api/packs" -o /dev/null -w '%{http_code}' \
+         | grep -q '^401$'; then
+      echo "  ✓ Backend is up (${i}s)"
+      break
+    fi
+    [ "$i" = 30 ] && echo "  ⚠ Backend not responding after 30s — continuing anyway"
+  done
+
+  # ── 6c. Ensure demo tutors exist (idempotent) ───────────────────
+  echo "→ Ensuring demo tutors exist"
+  docker compose -f docker-compose.yml --env-file .env exec -T backend node <<'NODE'
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+(async () => {
+  try {
+    const count = await p.user.count({ where: { role: 'TUTOR' } });
+    if (count > 0) { console.log(`  • ${count} tutor(s) already in DB — skipping`); return; }
+    await p.user.upsert({
+      where: { pin: 'TCH-D5VA' }, update: {},
+      create: { name: 'Moses', role: 'TUTOR', pin: 'TCH-D5VA', active: true,
+                subjects: ['MATHEMATICS','PHYSICAL_SCIENCES'], teachGrades: [10,11] }
+    });
+    await p.user.upsert({
+      where: { pin: 'TCH-GDBR' }, update: {},
+      create: { name: 'John',  role: 'TUTOR', pin: 'TCH-GDBR', active: true,
+                subjects: ['MATHEMATICS'], teachGrades: [11,12] }
+    });
+    console.log('  ✓ Created tutors: Moses (TCH-D5VA), John (TCH-GDBR)');
+  } catch (e) { console.error('  ✗ Tutor seed failed:', e.message); }
+  finally { await p.$disconnect(); }
+})();
+NODE
 fi
 
 # ── 7. Smoke test ──────────────────────────────────────────────────

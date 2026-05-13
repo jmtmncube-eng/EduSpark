@@ -118,9 +118,8 @@ export default function Login() {
     // If stance is "returning", reject anything that's not a PIN — prevents accidental creation
     if (stance === 'returning' && !isPin(trimmed)) {
       showToast(
-        role === 'admin' ? 'Admins sign in with ADM-XXXX only.'
-          : role === 'tutor' ? 'Returning tutors sign in with TCH-XXXX. Switch to "I\'m new" if you don\'t have a PIN yet.'
-          : 'Returning students sign in with SPK-XXXX. Switch to "I\'m new" if you don\'t have a PIN yet.',
+        role === 'admin' ? 'Admins sign in with a PIN only.'
+          : 'Returning users sign in with their PIN. Switch to "I\'m new" if you don\'t have one yet.',
         'warn'
       );
       return;
@@ -280,11 +279,11 @@ export default function Login() {
   }
 
   const placeholder =
-    isParentPin(value) ? 'Enter parent access code (PAR-XXXX)' :
-    role === 'admin' ? 'Enter your PIN (e.g. ADM-XXXX)' :
+    isParentPin(value) ? 'Enter your parent access code' :
+    role === 'admin' ? 'Enter your admin PIN' :
     stance === 'returning'
-      ? (role === 'tutor' ? 'Enter your PIN (TCH-XXXX)' : 'Enter your PIN (SPK-XXXX)')
-      : (role === 'tutor' ? 'Enter your full name to start setup' : 'Enter your full name to start setup');
+      ? 'Enter your PIN'
+      : 'Enter your full name to start setup';
 
   const hint =
     isParentPin(value) ? 'Parent access is temporary and view-only. No account creation.' :
@@ -312,9 +311,9 @@ export default function Login() {
         {/* Role */}
         <div className="role-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {([
-            { key: 'student', ico: '🎒', label: 'Student',  sub: 'SPK-XXXX' },
-            { key: 'tutor',   ico: '📚', label: 'Tutor',    sub: 'TCH-XXXX' },
-            { key: 'admin',   ico: '👨‍💼', label: 'Admin',    sub: 'ADM-XXXX' },
+            { key: 'student', ico: '🎒', label: 'Student',  sub: 'Quizzes & practice' },
+            { key: 'tutor',   ico: '📚', label: 'Tutor',    sub: 'Run a class' },
+            { key: 'admin',   ico: '👨‍💼', label: 'Admin',    sub: 'Manage platform' },
           ] as const).map(({ key, ico, label, sub }) => (
             <div key={key} className={`role-card ${role === key ? 'active' : ''}`}
               onClick={() => { setRole(key); setValue(''); if (key === 'admin') setStance('returning'); }}>
@@ -510,7 +509,7 @@ export default function Login() {
             }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Before you continue:</div>
               <ul style={{ margin: '4px 0 0 18px', padding: 0, lineHeight: 1.5 }}>
-                <li>Did you sign in before with a different spelling? <strong>Cancel</strong> and try your <strong>PIN (SPK-XXXX / TCH-XXXX)</strong> instead.</li>
+                <li>Did you sign in before with a different spelling? <strong>Cancel</strong> and try your <strong>PIN</strong> instead.</li>
                 <li>Names are case-insensitive but spaces and spelling matter.</li>
                 <li>If you confirm, a brand new account is created and you'll get a permanent PIN.</li>
               </ul>

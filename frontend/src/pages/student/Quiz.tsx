@@ -78,6 +78,13 @@ export default function StudentQuiz() {
       showToast(`Quiz complete! Score: ${r.score}% · +${r.xpEarned} XP`, 'success');
       navigate(`/app/results/${r.id}`);
     } catch (e: unknown) {
+      // Offline failure: api layer has already queued the submission for retry.
+      // Treat as a soft success so the student can exit the quiz screen.
+      if ((e as { offline?: boolean })?.offline) {
+        showToast('Saved offline — will submit when you reconnect.', 'info');
+        navigate('/app/my-work');
+        return;
+      }
       showToast((e as Error).message, 'err');
       setIsSubmitting(false);
     }

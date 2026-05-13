@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.1.0] — 2026-05-14 — Offline-first, Clock & Weather, Mobile polish, Demo seed
+
+### Added
+- **Offline write queue** (`frontend/src/services/offlineQueue.ts`) — any non-GET request that fails with a network error is persisted to `localStorage`, retried on `window.online`, on user sign-in, and every 30 s while connected. Mutations stay queued through 5xx errors; 4xx are dropped. Quiz submissions in particular now survive flaky connections — the student sees "Saved offline — will submit when you reconnect" and can move on.
+- **OfflineBanner** — fixed top-of-screen status banner that appears when offline or whenever the queue has pending items. Shows per-type counts ("📋 Quiz submission ×2 · 📅 Calendar request ×1") and an explicit "↻ Sync now" button when reconnected.
+- **ClockWeather widget** — real-time clock + Open-Meteo weather chip rendered next to the dashboard welcome. Geolocation API (with browser prompt) and a Johannesburg fallback. Reverse-geocode populates the city name. Refreshes every 15 min and caches the coordinates for instant render on next load.
+
+### Added — Mobile polish
+- Comprehensive responsive overhaul in `index.css`:
+  - Tables get horizontal scroll with a sane min-width
+  - Page headers (`.ph`) shrink + headings reduce on phones
+  - Cards (`.ca`, `.card`) shrink padding
+  - Modals fill the viewport at narrow widths
+  - Calendar cells compress; on `< 480px` pill labels are replaced by a single dot indicator
+  - Quiz options get a 44 px tap target
+  - Topbar wraps and hides the centre identity strip on phones to leave room for the bell
+  - Tablet breakpoint (769–1024 px) gives stats a 2-column grid
+  - Honours `prefers-reduced-motion`
+- Viewport meta upgraded with `viewport-fit=cover`; `theme-color` set to EduSpark teal; description meta added for shareability.
+
+### Added — Seed data
+- Rewritten `backend/seed-extras.ts` produces a realistic demo class:
+  - 3 packs (Algebra Foundations · Quadratic Practice · Newton's Laws) auto-shared with the first tutor
+  - First tutor's class auto-paired and unlocked for grade-appropriate packs
+  - 18 synthetic historical practice results across students with varied scores
+  - Calendar notes (tutor session + admin broadcast)
+  - Welcome notification per student
+- Fully idempotent — re-running it is safe and is a no-op if the data is already there.
+
+### Changed
+- `api.ts` request function detects network-vs-HTTP errors and enqueues mutations on true network failures; non-mutation reads bubble the error up to the caller.
+- Quiz submission flow handles `offline` flag as a soft-success → toast + navigate to My Work.
+
+---
+
 ## [2.0.0] — 2026-05-13 — Packs, PDFs, SmartCoach, PIN Recovery, Production Deploy
 
 Major release intended for the VPS hand-off.

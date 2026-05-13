@@ -379,7 +379,53 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 @media(max-width:768px){
   .sb{transform:translateX(-100%);z-index:200}.sb.open{transform:none}
   .sov.show{display:block}.main{margin-left:0}.menu-btn{display:flex}
-  .pg{padding:16px 13px}.topbar{padding:0 13px}
+  .pg{padding:16px 13px}.topbar{padding:0 13px;gap:8px;flex-wrap:wrap}
   .grid2,.grid3{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.cal-layout{grid-template-columns:1fr}
+
+  /* Tables → horizontally scrollable with visual cue */
+  .dt{font-size:12px;min-width:560px}
+
+  /* Headers stack & reduce padding on small viewports */
+  .ph{padding:14px 0 12px}.ph h2{font-size:18px;margin-bottom:2px}.ph p{font-size:12px}
+
+  /* Cards squeeze on tight space */
+  .ca,.card{padding:12px}
+
+  /* Modals fill the screen instead of hovering with awkward margins */
+  .modal{padding:8px}.modal-content{max-width:100%;border-radius:12px;padding:16px}
+
+  /* Calendar cells smaller on mobile */
+  .cal-day{min-height:54px;padding:4px}.cal-dn{font-size:11px}.cal-pill{font-size:8.5px;padding:1px 4px}
+
+  /* Force-wrap long item rows so they don't overflow on tiny screens */
+  .flex.jb.ia{flex-wrap:wrap;row-gap:6px}
+
+  /* Quiz screen — bigger tap targets */
+  .qopt{font-size:13px;padding:10px 12px;min-height:44px;display:flex;align-items:center}
 }
-@media(max-width:480px){.stats{grid-template-columns:1fr 1fr}.ach-grid{grid-template-columns:1fr 1fr}.lwrap{padding:32px 20px}}
+@media(max-width:480px){
+  .stats{grid-template-columns:1fr 1fr}.ach-grid{grid-template-columns:1fr 1fr}.lwrap{padding:32px 20px}
+  .topbar{padding:0 10px;min-height:54px}
+  /* Hide the centre identity strip on phones to leave room for bell + xp */
+  .topbar > div:nth-child(2){display:none}
+  /* Even smaller calendar cells */
+  .cal-day{min-height:46px;font-size:11px}
+  .cal-pill{display:none}
+  .cal-day.hev::after{content:'•';color:var(--p);font-size:14px;line-height:0;position:absolute;bottom:4px;left:50%;transform:translateX(-50%)}
+  .cal-day{position:relative}
+  .cal-mo{font-size:14px}
+  /* Stack profile modal denser */
+  .modal-content{padding:14px}
+  /* Force one-column for any 2-col grid */
+  .grid2,.grid3{grid-template-columns:1fr!important}
+  /* Buttons in dense flex rows wrap rather than overflow */
+  .btn{white-space:nowrap}.btn.wf{white-space:normal}
+}
+/* Tablet sweet spot */
+@media(min-width:769px) and (max-width:1024px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+/* Honour user preference for reduced motion */
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;transition-duration:.001s!important}
+}

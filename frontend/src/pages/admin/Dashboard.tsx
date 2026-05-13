@@ -5,6 +5,7 @@ import { analytics } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import TutorSpotlight from '../../components/TutorSpotlight';
 import AStudentFactory from '../../components/AStudentFactory';
+import ClockWeather from '../../components/ClockWeather';
 import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend);
@@ -56,7 +57,13 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <div className="ph"><h2>📊 Dashboard</h2><p>Platform overview</p></div>
+      <div className="ph" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <h2 style={{ margin: 0 }}>📊 Dashboard</h2>
+          <p style={{ margin: 0 }}>Platform overview</p>
+        </div>
+        <ClockWeather />
+      </div>
       <AdminOrTutor />
       <TutorSpotlight />
       <div className="stats">

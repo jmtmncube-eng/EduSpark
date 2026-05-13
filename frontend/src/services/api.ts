@@ -1,25 +1,71 @@
+import { enqueue as enqueueOffline, queueSize } from './offlineQueue';
+
 const BASE = '/api';
 
 function getToken() {
   return localStorage.getItem('es_token');
 }
 
+/**
+ * Detect a true network failure (offline, DNS, cors-network) — these throw a
+ * TypeError before any response is received. HTTP error codes (4xx/5xx) reach
+ * `res.ok === false` below, NOT this catch.
+ */
+function isNetworkError(err: unknown): boolean {
+  return err instanceof TypeError;
+}
+
+const SAFE_TO_QUEUE = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+const QUEUE_LABELS: Record<string, string> = {
+  '/results': '📋 Quiz submission',
+  '/results/practice': '📚 Practice session',
+  '/calendar/requests': '📅 Calendar request',
+  '/tutor-requests': '🙋 Tutor request',
+  '/notifications': '🔔 Notification action',
+};
+
+function labelFor(path: string): string {
+  for (const [prefix, label] of Object.entries(QUEUE_LABELS)) {
+    if (path.startsWith(prefix)) return label;
+  }
+  return 'Pending change';
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const method = (options.method || 'GET').toUpperCase();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...((options.headers as Record<string, string>) || {}),
+  };
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Request failed');
+  try {
+    const res = await fetch(`${BASE}${path}`, { ...options, headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  } catch (err) {
+    // Network/offline failure on a mutation → queue it and tell the caller
+    if (isNetworkError(err) && SAFE_TO_QUEUE.has(method)) {
+      enqueueOffline({
+        url: `${BASE}${path}`,
+        method,
+        body: options.body as string | undefined,
+        contentType: headers['Content-Type'],
+        needsAuth: !!token,
+        label: labelFor(path),
+      });
+      // Throw a special marker so the calling component can display
+      // a "saved offline" message instead of a hard error.
+      const queued = new Error(`Saved offline — will sync when you reconnect (${queueSize()} pending).`);
+      (queued as Error & { offline?: boolean }).offline = true;
+      throw queued;
+    }
+    throw err;
   }
-  return res.json();
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────

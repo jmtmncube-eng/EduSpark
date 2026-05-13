@@ -7,7 +7,9 @@ import ToastContainer from './components/Toast';
 import Sidebar from './components/Sidebar';
 import NotificationBell from './components/NotificationBell';
 import OnboardingModal from './components/OnboardingModal';
+import OfflineBanner from './components/OfflineBanner';
 import Login from './pages/Login';
+import { flushQueue } from './services/offlineQueue';
 
 // Admin pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -158,9 +160,16 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', saved);
   }, []);
 
+  // Once a user is logged in and we're online, try to drain any queued mutations
+  // from a previous offline session.
+  useEffect(() => {
+    if (user && navigator.onLine) flushQueue();
+  }, [user]);
+
   return (
     <>
       <Background />
+      <OfflineBanner />
       <ToastContainer />
       <Routes>
         <Route path="/" element={user ? <Navigate to="/app/dashboard" replace /> : <Login />} />

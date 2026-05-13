@@ -7,6 +7,7 @@ import Modal from '../../components/Modal';
 import type { Assignment, QuizResult } from '../../types';
 import { getLvl, calcStreak, fmtDate, subjectBadge } from '../../utils/helpers';
 import SmartCoach from '../../components/SmartCoach';
+import ClockWeather from '../../components/ClockWeather';
 
 const MOTIVATIONS = [
   { msg: 'Keep going! Every quiz builds your knowledge. 💡', ico: '🔥' },
@@ -42,9 +43,12 @@ export default function StudentDashboard() {
 
   return (
     <div>
-      <div className="ph">
-        <h2>👋 Welcome back, {user.name}!</h2>
-        <p>Your learning hub — quizzes, progress and schedule</p>
+      <div className="ph" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <h2 style={{ margin: 0 }}>👋 Welcome back, {user.name}!</h2>
+          <p style={{ margin: 0 }}>Your learning hub — quizzes, progress and schedule</p>
+        </div>
+        <ClockWeather />
       </div>
       <SmartCoach />
 

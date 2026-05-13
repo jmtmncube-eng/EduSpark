@@ -425,6 +425,31 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 @media(min-width:769px) and (max-width:1024px){
   .stats{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ── LOGIN page responsiveness ─────────────────────────────────── */
+/* The login wrapper now allows scrolling on shorter viewports so nothing
+   ever gets cut off — and it dials down padding + font size on tight phones. */
+#login{padding:18px 12px;align-items:flex-start!important;overflow-y:auto}
+@media(min-height:740px){#login{align-items:center!important}}
+@media(max-width:520px){
+  .lwrap{padding:24px 18px;border-radius:22px;border-width:1.5px}
+  .role-row{grid-template-columns:1fr 1fr 1fr!important;gap:8px;margin-bottom:14px}
+  .role-card{padding:10px 6px;border-radius:12px}
+  .role-card>div:first-child{font-size:22px!important;margin-bottom:2px!important}
+  .role-card>div:nth-child(2){font-size:12px!important}
+  .role-card>div:nth-child(3){font-size:9px!important}
+  .logo-orb{width:52px;height:52px;border-radius:14px;font-size:24px}
+  .brand-name{font-size:24px}
+  .l-in{font-size:13px;padding:10px 14px}
+  .l-btn{font-size:15px;padding:12px}
+}
+@media(max-width:380px){
+  .lwrap{padding:20px 14px}
+  .role-card>div:nth-child(2){font-size:11px!important}
+  .role-card>div:nth-child(3){display:none}
+}
+/* Wider screens — keep the card centred but don't sprawl */
+@media(min-width:1280px){.lwrap{max-width:480px}}
 /* Honour user preference for reduced motion */
 @media(prefers-reduced-motion:reduce){
   *{animation-duration:.001s!important;transition-duration:.001s!important}

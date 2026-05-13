@@ -393,29 +393,67 @@ export default function Login() {
           </button>
         )}
 
-        {/* DEV ONLY */}
-        {import.meta.env.DEV && (
-          <div style={{ marginTop: 18, background: 'rgba(251,191,36,.12)', border: '1.5px dashed rgba(251,191,36,.5)', borderRadius: 12, padding: '12px 14px', fontSize: 11.5 }}>
-            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 8 }}>🛠️ Dev Credentials</div>
-            {([
-              { role: '👨‍💼 Admin',   creds: [{ label: 'Alistair Sabe', pin: 'ADM-ALIS' }, { label: 'Mbongeni Mncube', pin: 'ADM-MBON' }, { label: 'Glad Mpala', pin: 'ADM-GLAD' }] },
-              { role: '📚 Tutor',   creds: [{ label: 'Moses', pin: 'TCH-D5VA' }, { label: 'John', pin: 'TCH-GDBR' }] },
-              { role: '🎒 Student', creds: [{ label: 'Zanele', pin: 'SPK-ZM3K' }, { label: 'Sipho', pin: 'SPK-SN2K' }, { label: 'Amahle', pin: 'SPK-AM1D' }] },
-            ] as { role: string; creds: { label: string; pin: string }[] }[]).map(({ role: r, creds }) => (
-              <div key={r} style={{ marginBottom: 7 }}>
-                <span style={{ fontWeight: 700, color: 'var(--t2)' }}>{r}:</span>
-                {creds.map(({ label, pin }) => (
-                  <div key={pin} style={{ marginLeft: 12, color: 'var(--t3)', lineHeight: 1.6 }}>
-                    {label} · <span style={{ fontFamily: 'monospace', color: '#0d9488', fontWeight: 700, letterSpacing: '.08em', cursor: 'pointer' }} title="Click to fill" onClick={() => setValue(pin)}>{pin}</span>
-                  </div>
-                ))}
+        {/* Why EduSpark — replaces the dev creds with something tasteful */}
+        <div style={{
+          marginTop: 22,
+          padding: '14px 16px',
+          background: 'linear-gradient(135deg, rgba(20,184,166,.07), rgba(14,165,233,.04))',
+          border: '1px solid rgba(20,184,166,.18)',
+          borderRadius: 14,
+        }}>
+          <div style={{
+            fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 12.5,
+            color: 'var(--t2)', letterSpacing: '.08em', textTransform: 'uppercase',
+            marginBottom: 10, textAlign: 'center',
+          }}>
+            Why EduSpark
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: 8,
+          }}>
+            {[
+              { ico: '📐', title: 'Maths & Physics', sub: 'Gr 10–12 · all the topics' },
+              { ico: '🎯', title: 'SmartCoach',      sub: 'Personal next-best practice' },
+              { ico: '📦', title: 'Content Packs',   sub: 'Curated by your teachers' },
+              { ico: '📄', title: 'Branded PDFs',    sub: 'Worksheet + Memo exports' },
+            ].map((c) => (
+              <div key={c.title} style={{
+                background: 'rgba(255,255,255,.5)',
+                border: '1px solid var(--bd)',
+                borderRadius: 10,
+                padding: '8px 10px',
+                display: 'flex', alignItems: 'center', gap: 8,
+                minHeight: 50,
+              }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{c.ico}</span>
+                <div style={{ minWidth: 0, lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--t)' }}>{c.title}</div>
+                  <div style={{ fontSize: 10, color: 'var(--t3)' }}>{c.sub}</div>
+                </div>
               </div>
             ))}
           </div>
-        )}
 
-        <div style={{ fontSize: 11, color: 'var(--t4)', textAlign: 'center', marginTop: 10 }}>
-          Mathematics &amp; Physical Sciences · CAPS · IEB · NSC · Cambridge
+          <div style={{
+            marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 8, flexWrap: 'wrap',
+          }}>
+            {['CAPS', 'IEB', 'NSC', 'Cambridge'].map((c) => (
+              <span key={c} style={{
+                fontSize: 10, fontWeight: 700, padding: '3px 10px',
+                background: 'rgba(20,184,166,.10)', color: 'var(--p)',
+                border: '1px solid rgba(20,184,166,.28)',
+                borderRadius: 99, letterSpacing: '.04em',
+              }}>{c}</span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 10.5, color: 'var(--t4)', textAlign: 'center', marginTop: 12 }}>
+          Maths &amp; Physical Sciences · Built for South African learners
         </div>
       </div>
 

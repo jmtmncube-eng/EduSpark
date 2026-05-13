@@ -411,7 +411,7 @@ export default function Login() {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: 8,
           }}>
             {[
@@ -454,6 +454,45 @@ export default function Login() {
 
         <div style={{ fontSize: 10.5, color: 'var(--t4)', textAlign: 'center', marginTop: 12 }}>
           Maths &amp; Physical Sciences · Built for South African learners
+        </div>
+
+        {/* Athera attribution — mirrors the resihub footer pattern */}
+        <div style={{
+          marginTop: 14,
+          paddingTop: 12,
+          borderTop: '1px solid var(--bd)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          fontSize: 11,
+          color: 'var(--t3)',
+        }}>
+          <span>Built by</span>
+          <a
+            href="https://athera.co.za"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 99,
+              background: 'rgba(20,184,166,.10)',
+              border: '1px solid rgba(20,184,166,.25)',
+              color: 'var(--p)',
+              fontWeight: 700,
+              letterSpacing: '.02em',
+              textDecoration: 'none',
+              transition: 'background .15s, border-color .15s',
+            }}
+            onMouseOver={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(20,184,166,.18)'; }}
+            onMouseOut={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(20,184,166,.10)'; }}
+          >
+            <span style={{ fontSize: 13 }}>🜲</span>
+            Athera
+          </a>
         </div>
       </div>
 

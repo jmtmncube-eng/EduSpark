@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.10.4] — 2026-05-14 — Worksheet/Memo PDFs: correct maths characters + diagrams
+
+### Fixed — Garbled characters in downloaded PDFs
+- The PDF renderer used pdfkit's built-in Helvetica, which only covers WinAnsi — so the minus sign (`−`), Greek letters (`θ Δ Σ λ Ω`), roots (`√`), arrows and sub/superscripts that Maths & Science content is full of all came out as mojibake (e.g. `−0.76 V` rendered as `" 0.76 V`, and a `📝` in a pack title rendered as `Ø=ÜÚ`). We now **embed DejaVu Sans** (broad Unicode coverage) for body, bold and oblique text, so the maths renders correctly. Emoji and other pictographs — which no print font can draw — are cleanly stripped from titles and question text instead of garbling.
+
+### Added — Diagrams in worksheet & memo PDFs
+- Questions that carry a diagram now **show that diagram** in the PDF, not just plain text. The stored SVG is rasterised (via `sharp`) and placed in a neatly framed box under the question. Questions without a relevant diagram stay clean text — no filler pictures.
+
+---
+
 ## [2.10.3] — 2026-05-14 — Login: trimmed feature cards, CAPS & IEB only
 
 ### Changed — Login screen

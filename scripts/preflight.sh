@@ -196,6 +196,12 @@ echo " v2.10.3 — login: trimmed feature cards, CAPS & IEB only"
 lacks "Login curriculum row drops Cambridge"         "Cambridge"        frontend/src/pages/Login.tsx
 lacks "Login curriculum row drops NSC"               "'NSC'"            frontend/src/pages/Login.tsx
 
+echo " v2.10.4 — worksheet/memo PDFs: correct maths characters + diagrams"
+has   "PDF renderer embeds a Unicode font"           "dejavu-fonts-ttf" backend/src/utils/pdfRenderer.ts
+has   "PDF renderer strips non-printable pictographs" "function clean"  backend/src/utils/pdfRenderer.ts
+has   "PDF renderer draws question diagrams"         "rasterizeDiagram" backend/src/utils/pdfRenderer.ts
+has   "dejavu-fonts-ttf is a runtime dependency"     "dejavu-fonts-ttf" backend/package.json
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

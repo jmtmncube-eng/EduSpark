@@ -432,7 +432,7 @@ router.get('/:id/pdf', authMiddleware, async (req: Request, res: Response) => {
 
     const requester = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
 
-    renderPackPdf(res, {
+    await renderPackPdf(res, {
       title: pack.title,
       subtitle: [
         pack.subject === 'MATHEMATICS' ? 'Mathematics' : 'Physical Sciences',

@@ -107,6 +107,25 @@ async function main() {
           solution: 'KE=½mv²=½×5×16=40J', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
+      // ── IEB-tagged samples so both curricula are present from a fresh seed ──
+      prisma.question.create({
+        data: {
+          subject: 'MATHEMATICS', grade: 11, topic: 'Analytical Geometry', difficulty: 'MEDIUM',
+          curriculum: 'IEB',
+          question: 'Distance between (1, 2) and (4, 6)?',
+          options: ['5', '7', '3', '√7'], answer: '5',
+          solution: 'd = √((4−1)² + (6−2)²) = √(9+16) = √25 = 5', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
+        },
+      }),
+      prisma.question.create({
+        data: {
+          subject: 'PHYSICAL_SCIENCES', grade: 11, topic: 'Electric Circuits', difficulty: 'MEDIUM',
+          curriculum: 'IEB',
+          question: 'R₁=20Ω and R₂=30Ω in series across 10V. Current?',
+          options: ['0.2 A', '0.5 A', '2 A', '0.1 A'], answer: '0.2 A',
+          solution: 'Rₜ = 20 + 30 = 50Ω;  I = V÷Rₜ = 10÷50 = 0.2 A', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
+        },
+      }),
     ]);
 
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 3);

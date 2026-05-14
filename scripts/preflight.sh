@@ -94,6 +94,10 @@ hdr "2. Production build"
 run_if_deps "backend build (tsc)"   backend  npm run build
 run_if_deps "frontend build (vite)" frontend npm run build
 
+# ── 2b. Automated tests ────────────────────────────────────────────
+hdr "2b. Tests"
+run_if_deps "backend unit tests (vitest)" backend npm test
+
 # ── 3. Shipped fixes are present (regression tripwire) ─────────────
 # These run everywhere — they only read source files. Grouped by the
 # release that introduced them; add a new block whenever you ship.
@@ -157,6 +161,19 @@ lacks "Login page has zero <select> dropdowns"       "<select"          frontend
 has   "Login uses pill / card prompts"               "PillSelect"       frontend/src/pages/Login.tsx
 has   "Text scale tuned for WCAG-AA contrast"        "--t4:#3C7257"     frontend/src/index.css
 has   "Idle auto-logout still wired"                 "IDLE_LIMIT_MS"    frontend/src/context/AuthContext.tsx
+
+echo " v2.10 — CAPS+IEB curriculum, varied difficulty-aware generators, scale, tests"
+has   "Curriculum enum in schema"                    "enum Curriculum"  backend/prisma/schema.prisma
+present backend/prisma/migrations/20260514140000_curriculum/migration.sql \
+        "Curriculum migration committed"
+has   "Generators are difficulty-aware"              "GenDiff"          backend/src/utils/questionGenerators.ts
+has   "Generators are multi-variant for variety"     "GeneratorFn[]"    backend/src/utils/questionGenerators.ts
+has   "Generate route honours the difficulty mix"    "difficultyPlan"   backend/src/routes/questions.ts
+has   "Registration captures curriculum"             "curriculum"       frontend/src/pages/Login.tsx
+has   "Students list has a triage Sort control"      "Needs attention"  frontend/src/pages/admin/Students.tsx
+has   "Admin can bulk-assign students"               "bulk-assign-tutor" backend/src/routes/students.ts
+present backend/src/__tests__/generators.test.ts     "Generator test suite committed"
+present backend/src/__tests__/questionValidation.test.ts "Validation test suite committed"
 
 rm -f "$LOG"
 

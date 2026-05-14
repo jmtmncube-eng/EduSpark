@@ -410,6 +410,11 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 
   /* Quiz screen — bigger tap targets */
   .qopt{font-size:13px;padding:10px 12px;min-height:44px;display:flex;align-items:center}
+
+  /* Pill-based controls (PillSelect, filter pills) — comfortable tap targets
+     and breathing room when they wrap onto multiple rows on a phone. */
+  .btn-sm{min-height:32px}
+  .flex.ia.g2.wrap{row-gap:6px}
 }
 @media(max-width:480px){
   .stats{grid-template-columns:1fr 1fr}.ach-grid{grid-template-columns:1fr 1fr}.lwrap{padding:32px 20px}

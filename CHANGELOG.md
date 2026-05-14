@@ -5,6 +5,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.10.0] — 2026-05-14 — CAPS + IEB, varied difficulty-aware generators, scale, tests
+
+The five "lagging behind" items, all addressed — plus IEB support.
+
+### Added — CAPS + IEB curriculum
+- New `Curriculum` enum (CAPS / IEB). `Question.curriculum`, `QuestionBatch.curriculum` and `User.curriculum` (a student's preference), behind idempotent migration `20260514140000_curriculum`. Threaded through the generate / create / update / import / pack-from-template / auto-assignment routes and `auth/register`.
+- **Frontend:** registration now has a real CAPS/IEB picker (persisted, not discarded); the generator wizard has a curriculum step; the Question Bank has a curriculum filter pill + a per-card badge; the add-question modal has a curriculum step. Fresh seed ships IEB-tagged sample questions so both curricula are present day one.
+
+### Changed — Generators: real variety, real difficulty (#1)
+- `QG` is now `Record<string, GeneratorFn[]>` — **multi-variant per topic**. The registry picks a random variant per call, so a batch on one topic is genuinely varied instead of "same template, new numbers". The 11 highest-traffic topics get 2–3 distinct question forms.
+- Every generator is **difficulty-aware** — a `di()` helper scales number ranges by EASY/MEDIUM/HARD and the right difficulty label is returned.
+- The generator's **difficulty-mix selector is now real**: EASY/MEDIUM/HARD generate all-that-band; MIXED produces a shuffled ≈30/40/30 spread. Pack-from-template and auto-built assignments generate at the slot difficulty too. (The old "the mix is a hint…" disclaimer is gone — because it isn't a hint any more.)
+
+### Changed — Lists that scale (#2)
+- **Students:** grade filter pills + a **Sort** control defaulting to "🚨 Needs attention" (lowest average first) so a teacher can triage a big class at a glance.
+- **Packs:** subject + grade filter pills.
+- **Assignments:** status filter pills (All / Active / Overdue / Hidden) with live counts.
+
+### Added — Automated tests (#3)
+- **vitest** added to the backend with **190 tests** on the critical paths: the validation pipeline, the quality-flag thresholds, and — the big one — **every generator variant × every difficulty is asserted to produce a valid question** (answer-in-options, distinct options, validation-clean). `npm test` is wired into `preflight.sh`. Test files are excluded from the production `tsc` build.
+
+### Changed — Persona refinements (#5)
+- **Admin bulk-assign:** the Tutors "Assign Students" modal is now multi-select, backed by a new `PATCH /students/bulk-assign-tutor`. (Tutor parent-code minting was already wired — the parent route is tutor-scoped and the nav item already shows for tutors.)
+
+### Changed — Mobile (#4)
+- Verified the new pill-based UI on small screens; added comfortable tap-target sizing for pill controls when they wrap.
+
+---
+
 ## [2.9.5] — 2026-05-14 — Login polish: no dropdowns, WCAG-AA contrast pass
 
 ### Changed — Login page

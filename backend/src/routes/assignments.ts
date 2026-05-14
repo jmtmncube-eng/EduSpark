@@ -253,6 +253,97 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
   }
 });
 
+// GET /api/assignments/:id/live — submission progress tray
+// Returns { eligible, submitted, inProgress, avgScore, latest }
+router.get('/:id/live', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id } });
+    if (!assignment) return res.status(404).json({ error: 'Not found' });
+    if (req.user!.role === 'TUTOR' && assignment.tutorId !== req.user!.userId) {
+      return res.status(403).json({ error: 'Not your assignment' });
+    }
+
+    // Who is eligible to take this assignment?
+    const studentWhere: Record<string, unknown> = { role: 'STUDENT', active: true };
+    if (assignment.tutorId) studentWhere.teacherId = assignment.tutorId;
+    if (assignment.assignTo === 'gr10') studentWhere.grade = 10;
+    else if (assignment.assignTo === 'gr11') studentWhere.grade = 11;
+    else if (assignment.assignTo === 'gr12') studentWhere.grade = 12;
+    else if (assignment.assignTo !== 'all') studentWhere.id = assignment.assignTo;
+
+    const [eligible, results] = await Promise.all([
+      prisma.user.count({ where: studentWhere }),
+      prisma.quizResult.findMany({
+        where: { assignmentId: assignment.id, resultType: 'ASSIGNMENT' },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { completedAt: 'desc' },
+        take: 200,
+      }),
+    ]);
+
+    const submitterIds = new Set(results.map((r) => r.userId));
+    const submitted = submitterIds.size;
+    const avgScore = results.length ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length) : 0;
+    const latest = results.slice(0, 5).map((r) => ({
+      id: r.id, userId: r.userId, userName: r.user?.name ?? 'Student',
+      score: r.score, correct: r.correct, total: r.total, completedAt: r.completedAt,
+    }));
+    return res.json({ eligible, submitted, avgScore, latest });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/assignments/:id/heatmap — per-question correctness across all submissions
+router.get('/:id/heatmap', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: req.params.id },
+      include: { questions: { include: { question: true }, orderBy: { order: 'asc' } } },
+    });
+    if (!assignment) return res.status(404).json({ error: 'Not found' });
+    if (req.user!.role === 'TUTOR' && assignment.tutorId !== req.user!.userId) {
+      return res.status(403).json({ error: 'Not your assignment' });
+    }
+
+    const qIds = assignment.questions.map((aq) => aq.question.id);
+    const details = await prisma.resultDetail.findMany({
+      where: {
+        questionId: { in: qIds },
+        result: { assignmentId: assignment.id, resultType: 'ASSIGNMENT' },
+      },
+      select: { questionId: true, isCorrect: true },
+    });
+
+    const acc: Record<string, { attempts: number; correct: number }> = {};
+    for (const d of details) {
+      if (!d.questionId) continue;
+      const a = acc[d.questionId] || { attempts: 0, correct: 0 };
+      a.attempts++;
+      if (d.isCorrect) a.correct++;
+      acc[d.questionId] = a;
+    }
+
+    const rows = assignment.questions.map((aq, i) => {
+      const a = acc[aq.question.id] || { attempts: 0, correct: 0 };
+      const correctRate = a.attempts ? Math.round((a.correct / a.attempts) * 100) : 0;
+      return {
+        index: i + 1,
+        questionId: aq.question.id,
+        question: aq.question.question,
+        difficulty: aq.question.difficulty,
+        attempts: a.attempts,
+        correctRate,
+      };
+    });
+    return res.json({ rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // DELETE /api/assignments/:id
 router.delete('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {

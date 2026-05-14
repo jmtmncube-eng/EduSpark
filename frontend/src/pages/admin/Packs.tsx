@@ -4,6 +4,7 @@ import type { Pack, Question, PdfDocument } from '../../types';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import { diffMeta } from '../../utils/difficulty';
+import PackTemplatePicker from '../../components/PackTemplatePicker';
 
 const SUBJECTS = ['MATHEMATICS', 'PHYSICAL_SCIENCES'] as const;
 const EMOJIS = ['📦', '📚', '🧮', '⚗️', '🔬', '📐', '🎯', '🏆', '🧠', '✨'];
@@ -14,6 +15,7 @@ export default function AdminPacks() {
   const [showEditor, setShowEditor] = useState<Pack | 'new' | null>(null);
   const [shareTarget, setShareTarget] = useState<Pack | null>(null);
   const [search, setSearch] = useState('');
+  const [templatePicker, setTemplatePicker] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -57,6 +59,7 @@ export default function AdminPacks() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 200 }}
           />
+          <button className="btn ba" onClick={() => setTemplatePicker(true)}>✨ From template</button>
           <button className="btn bg-btn" onClick={() => setShowEditor('new')}>+ New Pack</button>
         </div>
       </div>
@@ -92,6 +95,13 @@ export default function AdminPacks() {
           pack={shareTarget}
           onClose={() => setShareTarget(null)}
           onShared={() => { setShareTarget(null); refresh(); }}
+        />
+      )}
+
+      {templatePicker && (
+        <PackTemplatePicker
+          onClose={() => setTemplatePicker(false)}
+          onCreated={() => { setTemplatePicker(false); refresh(); }}
         />
       )}
     </div>

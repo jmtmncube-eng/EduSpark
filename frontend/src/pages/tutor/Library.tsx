@@ -10,6 +10,7 @@ import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { diffMeta } from '../../utils/difficulty';
+import PackTemplatePicker from '../../components/PackTemplatePicker';
 
 const EMOJIS = ['📦', '📚', '🧮', '⚗️', '🔬', '📐', '🎯', '🏆', '🧠', '✨'];
 
@@ -21,6 +22,7 @@ export default function TutorLibrary() {
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Pack | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
 
   async function refresh() {
@@ -56,7 +58,10 @@ export default function TutorLibrary() {
             Packs from admin you can unlock for your class · packs you create yourself for your students.
           </div>
         </div>
-        <button className="btn bg-btn" onClick={() => setShowCreate(true)}>+ New custom pack</button>
+        <div className="flex g1">
+          <button className="btn ba" onClick={() => setShowTemplate(true)}>✨ From template</button>
+          <button className="btn bg-btn" onClick={() => setShowCreate(true)}>+ New custom pack</button>
+        </div>
       </div>
 
       {/* Source tabs */}
@@ -116,6 +121,13 @@ export default function TutorLibrary() {
         <CustomPackEditor
           onClose={() => setShowCreate(false)}
           onSaved={() => { setShowCreate(false); refresh(); }}
+        />
+      )}
+
+      {showTemplate && (
+        <PackTemplatePicker
+          onClose={() => setShowTemplate(false)}
+          onCreated={() => { setShowTemplate(false); refresh(); }}
         />
       )}
     </div>

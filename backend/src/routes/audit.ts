@@ -15,29 +15,33 @@ const router = Router();
 router.get('/', authMiddleware, adminOnly, async (req: Request, res: Response) => {
   try {
     const { action, entityType, entityId, actorId, q, from, to, format } = req.query as Record<string, string>;
-    const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit as string) || 100, 1000));
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
 
     const where: Record<string, unknown> = {};
-    if (action) where.action = action;
-    if (entityType) where.entityType = entityType;
-    if (entityId) where.entityId = entityId;
-    if (actorId) where.actorId = actorId;
+    if (typeof action === 'string' && action.trim())     where.action = action.trim();
+    if (typeof entityType === 'string' && entityType.trim()) where.entityType = entityType.trim();
+    if (typeof entityId === 'string' && entityId.trim()) where.entityId = entityId.trim();
+    if (typeof actorId === 'string' && actorId.trim())   where.actorId = actorId.trim();
 
-    // Date range
+    // Date range — only honour valid ISO strings
     const dateFilter: { gte?: Date; lte?: Date } = {};
-    if (from) { const d = new Date(from); if (!isNaN(d.getTime())) dateFilter.gte = d; }
-    if (to)   { const d = new Date(to);   if (!isNaN(d.getTime())) dateFilter.lte = d; }
+    if (typeof from === 'string' && from) {
+      const d = new Date(from); if (!isNaN(d.getTime())) dateFilter.gte = d;
+    }
+    if (typeof to === 'string' && to) {
+      const d = new Date(to);   if (!isNaN(d.getTime())) dateFilter.lte = d;
+    }
     if (dateFilter.gte || dateFilter.lte) where.createdAt = dateFilter;
 
-    // Free-text search across action / entityType / entityId
-    if (q?.trim()) {
-      const term = q.trim();
+    // Free-text search — limit to 200 chars and skip when the term is empty
+    if (typeof q === 'string' && q.trim()) {
+      const term = q.trim().slice(0, 200);
       where.OR = [
-        { action:     { contains: term, mode: 'insensitive' } },
-        { entityType: { contains: term, mode: 'insensitive' } },
-        { entityId:   { contains: term, mode: 'insensitive' } },
-        { ip:         { contains: term, mode: 'insensitive' } },
+        { action:     { contains: term, mode: 'insensitive' as const } },
+        { entityType: { contains: term, mode: 'insensitive' as const } },
+        { entityId:   { contains: term, mode: 'insensitive' as const } },
+        { ip:         { contains: term, mode: 'insensitive' as const } },
       ];
     }
 
@@ -111,30 +115,36 @@ router.get('/entities', authMiddleware, adminOnly, async (_req: Request, res: Re
   }
 });
 
-// Snapshot — counts per action / per day, for the filter chips at the top
+// Snapshot — counts per action / per day, for the filter chips at the top.
+// Every sub-query is isolated so one failing aggregate doesn't 500 the page.
 router.get('/summary', authMiddleware, adminOnly, async (_req: Request, res: Response) => {
-  try {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [total, last7d, today] = await Promise.all([
-      prisma.auditLog.count(),
-      prisma.auditLog.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }),
-      prisma.auditLog.count({ where: { createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
-    ]);
-    const byAction = await prisma.auditLog.groupBy({
-      by: ['action'],
-      where: { createdAt: { gte: since } },
-      _count: { action: true },
-      orderBy: { _count: { action: 'desc' } },
-      take: 10,
-    });
-    return res.json({
-      total, last7d, today,
-      topActions: byAction.map((b) => ({ action: b.action, count: b._count.action })),
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => {
+    try { return await p; } catch (e) { console.error('[audit/summary subquery]', e); return fallback; }
+  };
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since7  = new Date(Date.now() -  7 * 24 * 60 * 60 * 1000);
+  const sinceToday = new Date(new Date().setHours(0, 0, 0, 0));
+
+  const [total, last7d, today, byAction] = await Promise.all([
+    safe(prisma.auditLog.count(), 0),
+    safe(prisma.auditLog.count({ where: { createdAt: { gte: since7 } } }), 0),
+    safe(prisma.auditLog.count({ where: { createdAt: { gte: sinceToday } } }), 0),
+    safe(
+      prisma.auditLog.groupBy({
+        by: ['action'],
+        where: { createdAt: { gte: since30 } },
+        _count: { action: true },
+        orderBy: { _count: { action: 'desc' } },
+        take: 10,
+      }),
+      [] as { action: string; _count: { action: number } }[],
+    ),
+  ]);
+
+  return res.json({
+    total, last7d, today,
+    topActions: byAction.map((b) => ({ action: b.action, count: b._count.action })),
+  });
 });
 
 export default router;

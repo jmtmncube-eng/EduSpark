@@ -126,6 +126,12 @@ export const questions = {
     request<{ created: object[]; count: number; batchId: string | null }>(
       '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count, difficulty }) }
     ),
+  stats: (ids: string[]) => {
+    if (!ids.length) return Promise.resolve({} as Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>);
+    return request<Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>>(
+      `/questions/stats?ids=${encodeURIComponent(ids.join(','))}`
+    );
+  },
   listBatches: () => request<{ id: string; subject: string; grade: number; topic: string; requestedCount: number; difficulty: string | null; createdAt: string; questionCount: number }[]>('/questions/batches'),
   getBatch: (id: string) => request<{ id: string; subject: string; grade: number; topic: string; createdAt: string; createdBy: { name: string; role: string }; questions: { id: string; question: string; difficulty: string; topic: string; subject: string; options: string[]; answer: string; expectedSeconds: number }[] }>(`/questions/batches/${id}`),
   deleteBatch: (id: string) => request<{ success: boolean }>(`/questions/batches/${id}`, { method: 'DELETE' }),
@@ -153,6 +159,13 @@ export const assignments = {
     request<object>(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     request<{ success: boolean }>(`/assignments/${id}`, { method: 'DELETE' }),
+  live: (id: string) => request<{
+    eligible: number; submitted: number; avgScore: number;
+    latest: { id: string; userId: string; userName: string; score: number; correct: number; total: number; completedAt: string }[];
+  }>(`/assignments/${id}/live`),
+  heatmap: (id: string) => request<{
+    rows: { index: number; questionId: string; question: string; difficulty: string; attempts: number; correctRate: number }[];
+  }>(`/assignments/${id}/heatmap`),
 };
 
 // ─── Students ─────────────────────────────────────────────────────
@@ -294,6 +307,9 @@ export const packs = {
   revokeUnlock: (id: string, studentId: string) =>
     request<{ success: boolean }>(`/packs/${id}/unlock/${studentId}`, { method: 'DELETE' }),
   listUnlocks: (id: string) => request<object[]>(`/packs/${id}/unlocks`),
+  templates: () => request<{ id: string; title: string; description: string; emoji: string; mix: { EASY: number; MEDIUM: number; HARD: number } }[]>('/packs/templates/list'),
+  fromTemplate: (data: { templateId: string; subject: string; grade: number; topic: string; title?: string }) =>
+    request<object>('/packs/from-template', { method: 'POST', body: JSON.stringify(data) }),
   /**
    * Open a branded PDF in a new browser tab.
    *

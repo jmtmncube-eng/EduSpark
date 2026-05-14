@@ -332,6 +332,60 @@ router.post('/import', authMiddleware, adminOrTutorOnly, async (req: Request, re
   }
 });
 
+// ─── Quality signals (usage + correctness aggregates per question) ──
+// GET /api/questions/stats?ids=id1,id2,...
+//   Returns { questionId: { used, attempts, correctRate, packCount, avgTimeSec } }
+router.get('/stats', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const idsParam = (req.query.ids as string) || '';
+    const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 500);
+    if (!ids.length) return res.json({});
+
+    // Pack membership counts
+    const packRows = await prisma.packQuestion.groupBy({
+      by: ['questionId'],
+      where: { questionId: { in: ids } },
+      _count: { questionId: true },
+    });
+
+    // Result-detail aggregates (correct rate + attempts)
+    const detailRows = await prisma.resultDetail.findMany({
+      where: { questionId: { in: ids } },
+      select: { questionId: true, isCorrect: true },
+    });
+
+    // Map back
+    const packMap: Record<string, number> = {};
+    for (const r of packRows) {
+      if (r.questionId) packMap[r.questionId] = r._count.questionId;
+    }
+
+    const acc: Record<string, { attempts: number; correct: number }> = {};
+    for (const d of detailRows) {
+      if (!d.questionId) continue;
+      const a = acc[d.questionId] || { attempts: 0, correct: 0 };
+      a.attempts++;
+      if (d.isCorrect) a.correct++;
+      acc[d.questionId] = a;
+    }
+
+    const out: Record<string, { used: number; attempts: number; correctRate: number; packCount: number }> = {};
+    for (const id of ids) {
+      const a = acc[id] || { attempts: 0, correct: 0 };
+      out[id] = {
+        used: packMap[id] || 0,           // # of packs containing this Q
+        packCount: packMap[id] || 0,
+        attempts: a.attempts,
+        correctRate: a.attempts ? Math.round((a.correct / a.attempts) * 100) : 0,
+      };
+    }
+    return res.json(out);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ─── Generation batches (history) ────────────────────────────────
 // GET /api/questions/batches  — current user's recent generation batches
 router.get('/batches', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {

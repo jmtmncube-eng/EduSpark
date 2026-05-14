@@ -53,6 +53,8 @@ export default function AdminQuestions() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [attachOpen, setAttachOpen] = useState(false);
 
+  const [stats, setStats] = useState<Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>>({});
+
   const load = useCallback(async () => {
     const params: Record<string, string> = {};
     if (filterSub) params.subject = filterSub.toUpperCase();
@@ -61,6 +63,12 @@ export default function AdminQuestions() {
     if (search) params.search = search;
     const data = await questionsApi.list(params);
     setQs(data as Question[]);
+    // Quality signals — fetched in parallel, overlaid on cards
+    try {
+      const ids = (data as Question[]).map((q) => q.id).slice(0, 200);
+      if (ids.length) setStats(await questionsApi.stats(ids));
+      else setStats({});
+    } catch { /* silent — stats are best-effort */ }
   }, [search, filterSub, filterGrade, filterTopic]);
 
   useEffect(() => { load(); }, [load]);
@@ -240,6 +248,25 @@ export default function AdminQuestions() {
                   <span className="badge btl">Gr{q.grade}</span>
                   <span className="xs ct3">{q.topic}</span>
                   {q.imageData && <span className="badge bcy">🖼 Image</span>}
+                  {(() => {
+                    const s = stats[q.id];
+                    if (!s) return null;
+                    return (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
+                        <span title="Number of packs containing this question">📦 {s.packCount}</span>
+                        <span title="Total student attempts">🎯 {s.attempts}</span>
+                        {s.attempts > 0 && (
+                          <span
+                            title="Average correct rate"
+                            style={{
+                              fontWeight: 700,
+                              color: s.correctRate >= 70 ? '#16a34a' : s.correctRate >= 40 ? '#b45309' : '#b91c1c',
+                            }}
+                          >{s.correctRate}%</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex g1 wrap">
                   <button className="btn ba btn-sm" onClick={() => toggleExp(q.id)} title="Show answer & solution">👁</button>

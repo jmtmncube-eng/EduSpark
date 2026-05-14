@@ -5,6 +5,10 @@ import { Subject } from '@prisma/client';
 import { notify } from '../utils/notify';
 import { renderPackPdf } from '../utils/pdfRenderer';
 import { audit } from '../utils/audit';
+import { PACK_TEMPLATES, getTemplate } from '../utils/packTemplates';
+import { generateQuestion } from '../utils/questionGenerators';
+import { maybeMakeDiagram } from '../utils/diagramTemplates';
+import type { Difficulty } from '@prisma/client';
 
 const router = Router();
 
@@ -421,6 +425,80 @@ router.get('/:id/pdf', authMiddleware, async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[pack pdf]', err);
     if (!res.headersSent) res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── Pack templates ──────────────────────────────────────────────
+router.get('/templates/list', authMiddleware, adminOrTutorOnly, (_req: Request, res: Response) => {
+  return res.json(PACK_TEMPLATES);
+});
+
+// POST /api/packs/from-template
+//   { templateId, subject, grade, topic, title? }
+// Generates a fresh batch of questions to match the template's mix,
+// then assembles a Pack from them. Returns the new Pack.
+router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
+  try {
+    const { templateId, subject, grade, topic, title } = req.body as {
+      templateId: string; subject: string; grade: number; topic: string; title?: string;
+    };
+    const tpl = getTemplate(templateId);
+    if (!tpl) return res.status(400).json({ error: 'Unknown template' });
+    if (!topic?.trim()) return res.status(400).json({ error: 'Topic required' });
+
+    const sub = (subjectMap[subject] || 'MATHEMATICS') as Subject;
+    const diffOrder: ('EASY' | 'MEDIUM' | 'HARD')[] = ['EASY', 'MEDIUM', 'HARD'];
+
+    // Generate to the mix
+    const createdIds: string[] = [];
+    let order = 0;
+    for (const diff of diffOrder) {
+      const need = tpl.mix[diff];
+      for (let i = 0; i < need; i++) {
+        const d = generateQuestion(topic, subject, Number(grade));
+        // Force this question's difficulty to match the template slot regardless
+        // of what the underlying generator happened to produce.
+        const q = await prisma.question.create({
+          data: {
+            subject: sub,
+            grade: Number(grade),
+            topic,
+            difficulty: diff as Difficulty,
+            question: d.q,
+            options: d.opts,
+            answer: d.ans,
+            solution: d.sol,
+            visibility: 'ALL',
+            imageData: maybeMakeDiagram(topic, 0.5),
+            createdById: req.user!.userId,
+          },
+        });
+        createdIds.push(q.id);
+        order++;
+      }
+    }
+
+    const pack = await prisma.pack.create({
+      data: {
+        title: (title?.trim() || `${tpl.emoji} ${tpl.title} · ${topic}`),
+        description: tpl.description,
+        subject: sub,
+        grade: Number(grade),
+        topic,
+        coverEmoji: tpl.emoji,
+        createdById: req.user!.userId,
+        questions: { create: createdIds.map((qId, i) => ({ questionId: qId, order: i })) },
+      },
+      include: packInclude,
+    });
+
+    await audit(req, 'pack.create', 'Pack', pack.id, {
+      template: templateId, title: pack.title, subject, grade, topic, items: createdIds.length,
+    });
+    return res.status(201).json(pack);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

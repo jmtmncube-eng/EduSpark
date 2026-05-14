@@ -7,6 +7,8 @@ import type { Assignment, Question } from '../../types';
 import { subjectBadge, fmtDate, compressImage, compressDiagram } from '../../utils/helpers';
 import { diffMeta } from '../../utils/difficulty';
 import DiagramViewer from '../../components/DiagramViewer';
+import AssignmentLiveTray from '../../components/AssignmentLiveTray';
+import AssignmentHeatmap from '../../components/AssignmentHeatmap';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: { 10: ['Algebra','Functions & Graphs','Trigonometry','Statistics','Finance & Growth','Euclidean Geometry'], 11: ['Quadratic Equations','Trigonometric Functions','Analytical Geometry','Finance','Counting & Probability','Inequalities'], 12: ['Differential Calculus','Sequences & Series','Polynomials','Exponential & Logarithms','Regression Analysis','Trigonometry Advanced'] },
@@ -21,6 +23,8 @@ export default function AdminAssignments() {
   const [list, setList] = useState<Assignment[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [viewAssign, setViewAssign] = useState<Assignment | null>(null);
+  const [heatmapFor, setHeatmapFor] = useState<{ id: string; title: string } | null>(null);
+  const [expandedLive, setExpandedLive] = useState<Set<string>>(new Set());
   const [editId, setEditId] = useState('');
   const [allQs, setAllQs] = useState<Question[]>([]);
   const [selQIds, setSelQIds] = useState<Set<string>>(new Set());
@@ -134,25 +138,44 @@ export default function AdminAssignments() {
             <tbody>
               {list.map((a) => {
                 const dd = new Date(a.dueDate), now = new Date(), ov = dd < now;
+                const liveOpen = expandedLive.has(a.id);
                 return (
-                  <tr key={a.id}>
-                    <td><div className="bold fh" style={{ fontSize: 14 }}>{a.title}</div><div className="xs ct3">{a.topic}</div></td>
-                    <td><span className={`badge ${subjectBadge(a.subject)}`}>{a.subject === 'MATHEMATICS' ? '📐' : '⚗️'} Gr{a.grade}</span></td>
-                    <td><span className={`sm bold ${a.assignTo === 'none' ? 'cdr' : 'cp'}`}>{toLbl(a)}</span></td>
-                    <td><span className="badge btl">{a.questions.length} Qs</span></td>
-                    <td><span className="badge bcy">{a.documents.length} 📄</span></td>
-                    <td><span className="xs ct2">Max {a.maxAttempts ?? 3}x</span></td>
-                    <td><span className="badge btl">{a._count?.results ?? 0} 📋</span></td>
-                    <td className={`${ov ? 'cdr' : 'cp'} sm bold`}>{fmtDate(a.dueDate)}</td>
-                    <td><span className={`badge ${a.assignTo === 'none' ? 'bng' : ov ? 'bng' : 'bok'}`}>{a.assignTo === 'none' ? '🚫 Hidden' : ov ? 'Overdue' : 'Active'}</span></td>
-                    <td>
-                      <div className="flex g1 wrap">
-                        <button className="btn bg-btn btn-sm" onClick={() => setViewAssign(a)}>👁 View</button>
-                        <button className="btn ba btn-sm" onClick={() => openEdit(a)}>✏️</button>
-                        <button className="btn bd-btn btn-sm" onClick={() => delAssign(a.id)}>🗑</button>
-                      </div>
-                    </td>
-                  </tr>
+                  <>
+                    <tr key={a.id}>
+                      <td><div className="bold fh" style={{ fontSize: 14 }}>{a.title}</div><div className="xs ct3">{a.topic}</div></td>
+                      <td><span className={`badge ${subjectBadge(a.subject)}`}>{a.subject === 'MATHEMATICS' ? '📐' : '⚗️'} Gr{a.grade}</span></td>
+                      <td><span className={`sm bold ${a.assignTo === 'none' ? 'cdr' : 'cp'}`}>{toLbl(a)}</span></td>
+                      <td><span className="badge btl">{a.questions.length} Qs</span></td>
+                      <td><span className="badge bcy">{a.documents.length} 📄</span></td>
+                      <td><span className="xs ct2">Max {a.maxAttempts ?? 3}x</span></td>
+                      <td><span className="badge btl">{a._count?.results ?? 0} 📋</span></td>
+                      <td className={`${ov ? 'cdr' : 'cp'} sm bold`}>{fmtDate(a.dueDate)}</td>
+                      <td><span className={`badge ${a.assignTo === 'none' ? 'bng' : ov ? 'bng' : 'bok'}`}>{a.assignTo === 'none' ? '🚫 Hidden' : ov ? 'Overdue' : 'Active'}</span></td>
+                      <td>
+                        <div className="flex g1 wrap">
+                          <button
+                            className={`btn btn-sm ${liveOpen ? 'bg-btn' : 'ba'}`}
+                            onClick={() => setExpandedLive((cur) => { const s = new Set(cur); s.has(a.id) ? s.delete(a.id) : s.add(a.id); return s; })}
+                            title="Live submissions"
+                          >📡 Live</button>
+                          <button className="btn ba btn-sm" onClick={() => setHeatmapFor({ id: a.id, title: a.title })} title="Question heatmap">🔥</button>
+                          <button className="btn bg-btn btn-sm" onClick={() => setViewAssign(a)}>👁</button>
+                          <button className="btn ba btn-sm" onClick={() => openEdit(a)}>✏️</button>
+                          <button className="btn bd-btn btn-sm" onClick={() => delAssign(a.id)}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                    {liveOpen && (
+                      <tr key={a.id + '-live'}>
+                        <td colSpan={10} style={{ padding: '0 12px 8px' }}>
+                          <AssignmentLiveTray
+                            assignmentId={a.id}
+                            onOpenHeatmap={() => setHeatmapFor({ id: a.id, title: a.title })}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
             </tbody>
@@ -292,6 +315,14 @@ export default function AdminAssignments() {
             </div>
           ))}
         </Modal>
+      )}
+
+      {heatmapFor && (
+        <AssignmentHeatmap
+          assignmentId={heatmapFor.id}
+          title={heatmapFor.title}
+          onClose={() => setHeatmapFor(null)}
+        />
       )}
     </div>
   );

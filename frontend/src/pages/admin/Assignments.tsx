@@ -36,6 +36,7 @@ export default function AdminAssignments() {
   const [stuSearch, setStuSearch] = useState('');
   const [stuResults, setStuResults] = useState<{ id: string; name: string; grade: number; pin: string }[]>([]);
   const [selStu, setSelStu] = useState<{ id: string; name: string; grade: number } | null>(null);
+  const [filter, setFilter] = useState<'all' | 'active' | 'overdue' | 'hidden'>('all');
 
   const load = useCallback(async () => {
     const data = await assignmentsApi.list();
@@ -138,6 +139,20 @@ export default function AdminAssignments() {
 
   const toLbl = (a: Assignment) => a.assignTo === 'all' ? 'All' : a.assignTo === 'gr10' ? 'Gr10' : a.assignTo === 'gr11' ? 'Gr11' : a.assignTo === 'gr12' ? 'Gr12' : a.assignTo === 'none' ? '🚫 Hidden' : a.assignTo;
 
+  // Status filter — keeps the table scannable as assignments pile up.
+  const isOverdue = (a: Assignment) => a.assignTo !== 'none' && new Date(a.dueDate) < new Date();
+  const counts = {
+    all: list.length,
+    active: list.filter((a) => a.assignTo !== 'none' && !isOverdue(a)).length,
+    overdue: list.filter(isOverdue).length,
+    hidden: list.filter((a) => a.assignTo === 'none').length,
+  };
+  const visible = list.filter((a) =>
+    filter === 'all' ? true
+    : filter === 'active' ? (a.assignTo !== 'none' && !isOverdue(a))
+    : filter === 'overdue' ? isOverdue(a)
+    : a.assignTo === 'none');
+
   return (
     <div>
       <div className="ph"><h2>📋 Assignments</h2><p>Timed quizzes with a due date — built from your question pool.</p></div>
@@ -159,19 +174,41 @@ export default function AdminAssignments() {
         </div>
       </div>
 
-      <div className="flex jb ia mb2">
-        <span className="sm ct2">{list.length} assignment(s)</span>
+      <div className="flex jb ia mb2 wrap" style={{ gap: 8 }}>
+        <div className="flex g1 wrap">
+          {([
+            { k: 'all', label: 'All' },
+            { k: 'active', label: '🟢 Active' },
+            { k: 'overdue', label: '⚠️ Overdue' },
+            { k: 'hidden', label: '🚫 Hidden' },
+          ] as const).map((f) => {
+            const active = filter === f.k;
+            return (
+              <button
+                key={f.k} type="button" className="btn btn-sm"
+                onClick={() => setFilter(f.k)}
+                style={{
+                  background: active ? 'var(--p)' : 'var(--bg)',
+                  color: active ? '#fff' : 'var(--t)',
+                  border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                }}
+              >{f.label} · {counts[f.k]}</button>
+            );
+          })}
+        </div>
         <button className="btn bg-btn" onClick={() => openCreate()}>+ Create assignment</button>
       </div>
 
       {list.length === 0 ? (
         <div className="empty"><div className="eico">📭</div><h3>No assignments yet</h3><p>Create your first assignment above.</p></div>
+      ) : visible.length === 0 ? (
+        <div className="empty"><div className="eico">🔍</div><h3>None in this view</h3><p>No assignments match the “{filter}” filter.</p></div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="dt">
             <thead><tr><th>Title</th><th>Subject</th><th>Assigned To</th><th>Qs</th><th>Docs</th><th>Attempts</th><th>Submissions</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
-              {list.map((a) => {
+              {visible.map((a) => {
                 const dd = new Date(a.dueDate), now = new Date(), ov = dd < now;
                 const liveOpen = expandedLive.has(a.id);
                 return (

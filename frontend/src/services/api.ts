@@ -330,6 +330,10 @@ export const tutors = {
     request<object>(`/students/tutors/${id}/toggle-active`, { method: 'PATCH' }),
   assignStudent: (studentId: string, tutorId: string | null) =>
     request<object>(`/students/${studentId}/assign-tutor`, { method: 'PATCH', body: JSON.stringify({ tutorId }) }),
+  bulkAssign: (studentIds: string[], tutorId: string | null) =>
+    request<{ assigned: number; requested: number }>(
+      '/students/bulk-assign-tutor', { method: 'PATCH', body: JSON.stringify({ studentIds, tutorId }) }
+    ),
 };
 
 // ─── Packs (Phase 1: shared question/document bundles) ────────────

@@ -1,11 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { students as studentsApi, tutorRequests as requestsApi, availableStudents } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
+import PillSelect from '../../components/PillSelect';
 import type { User, QuizResult, TutorRequest, AvailableStudent } from '../../types';
 import { getLvl, fmtDate } from '../../utils/helpers';
+
+type SortKey = 'name' | 'attention' | 'quizzes' | 'xp';
 
 interface StudentWithResults extends User {
   results: (QuizResult & { assignment?: { title: string } })[];
@@ -18,6 +21,7 @@ export default function AdminStudents() {
   const [list, setList] = useState<StudentWithResults[]>([]);
   const [search, setSearch] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
+  const [sort, setSort] = useState<SortKey>('attention');
   const [viewStu, setViewStu] = useState<StudentWithResults | null>(null);
   const [resetPinStu, setResetPinStu] = useState<StudentWithResults | null>(null);
   const [customPin, setCustomPin] = useState('');
@@ -119,6 +123,26 @@ export default function AdminStudents() {
   // Check if tutor already has a pending request for a student
   const pendingStudentIds = new Set(myRequests.map((r) => r.studentId));
 
+  // Client-side sort — "Needs attention" (lowest average first, no-data last)
+  // is the default so a teacher can triage a big class at a glance.
+  const sortedList = useMemo(() => {
+    const rows = list.map((s) => {
+      const n = s.results?.length || 0;
+      const avg = n ? s.results!.reduce((x, r) => x + r.score, 0) / n : null;
+      return { s, n, avg };
+    });
+    if (sort === 'name') rows.sort((a, b) => a.s.name.localeCompare(b.s.name));
+    else if (sort === 'quizzes') rows.sort((a, b) => b.n - a.n);
+    else if (sort === 'xp') rows.sort((a, b) => (b.s.xp || 0) - (a.s.xp || 0));
+    else rows.sort((a, b) => {
+      if (a.avg === null && b.avg === null) return a.s.name.localeCompare(b.s.name);
+      if (a.avg === null) return 1;
+      if (b.avg === null) return -1;
+      return a.avg - b.avg;
+    });
+    return rows.map((r) => r.s);
+  }, [list, sort]);
+
   return (
     <div>
       <div className="ph">
@@ -154,14 +178,40 @@ export default function AdminStudents() {
         </div>
       )}
 
-      <div className="flex g2 mb2 wrap">
-        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+      {/* Browse — search + pill filters + sort. Built to triage a big class. */}
+      <div className="ca" style={{ padding: 12, marginBottom: 14, display: 'grid', gap: 8 }}>
+        <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
-          <input type="text" className="input" style={{ paddingLeft: 34 }} placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" className="input" style={{ paddingLeft: 34 }} placeholder="Search students by name…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="select" style={{ width: 'auto' }} value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)}>
-          <option value="">All Grades</option><option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option>
-        </select>
+        <div className="flex ia g2 wrap">
+          <span className="xs bold ct3" style={{ minWidth: 48 }}>Grade</span>
+          <PillSelect
+            ariaLabel="Filter by grade"
+            value={filterGrade}
+            onChange={setFilterGrade}
+            options={[
+              { value: '', label: 'All' },
+              { value: '10', label: 'Gr 10' },
+              { value: '11', label: 'Gr 11' },
+              { value: '12', label: 'Gr 12' },
+            ]}
+          />
+        </div>
+        <div className="flex ia g2 wrap">
+          <span className="xs bold ct3" style={{ minWidth: 48 }}>Sort</span>
+          <PillSelect
+            ariaLabel="Sort students"
+            value={sort}
+            onChange={(v) => setSort(v as SortKey)}
+            options={[
+              { value: 'attention', label: '🚨 Needs attention', hint: 'Lowest average first — triage struggling students' },
+              { value: 'name', label: 'A–Z' },
+              { value: 'quizzes', label: 'Most quizzes' },
+              { value: 'xp', label: 'Most XP' },
+            ]}
+          />
+        </div>
       </div>
 
       {list.length === 0 ? (
@@ -175,7 +225,7 @@ export default function AdminStudents() {
           <table className="dt">
             <thead><tr><th>Student</th><th>PIN</th><th>Grade</th>{isAdmin && <th>Tutor</th>}<th>Level</th><th>Quizzes</th><th>Avg</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
-              {list.map((s) => {
+              {sortedList.map((s) => {
                 const avg = s.results?.length ? (s.results.reduce((x, r) => x + r.score, 0) / s.results.length).toFixed(1) : '—';
                 const lv = getLvl(s.xp || 0);
                 return (

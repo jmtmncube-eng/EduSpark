@@ -3,6 +3,7 @@ import { packs as packsApi, documents as docsApi, questions as questionsApi, tut
 import type { Pack, Question, PdfDocument } from '../../types';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
+import PillSelect from '../../components/PillSelect';
 import { diffMeta } from '../../utils/difficulty';
 import PackTemplatePicker from '../../components/PackTemplatePicker';
 
@@ -15,6 +16,8 @@ export default function AdminPacks() {
   const [showEditor, setShowEditor] = useState<Pack | 'new' | null>(null);
   const [shareTarget, setShareTarget] = useState<Pack | null>(null);
   const [search, setSearch] = useState('');
+  const [fSubject, setFSubject] = useState('');
+  const [fGrade, setFGrade] = useState('');
   const [templatePicker, setTemplatePicker] = useState(false);
 
   async function refresh() {
@@ -37,10 +40,14 @@ export default function AdminPacks() {
     } catch (e) { showToast(String((e as Error).message), 'err'); }
   }
 
-  const filtered = list.filter((p) =>
-    !search.trim() || p.title.toLowerCase().includes(search.toLowerCase()) ||
-    (p.topic || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = list.filter((p) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch = !q || p.title.toLowerCase().includes(q) || (p.topic || '').toLowerCase().includes(q);
+    const matchesSubject = !fSubject || p.subject === fSubject;
+    const matchesGrade = !fGrade || String(p.grade) === fGrade;
+    return matchesSearch && matchesSubject && matchesGrade;
+  });
+  const anyFilter = !!(search.trim() || fSubject || fGrade);
 
   return (
     <div>
@@ -61,6 +68,41 @@ export default function AdminPacks() {
           />
           <button className="btn ba" onClick={() => setTemplatePicker(true)}>✨ From template</button>
           <button className="btn bg-btn" onClick={() => setShowEditor('new')}>+ New Pack</button>
+        </div>
+      </div>
+
+      {/* Filter pills — keeps the grid scannable as packs accumulate */}
+      <div className="ca" style={{ padding: 12, marginBottom: 14, display: 'grid', gap: 8 }}>
+        <div className="flex ia g2 wrap">
+          <span className="xs bold ct3" style={{ minWidth: 56 }}>Subject</span>
+          <PillSelect
+            ariaLabel="Filter packs by subject"
+            value={fSubject}
+            onChange={setFSubject}
+            options={[
+              { value: '', label: 'All' },
+              { value: 'MATHEMATICS', label: 'Maths', icon: '📐' },
+              { value: 'PHYSICAL_SCIENCES', label: 'Phys Sci', icon: '⚗️' },
+            ]}
+          />
+        </div>
+        <div className="flex ia g2 wrap">
+          <span className="xs bold ct3" style={{ minWidth: 56 }}>Grade</span>
+          <PillSelect
+            ariaLabel="Filter packs by grade"
+            value={fGrade}
+            onChange={setFGrade}
+            options={[
+              { value: '', label: 'All' },
+              { value: '10', label: 'Gr 10' },
+              { value: '11', label: 'Gr 11' },
+              { value: '12', label: 'Gr 12' },
+            ]}
+          />
+          {anyFilter && (
+            <button type="button" className="btn ba btn-sm"
+              onClick={() => { setSearch(''); setFSubject(''); setFGrade(''); }}>✕ Clear</button>
+          )}
         </div>
       </div>
 

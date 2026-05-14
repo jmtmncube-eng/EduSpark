@@ -99,6 +99,36 @@ router.get('/available', authMiddleware, adminOrTutorOnly, async (req: Request, 
   }
 });
 
+// PATCH /api/students/bulk-assign-tutor — ADMIN only: assign many students at once
+//   body: { studentIds: string[], tutorId: string | null }
+// Declared BEFORE /:id/assign-tutor so the literal path wins the route match.
+router.patch('/bulk-assign-tutor', authMiddleware, adminOnly, async (req: Request, res: Response) => {
+  try {
+    const { studentIds, tutorId } = req.body as { studentIds?: unknown; tutorId?: string | null };
+    const ids = Array.isArray(studentIds)
+      ? (studentIds as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 500)
+      : [];
+    if (!ids.length) return res.status(400).json({ error: 'No student ids provided' });
+
+    if (tutorId) {
+      const tutor = await prisma.user.findUnique({ where: { id: tutorId } });
+      if (!tutor || tutor.role !== 'TUTOR') return res.status(400).json({ error: 'Invalid tutor' });
+    }
+
+    const result = await prisma.user.updateMany({
+      where: { id: { in: ids }, role: 'STUDENT' },
+      data: { teacherId: tutorId ?? null },
+    });
+    await audit(req, 'user.assign-tutor', 'User', null, {
+      bulk: true, count: result.count, requested: ids.length, tutorId: tutorId ?? null,
+    });
+    return res.json({ assigned: result.count, requested: ids.length });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // PATCH /api/students/:id/assign-tutor — ADMIN only: assign a student to a tutor
 router.patch('/:id/assign-tutor', authMiddleware, adminOnly, async (req: Request, res: Response) => {
   try {

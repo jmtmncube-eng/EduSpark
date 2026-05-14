@@ -19,6 +19,7 @@ export default function AdminTutors() {
   const [selTutor, setSelTutor] = useState<Tutor | null>(null);
   const [stuSearch, setStuSearch] = useState('');
   const [stuResults, setStuResults] = useState<StudentResult[]>([]);
+  const [picked, setPicked] = useState<Record<string, StudentResult>>({});
   const [saving, setSaving] = useState(false);
   const [resetTutor, setResetTutor] = useState<Tutor | null>(null);
   const [customPin, setCustomPin] = useState('');
@@ -63,12 +64,23 @@ export default function AdminTutors() {
     finally { setActioningReq(null); }
   }
 
-  async function assignStudent(student: StudentResult, tutorId: string) {
+  function togglePick(s: StudentResult) {
+    setPicked((prev) => {
+      const next = { ...prev };
+      if (next[s.id]) delete next[s.id]; else next[s.id] = s;
+      return next;
+    });
+  }
+
+  // Bulk-assign every picked student to the selected tutor in one call.
+  async function bulkAssign(tutorId: string) {
+    const ids = Object.keys(picked);
+    if (!ids.length) return;
     setSaving(true);
     try {
-      await tutorsApi.assignStudent(student.id, tutorId);
-      showToast(`${student.name} assigned ✅`);
-      setStuSearch(''); setStuResults([]);
+      const r = await tutorsApi.bulkAssign(ids, tutorId);
+      showToast(`Assigned ${r.assigned} student${r.assigned === 1 ? '' : 's'} ✅`);
+      setPicked({}); setStuSearch(''); setStuResults([]);
       load();
     } catch (e: unknown) { showToast((e as Error).message, 'err'); }
     finally { setSaving(false); }
@@ -196,7 +208,7 @@ export default function AdminTutors() {
                   </div>
                 </div>
                 <div className="flex g1 wrap">
-                  <button className="btn bp btn-sm" onClick={() => { setSelTutor(t); setStuSearch(''); setStuResults([]); setShowAssign(true); }}>
+                  <button className="btn bp btn-sm" onClick={() => { setSelTutor(t); setStuSearch(''); setStuResults([]); setPicked({}); setShowAssign(true); }}>
                     + Assign Students
                   </button>
                   <button className="btn bw-btn btn-sm" onClick={() => { setResetTutor(t); setCustomPin(''); setNewPin(''); }}>
@@ -238,32 +250,58 @@ export default function AdminTutors() {
             Currently has <strong>{selTutor.students.length}</strong> student{selTutor.students.length !== 1 ? 's' : ''}. Search any student to assign (or move from another teacher).
           </div>
           <div className="fg">
-            <label className="lbl">Search Student by Name</label>
+            <label className="lbl">Search students by name — tap to select, assign in one go</label>
             <input type="text" className="input" value={stuSearch} onChange={(e) => setStuSearch(e.target.value)}
               placeholder="Type student name…" autoFocus />
             {stuResults.length > 0 && (
               <div style={{ border: '1.5px solid var(--bd)', borderRadius: 10, overflow: 'hidden', marginTop: 6 }}>
                 {stuResults.map((s) => {
                   const alreadyAssigned = selTutor.students.some((st) => st.id === s.id);
+                  const isPicked = !!picked[s.id];
                   return (
-                    <div key={s.id} style={{ padding: '10px 14px', borderBottom: '1px solid var(--bd)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div className="bold" style={{ fontSize: 13 }}>{s.name}</div>
-                        <div className="xs ct3">Grade {s.grade}</div>
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={alreadyAssigned}
+                      onClick={() => togglePick(s)}
+                      style={{
+                        width: '100%', textAlign: 'left', cursor: alreadyAssigned ? 'default' : 'pointer',
+                        padding: '10px 14px', borderBottom: '1px solid var(--bd)',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                        background: isPicked ? 'rgba(20,184,166,.10)' : 'transparent',
+                        border: 0, color: 'inherit', opacity: alreadyAssigned ? 0.55 : 1,
+                      }}
+                    >
+                      <div className="flex ia g2">
+                        <span style={{ fontSize: 15 }}>{alreadyAssigned ? '✅' : isPicked ? '🔘' : '⚪'}</span>
+                        <div>
+                          <div className="bold" style={{ fontSize: 13 }}>{s.name}</div>
+                          <div className="xs ct3">Grade {s.grade}</div>
+                        </div>
                       </div>
-                      {alreadyAssigned ? (
-                        <span className="badge bok xs">Already in class</span>
-                      ) : (
-                        <button className="btn bp btn-sm" disabled={saving} onClick={() => assignStudent(s, selTutor.id)}>
-                          + Assign
-                        </button>
-                      )}
-                    </div>
+                      {alreadyAssigned && <span className="badge bok xs">Already in class</span>}
+                    </button>
                   );
                 })}
               </div>
             )}
           </div>
+
+          {Object.keys(picked).length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              padding: '10px 12px', borderRadius: 10, marginTop: 10,
+              background: 'rgba(20,184,166,.08)', border: '1px solid rgba(20,184,166,.3)',
+            }}>
+              <span className="sm bold">{Object.keys(picked).length} selected</span>
+              <div className="flex g1">
+                <button className="btn ba btn-sm" onClick={() => setPicked({})}>Clear</button>
+                <button className="btn bp btn-sm" disabled={saving} onClick={() => bulkAssign(selTutor.id)}>
+                  ➕ Assign {Object.keys(picked).length} to {selTutor.name.split(' ')[0]}
+                </button>
+              </div>
+            </div>
+          )}
           {selTutor.students.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div className="lbl mb1">Currently Assigned</div>

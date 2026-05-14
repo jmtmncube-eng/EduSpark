@@ -185,6 +185,13 @@ lacks "No stale 'SA CAPS' branding in sidebar"       "SA CAPS"          frontend
 lacks "No stale 'SA CAPS' branding in PDF seed"      "SA CAPS"          backend/src/db/seed-pdfs.ts
 has   "Sidebar shows CAPS & IEB branding"            "CAPS &amp; IEB"   frontend/src/components/Sidebar.tsx
 
+echo " v2.10.2 — visible calendar requests, Grades 10–12 everywhere"
+has   "Calendar requests use a prominent banner"     "cal-req-banner"   frontend/src/pages/admin/Calendar.tsx
+has   "Calendar request banner has attention glow"   "reqGlow"          frontend/src/index.css
+has   "Generator grade step offers full 10–12 set"   "const GRADES = [10, 11, 12]" frontend/src/components/QuestionGenerator.tsx
+has   "Pack template grade picker offers 10–12"      "const GRADES = [10, 11, 12]" frontend/src/components/PackTemplatePicker.tsx
+lacks "Generator grade step not narrowed by tutor"   "tutorGrades"      frontend/src/components/QuestionGenerator.tsx
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

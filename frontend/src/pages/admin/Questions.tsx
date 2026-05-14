@@ -102,7 +102,9 @@ export default function AdminQuestions() {
 
   const filterTopics = filterSub && filterGrade ? TOPICS[filterSub]?.[Number(filterGrade)] || [] : [];
   const formTopics = TOPICS[form.subject]?.[Number(form.grade)] || [];
-  const gradeOptions = isTutor && user?.teachGrades?.length ? (user.teachGrades as number[]).sort() : [10, 11, 12];
+  // Both subjects run Grades 10–12 — always offer the full set, never narrow it
+  // to a tutor's teaching grades (that hid Grade 10 from some staff).
+  const gradeOptions = [10, 11, 12];
   const baseGrade = isTutor && user?.teachGrades?.length ? defaultGrade : '';
   const anyFilter = !!(search || filterSub || filterTopic || filterStatus || filterCurriculum || filterGrade !== baseGrade);
 

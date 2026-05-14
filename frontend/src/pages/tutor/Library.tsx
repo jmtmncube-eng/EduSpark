@@ -425,7 +425,7 @@ function CustomPackEditor({ onClose, onSaved }: { onClose: () => void; onSaved: 
         </label>
         <label className="sm bold" style={{ flex: 1 }}>Grade
           <select className="ipt mt1" value={grade} onChange={(e) => setGrade(Number(e.target.value))}>
-            {(user?.teachGrades?.length ? (user.teachGrades as number[]) : [10, 11, 12]).map((g) => <option key={g} value={g}>Grade {g}</option>)}
+            {[10, 11, 12].map((g) => <option key={g} value={g}>Grade {g}</option>)}
           </select>
         </label>
       </div>

@@ -3,7 +3,6 @@ import Modal from './Modal';
 import PillSelect from './PillSelect';
 import { packs as packsApi } from '../services/api';
 import { showToast } from './Toast';
-import { useAuth } from '../context/AuthContext';
 
 type Template = Awaited<ReturnType<typeof packsApi.templates>>[number];
 
@@ -25,13 +24,14 @@ interface Props {
   onCreated: (pack: { id: string; title: string }) => void;
 }
 
+// Both subjects run Grades 10–12 across CAPS and IEB — always offer the full set.
+const GRADES = [10, 11, 12];
+
 export default function PackTemplatePicker({ onClose, onCreated }: Props) {
-  const { user } = useAuth();
-  const tutorGrades = (user?.teachGrades?.length ? user.teachGrades : [10, 11, 12]) as number[];
   const [templates, setTemplates] = useState<Template[]>([]);
   const [picked, setPicked] = useState<Template | null>(null);
   const [subject, setSubject] = useState<'MATHEMATICS' | 'PHYSICAL_SCIENCES'>('MATHEMATICS');
-  const [grade, setGrade] = useState<number>(tutorGrades[0] ?? 10);
+  const [grade, setGrade] = useState<number>(10);
   const [topic, setTopic] = useState<string>('');
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -127,7 +127,7 @@ export default function PackTemplatePicker({ onClose, onCreated }: Props) {
               ariaLabel="Grade"
               value={String(grade)}
               onChange={(v) => setGrade(Number(v))}
-              options={tutorGrades.map((g) => ({ value: String(g), label: `Grade ${g}` }))}
+              options={GRADES.map((g) => ({ value: String(g), label: `Grade ${g}` }))}
             />
           </div>
 

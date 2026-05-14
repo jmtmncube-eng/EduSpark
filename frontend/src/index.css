@@ -300,6 +300,9 @@ h1,h2,h3,h4{font-family:var(--fh);font-weight:600}
 .cal-side-t{font-family:var(--fh);font-size:17px;font-weight:600;margin-bottom:12px}
 .cal-ev{padding:10px 12px;border-radius:9px;border:1px solid var(--bd);margin-bottom:7px;transition:var(--tr)}.cal-ev:hover{background:rgba(20,184,166,.07)}
 .cal-ev-t{font-size:13px;font-weight:600;color:var(--t);margin-bottom:2px}.cal-ev-s{font-size:11.5px;color:var(--t3)}
+.cal-req-banner{transition:var(--tr);animation:reqGlow 2.4s ease-in-out infinite}
+.cal-req-banner:hover{filter:brightness(1.04);transform:translateY(-1px)}
+@keyframes reqGlow{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.34)}50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}}
 
 /* ── GAMIFICATION ───────────────────────────────────────────────── */
 .lvl{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:99px;font-weight:700;font-size:12px}

@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.10.2] — 2026-05-14 — Visible calendar requests, Grades 10–12 everywhere
+
+### Changed — Calendar: student requests are now impossible to miss
+- The pending-requests notification was a faint, easy-to-miss little button in the toolbar. It's now a **full-width amber banner** above the calendar — icon, a clear "{N} student requests need your review" headline, a one-line explainer, and a bright "Review →" call to action. It carries a soft pulsing glow so it draws the eye, and the whole banner is clickable.
+
+### Fixed — Grade 10 was missing from Physics (and any subject) for some staff
+- The generator wizard's Grade step (and the pack-template, Question Bank and tutor-library grade pickers) narrowed the grade list to a tutor's *teaching grades*. A tutor who didn't have Grade 10 on their profile saw no Grade 10 option at all — which read as "Physics has no Grade 10". Both Mathematics and Physical Sciences run **Grades 10–12** across CAPS and IEB, so every grade picker now offers the full 10–12 set consistently. (The Question Bank still *defaults* a tutor's filter to their own grade — but Grade 10 is always selectable.)
+
+---
+
 ## [2.10.1] — 2026-05-14 — One-button generator, half-diagram, split analytics, CAPS+IEB branding
 
 Four targeted asks, all shipped.

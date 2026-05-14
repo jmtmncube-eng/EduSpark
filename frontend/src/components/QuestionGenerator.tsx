@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { questions as questionsApi } from '../services/api';
 import { showToast } from './Toast';
-import { useAuth } from '../context/AuthContext';
 import { diffMeta } from '../utils/difficulty';
 import type { Question } from '../types';
 import Modal from './Modal';
@@ -47,11 +46,10 @@ type Mix = 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
 
 const STEP_LABELS = ['Curriculum', 'Subject', 'Grade', 'Topic', 'How many', 'Difficulty'];
 
-export default function QuestionGenerator({ onDone }: { onDone?: (created: Question[]) => void }) {
-  const { user } = useAuth();
-  const isTutor = user?.role === 'TUTOR';
-  const tutorGrades = (user?.teachGrades?.length ? user.teachGrades : [10, 11, 12]) as number[];
+// Both subjects run Grades 10–12 across CAPS and IEB — always offer the full set.
+const GRADES = [10, 11, 12];
 
+export default function QuestionGenerator({ onDone }: { onDone?: (created: Question[]) => void }) {
   // Wizard state
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -61,7 +59,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
   // Choices
   const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB'>('CAPS');
   const [subject, setSubject] = useState<Subject>('mathematics');
-  const [grade, setGrade] = useState<number>(tutorGrades[0] ?? 10);
+  const [grade, setGrade] = useState<number>(10);
   const [topic, setTopic] = useState<string>('');
   const [count, setCount] = useState(5);
   const [mix, setMix] = useState<Mix>('MIXED');
@@ -150,13 +148,11 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
         return (
           <>
             <div className="flex g1 wrap">
-              {tutorGrades.map((g) => (
+              {GRADES.map((g) => (
                 <Pill key={g} active={grade === g} onClick={() => setGrade(g)}>Grade {g}</Pill>
               ))}
             </div>
-            {isTutor && tutorGrades.length === 1 && (
-              <div className="xs ct3 mt1">You only teach Grade {tutorGrades[0]} — admin can add more.</div>
-            )}
+            <div className="xs ct3 mt1">Both Mathematics and Physical Sciences run Grades 10–12.</div>
           </>
         );
       case 3:

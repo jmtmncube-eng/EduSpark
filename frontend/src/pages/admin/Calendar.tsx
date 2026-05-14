@@ -154,14 +154,43 @@ export default function StaffCalendar() {
             : 'Schedule sessions, broadcast to your class, and approve student requests.'}</p>
       </div>
 
+      {/* Pending student requests — prominent, hard-to-miss banner */}
+      {requests.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowRequests(true)}
+          className="cal-req-banner"
+          style={{
+            width: '100%', textAlign: 'left', cursor: 'pointer', marginBottom: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '13px 16px', borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(245,158,11,.20), rgba(245,158,11,.08))',
+            border: '1.5px solid rgba(245,158,11,.6)',
+          }}
+        >
+          <span className="flex ia g2" style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 24, lineHeight: 1 }}>📨</span>
+            <span style={{ minWidth: 0 }}>
+              <span className="bold" style={{ display: 'block', color: 'var(--t1)' }}>
+                {requests.length} student {requests.length === 1 ? 'request needs' : 'requests need'} your review
+              </span>
+              <span className="xs ct3">Tap to approve or deny new-session, cancel and date-move requests.</span>
+            </span>
+          </span>
+          <span
+            style={{
+              flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 700, fontSize: 13,
+              background: '#f59e0b', color: '#fff', borderRadius: 8, padding: '7px 14px',
+            }}
+          >
+            Review →
+          </span>
+        </button>
+      )}
+
       <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div className="flex ia g2" style={{ flexWrap: 'wrap' }}>
           <button className="btn bg-btn btn-sm" onClick={() => openAddNote()}>+ Add {isTutor ? 'Session / Note' : 'Note'}</button>
-          {requests.length > 0 && (
-            <button className="btn ba btn-sm" onClick={() => setShowRequests(true)} style={{ background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.4)' }}>
-              📨 {requests.length} pending request{requests.length > 1 ? 's' : ''}
-            </button>
-          )}
         </div>
         <div className="flex ia g2" style={{ fontSize: 11, color: 'var(--t3)' }}>
           {isTutor && <span>👤 Your class only · 🎓 Sessions · 📢 Broadcasts</span>}

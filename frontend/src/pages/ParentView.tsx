@@ -132,7 +132,7 @@ export default function ParentView() {
         )}
 
         <div style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af' }}>
-          🔬 EduSpark · Maths and Science Learning Platform · CAPS Aligned<br />
+          🔬 EduSpark · Maths &amp; Science · CAPS &amp; IEB aligned<br />
           <span style={{ marginTop: 4, display: 'block' }}>This link expires on {new Date(data.expiresAt).toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
       </div>

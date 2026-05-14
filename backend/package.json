@@ -1,7 +1,7 @@
 {
   "name": "eduspark-backend",
   "version": "1.0.0",
-  "description": "EduSpark SA CAPS Platform — Backend API",
+  "description": "EduSpark — CAPS & IEB Maths & Science platform (Backend API)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

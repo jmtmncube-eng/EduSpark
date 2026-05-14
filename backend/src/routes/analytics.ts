@@ -109,22 +109,28 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
 });
 
 // GET /api/analytics/topic-performance
+// Now carries `subject` per topic so the dashboard can chart Maths and
+// Physical Sciences in separate graphs.
 router.get('/topic-performance', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
     const scopeIds = await getScopeStudentIds(req.user!.role, req.user!.userId);
     const results = await prisma.quizResult.findMany({
       where: { ...(scopeIds ? { userId: { in: scopeIds } } : {}), resultType: 'ASSIGNMENT' },
-      include: { assignment: { select: { topic: true } } },
+      include: { assignment: { select: { topic: true, subject: true } } },
     });
-    const byTopic: Record<string, { total: number; count: number }> = {};
+    const byTopic: Record<string, { total: number; count: number; subject: string }> = {};
     results.forEach((r) => {
       if (!r.assignment) return;
       const t = r.assignment.topic;
-      if (!byTopic[t]) byTopic[t] = { total: 0, count: 0 };
+      if (!byTopic[t]) byTopic[t] = { total: 0, count: 0, subject: r.assignment.subject };
       byTopic[t].total += r.score; byTopic[t].count++;
     });
     return res.json(Object.entries(byTopic)
-      .map(([topic, d]) => ({ topic, avgScore: d.count ? (d.total / d.count).toFixed(1) : '0', attempts: d.count }))
+      .map(([topic, d]) => ({
+        topic, subject: d.subject,
+        avgScore: d.count ? (d.total / d.count).toFixed(1) : '0',
+        attempts: d.count,
+      }))
       .sort((a, b) => Number(a.avgScore) - Number(b.avgScore)));
   } catch (err) {
     return res.status(500).json({ error: 'Server error' });

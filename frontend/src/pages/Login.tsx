@@ -302,7 +302,7 @@ export default function Login() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 22 }}>
           <div className="logo-orb">🔬</div>
           <div className="brand-name">EduSpark</div>
-          <div style={{ fontSize: 12, color: 'var(--t3)' }}>Maths and Science Learning Platform</div>
+          <div style={{ fontSize: 12, color: 'var(--t3)' }}>CAPS &amp; IEB · Maths &amp; Science · Grades 10–12</div>
         </div>
 
         <div style={{ background: 'rgba(20,184,166,.08)', border: '1px solid rgba(20,184,166,.18)', borderRadius: 12, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--t2)', textAlign: 'center', fontStyle: 'italic' }}>

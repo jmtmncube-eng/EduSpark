@@ -175,6 +175,16 @@ has   "Admin can bulk-assign students"               "bulk-assign-tutor" backend
 present backend/src/__tests__/generators.test.ts     "Generator test suite committed"
 present backend/src/__tests__/questionValidation.test.ts "Validation test suite committed"
 
+echo " v2.10.1 — one-button generator, half-diagram, split analytics, CAPS+IEB branding"
+has   "Generator is a one-button guided wizard"      "STEP_LABELS"      frontend/src/components/QuestionGenerator.tsx
+has   "~half of generated questions carry a diagram" "Math.random() < 0.5" backend/src/routes/questions.ts
+has   "Analytics splits Maths & Physics graphs"      "subjectTopicChart" frontend/src/pages/admin/Analytics.tsx
+has   "topic-performance returns per-topic subject"  "subject: r.assignment.subject" backend/src/routes/analytics.ts
+lacks "No stale 'SA CAPS' branding in frontend"      "SA CAPS"          frontend/index.html
+lacks "No stale 'SA CAPS' branding in sidebar"       "SA CAPS"          frontend/src/components/Sidebar.tsx
+lacks "No stale 'SA CAPS' branding in PDF seed"      "SA CAPS"          backend/src/db/seed-pdfs.ts
+has   "Sidebar shows CAPS & IEB branding"            "CAPS &amp; IEB"   frontend/src/components/Sidebar.tsx
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

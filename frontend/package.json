@@ -1,7 +1,7 @@
 {
   "name": "eduspark-frontend",
   "version": "1.0.0",
-  "description": "EduSpark SA CAPS Platform — Frontend",
+  "description": "EduSpark — CAPS & IEB Maths & Science platform (Frontend)",
   "type": "module",
   "scripts": {
     "dev": "vite",

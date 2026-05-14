@@ -150,7 +150,7 @@ function renderPdf(doc: MockDoc): Promise<Buffer> {
       if (idx > 0) pdf.addPage();
       // Brand strip
       pdf.fillColor('#0d9488').fontSize(10).font('Helvetica-Bold')
-        .text('EduSpark · SA CAPS Practice Material', { align: 'right' });
+        .text('EduSpark · CAPS & IEB Practice Material', { align: 'right' });
       pdf.moveDown(1.2);
       pdf.fillColor('#0f172a').fontSize(18).font('Helvetica-Bold')
         .text(page.heading);

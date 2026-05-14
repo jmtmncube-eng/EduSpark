@@ -249,7 +249,7 @@ export default function AdminStudentReport() {
           <div className="flex jb ia wrap" style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--bd)' }}>
             <div>
               <div className="fh" style={{ fontSize: 18, fontWeight: 700 }}>EduSpark Progress Report</div>
-              <div className="xs ct3">SA CAPS — Mathematics &amp; Physical Sciences</div>
+              <div className="xs ct3">CAPS &amp; IEB — Mathematics &amp; Physical Sciences</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div className="xs ct3">Date: {today}</div>

@@ -170,7 +170,7 @@ export default function ParentSession() {
         )}
 
         <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af' }}>
-          🔬 EduSpark · Maths and Science Learning Platform · CAPS Aligned<br />
+          🔬 EduSpark · Maths &amp; Science · CAPS &amp; IEB aligned<br />
           <span style={{ display: 'block', marginTop: 4 }}>This is a read-only view. Access expires on {expiryDate}.</span>
         </div>
       </div>

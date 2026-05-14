@@ -2,22 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { questions as questionsApi } from '../services/api';
 import { showToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
-import { ALL_DIFFICULTIES, diffMeta } from '../utils/difficulty';
+import { diffMeta } from '../utils/difficulty';
 import type { Question } from '../types';
 import Modal from './Modal';
 
 /**
- * Guided generator panel.
+ * One-button guided generator.
  *
- *   1. Subject  (Maths or Physical Sciences) — big, visually distinct cards
- *   2. Grade    (10 / 11 / 12)
- *   3. Topic    (from the CAPS topic list for that grade + subject)
- *   4. Count    (3 / 5 / 10 / 20)
- *   5. Mix      (Warm-up only · Core only · Stretch only · Mixed)
- *   6. Generate
- *
- * Math is teal (📐), Physics is indigo (⚗️) — that palette is reused across
- * the rest of the app so tutors can scan content at a glance.
+ * The Question Bank shows a single "⚡ Generate Questions" button. Pressing it
+ * opens a step-by-step wizard that prompts for every detail it needs —
+ * curriculum → subject → grade → topic → count → difficulty — then generates.
+ * No big always-open form; just one button and a guided flow.
  */
 
 const TOPICS: Record<'mathematics' | 'physical_sciences', Record<number, string[]>> = {
@@ -36,21 +31,13 @@ const TOPICS: Record<'mathematics' | 'physical_sciences', Record<number, string[
 // Subject visual identity reused everywhere
 export const SUBJECT_THEME = {
   mathematics: {
-    label: 'Mathematics',
-    short: 'Maths',
-    icon: '📐',
-    fg: '#0D9488',
-    bg: 'rgba(13,148,136,.10)',
-    border: 'rgba(13,148,136,.35)',
+    label: 'Mathematics', short: 'Maths', icon: '📐',
+    fg: '#0D9488', bg: 'rgba(13,148,136,.10)', border: 'rgba(13,148,136,.35)',
     gradient: 'linear-gradient(135deg, rgba(13,148,136,.12), rgba(16,185,129,.08))',
   },
   physical_sciences: {
-    label: 'Physical Sciences',
-    short: 'Phys Sci',
-    icon: '⚗️',
-    fg: '#7c3aed',
-    bg: 'rgba(124,58,237,.10)',
-    border: 'rgba(124,58,237,.35)',
+    label: 'Physical Sciences', short: 'Phys Sci', icon: '⚗️',
+    fg: '#7c3aed', bg: 'rgba(124,58,237,.10)', border: 'rgba(124,58,237,.35)',
     gradient: 'linear-gradient(135deg, rgba(124,58,237,.12), rgba(168,85,247,.08))',
   },
 } as const;
@@ -58,51 +45,66 @@ export const SUBJECT_THEME = {
 type Subject = keyof typeof SUBJECT_THEME;
 type Mix = 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
 
+const STEP_LABELS = ['Curriculum', 'Subject', 'Grade', 'Topic', 'How many', 'Difficulty'];
+
 export default function QuestionGenerator({ onDone }: { onDone?: (created: Question[]) => void }) {
   const { user } = useAuth();
   const isTutor = user?.role === 'TUTOR';
-
-  // Step state
-  const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB'>('CAPS');
-  const [subject, setSubject] = useState<Subject | null>(null);
   const tutorGrades = (user?.teachGrades?.length ? user.teachGrades : [10, 11, 12]) as number[];
+
+  // Wizard state
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Choices
+  const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB'>('CAPS');
+  const [subject, setSubject] = useState<Subject>('mathematics');
   const [grade, setGrade] = useState<number>(tutorGrades[0] ?? 10);
   const [topic, setTopic] = useState<string>('');
   const [count, setCount] = useState(5);
   const [mix, setMix] = useState<Mix>('MIXED');
-  const [busy, setBusy] = useState(false);
+
+  // Results
   const [recent, setRecent] = useState<Question[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
+
+  // History
   const [batches, setBatches] = useState<Awaited<ReturnType<typeof questionsApi.listBatches>>>([]);
   const [viewBatchId, setViewBatchId] = useState<string | null>(null);
   const [showAllBatches, setShowAllBatches] = useState(false);
 
-  // Load recent batches on mount so the tutor can revisit past generations
   useEffect(() => {
     questionsApi.listBatches().then(setBatches).catch(() => setBatches([]));
   }, []);
-
   async function refreshBatches() {
     try { setBatches(await questionsApi.listBatches()); } catch { /* ignore */ }
   }
 
-  const topics = useMemo(() => subject ? TOPICS[subject][grade] ?? [] : [], [subject, grade]);
-
+  const theme = SUBJECT_THEME[subject];
+  const topics = useMemo(() => TOPICS[subject][grade] ?? [], [subject, grade]);
   useEffect(() => {
     if (topics.length && !topics.includes(topic)) setTopic(topics[0]);
   }, [topics, topic]);
 
-  async function generate() {
-    if (!subject) { showToast('Pick a subject', 'warn'); return; }
-    if (!topic) { showToast('Pick a topic', 'warn'); return; }
-    setBusy(true);
+  function openWizard() {
+    setStep(0);
+    setDone(false);
     setRecent([]);
     setBatchId(null);
+    setOpen(true);
+  }
+
+  async function generate() {
+    if (!topic) { showToast('Pick a topic', 'warn'); return; }
+    setBusy(true);
     try {
       const r = await questionsApi.generate(subject, grade, topic, count, mix, curriculum);
-      showToast(`Generated ${r.count} ${curriculum} ${SUBJECT_THEME[subject].short} question(s)`, 'success');
+      showToast(`Generated ${r.count} ${curriculum} ${theme.short} question(s)`, 'success');
       setRecent(r.created as Question[]);
       setBatchId(r.batchId);
+      setDone(true);
       onDone?.(r.created as Question[]);
       refreshBatches();
     } catch (e) {
@@ -110,217 +112,184 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
     } finally { setBusy(false); }
   }
 
-  const theme = subject ? SUBJECT_THEME[subject] : null;
-
-  return (
-    <div className="ca" style={{
-      padding: 16, marginBottom: 14,
-      background: theme ? theme.gradient : 'linear-gradient(135deg, rgba(20,184,166,.06), rgba(14,165,233,.04))',
-      border: `1px solid ${theme ? theme.border : 'var(--bd)'}`,
-      transition: 'background .3s, border-color .3s',
-    }}>
-      <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>⚡ Generate Questions</div>
-          <div className="xs ct3">Curriculum → subject → grade → topic → how many. Questions land in your Bank ready to review.</div>
-        </div>
-      </div>
-
-      {/* Step 1 — Curriculum */}
-      <div className="sm bold mb1">1. Curriculum</div>
-      <div className="flex g1 wrap" style={{ marginBottom: 14 }}>
-        {(['CAPS', 'IEB'] as const).map((c) => {
-          const active = curriculum === c;
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCurriculum(c)}
-              style={{
-                cursor: 'pointer', padding: '9px 18px', borderRadius: 10,
-                background: active ? 'var(--p)' : 'var(--bg)',
-                color: active ? '#fff' : 'var(--t)',
-                border: `2px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
-                fontWeight: 700, fontSize: 13,
-              }}
-            >
-              {c === 'CAPS' ? '🇿🇦 CAPS' : '📘 IEB'}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Step 2 — Subject */}
-      <div className="sm bold mb1">2. Subject</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-        {(Object.keys(SUBJECT_THEME) as Subject[]).map((s) => {
-          const t = SUBJECT_THEME[s];
-          const active = subject === s;
-          return (
-            <button
-              key={s}
-              onClick={() => setSubject(s)}
-              style={{
-                cursor: 'pointer', textAlign: 'left',
-                padding: '12px 14px', borderRadius: 12,
-                background: active ? t.bg : 'var(--bg)',
-                border: `2px solid ${active ? t.fg : 'var(--bd)'}`,
-                display: 'flex', alignItems: 'center', gap: 12,
-                transition: 'all .15s',
-              }}
-            >
-              <span style={{ fontSize: 28 }}>{t.icon}</span>
-              <div>
-                <div className="bold" style={{ color: active ? t.fg : 'var(--t)' }}>{t.label}</div>
-                <div className="xs ct3">{s === 'mathematics' ? 'Algebra · Calc · Trig · Stats' : 'Mechanics · Waves · Electricity · Chem'}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {subject && (
-        <>
-          {/* Step 2 — Grade */}
-          <div className="sm bold mb1">3. Grade</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-            {tutorGrades.map((g) => (
-              <button
-                key={g}
-                onClick={() => setGrade(g)}
-                style={{
-                  cursor: 'pointer',
-                  flex: '1 1 80px',
-                  padding: '10px 16px', borderRadius: 10,
-                  background: grade === g ? theme!.bg : 'var(--bg)',
-                  border: `2px solid ${grade === g ? theme!.fg : 'var(--bd)'}`,
-                  fontWeight: 700, fontSize: 14,
-                  color: grade === g ? theme!.fg : 'var(--t)',
-                }}
-              >
-                Grade {g}
-              </button>
+  // ─── One step of the wizard ───────────────────────────────────────
+  function renderStep() {
+    switch (step) {
+      case 0:
+        return (
+          <Choices>
+            {(['CAPS', 'IEB'] as const).map((c) => (
+              <PickCard key={c} active={curriculum === c} onClick={() => setCurriculum(c)}>
+                <span style={{ fontSize: 22 }}>{c === 'CAPS' ? '🇿🇦' : '📘'}</span>
+                <div>
+                  <div className="bold">{c}</div>
+                  <div className="xs ct3">{c === 'CAPS' ? 'National curriculum' : 'Independent Examinations Board'}</div>
+                </div>
+              </PickCard>
             ))}
-            {isTutor && tutorGrades.length === 1 && (
-              <div className="xs ct3" style={{ alignSelf: 'center', flexBasis: '100%' }}>
-                You only teach Grade {tutorGrades[0]} — admin can add more.
-              </div>
-            )}
-          </div>
-
-          {/* Step 3 — Topic */}
-          <div className="sm bold mb1">4. Topic</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6, marginBottom: 14 }}>
-            {topics.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTopic(t)}
-                style={{
-                  cursor: 'pointer', textAlign: 'left',
-                  padding: '8px 10px', borderRadius: 8,
-                  background: topic === t ? theme!.bg : 'var(--bg)',
-                  border: `1.5px solid ${topic === t ? theme!.fg : 'var(--bd)'}`,
-                  fontSize: 12.5, fontWeight: 600,
-                  color: topic === t ? theme!.fg : 'var(--t)',
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-
-          {/* Step 4 — Count */}
-          <div className="sm bold mb1">5. How many?</div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-            {[3, 5, 10, 20].map((n) => (
-              <button
-                key={n}
-                onClick={() => setCount(n)}
-                style={{
-                  cursor: 'pointer',
-                  padding: '8px 14px', borderRadius: 8,
-                  background: count === n ? theme!.bg : 'var(--bg)',
-                  border: `1.5px solid ${count === n ? theme!.fg : 'var(--bd)'}`,
-                  fontWeight: 700, fontSize: 13,
-                  color: count === n ? theme!.fg : 'var(--t)',
-                }}
-              >
-                {n} questions
-              </button>
-            ))}
-          </div>
-
-          {/* Step 6 — Mix */}
-          <div className="sm bold mb1">
-            6. Difficulty mix
-            <span className="xs ct3" style={{ fontWeight: 400, marginLeft: 6 }}>
-              (students see friendly names — see key below)
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 6, marginBottom: 6 }}>
-            {(['MIXED', 'EASY', 'MEDIUM', 'HARD'] as Mix[]).map((m) => {
-              const isMixed = m === 'MIXED';
-              const meta = !isMixed ? diffMeta(m) : null;
-              const active = mix === m;
+          </Choices>
+        );
+      case 1:
+        return (
+          <Choices>
+            {(Object.keys(SUBJECT_THEME) as Subject[]).map((s) => {
+              const t = SUBJECT_THEME[s];
               return (
-                <button
-                  key={m}
-                  onClick={() => setMix(m)}
-                  style={{
-                    cursor: 'pointer', textAlign: 'left',
-                    padding: '8px 12px', borderRadius: 10,
-                    background: active ? (meta?.bg ?? 'rgba(20,184,166,.10)') : 'var(--bg)',
-                    border: `1.5px solid ${active ? (meta?.fg ?? 'var(--p)') : 'var(--bd)'}`,
-                    color: active ? (meta?.fg ?? 'var(--p)') : 'var(--t)',
-                    fontSize: 13, fontWeight: 700,
-                  }}
-                >
-                  {isMixed
-                    ? <>🎲 Mixed <span className="xs" style={{ fontWeight: 400 }}>· spread across all</span></>
-                    : <>{meta!.icon} {meta!.label}</>}
-                </button>
+                <PickCard key={s} active={subject === s} accent={t.fg} onClick={() => setSubject(s)}>
+                  <span style={{ fontSize: 26 }}>{t.icon}</span>
+                  <div>
+                    <div className="bold">{t.label}</div>
+                    <div className="xs ct3">{s === 'mathematics' ? 'Algebra · Calc · Trig · Stats' : 'Mechanics · Waves · Electricity · Chem'}</div>
+                  </div>
+                </PickCard>
               );
             })}
+          </Choices>
+        );
+      case 2:
+        return (
+          <>
+            <div className="flex g1 wrap">
+              {tutorGrades.map((g) => (
+                <Pill key={g} active={grade === g} onClick={() => setGrade(g)}>Grade {g}</Pill>
+              ))}
+            </div>
+            {isTutor && tutorGrades.length === 1 && (
+              <div className="xs ct3 mt1">You only teach Grade {tutorGrades[0]} — admin can add more.</div>
+            )}
+          </>
+        );
+      case 3:
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 7 }}>
+            {topics.map((t) => (
+              <Pill key={t} active={topic === t} onClick={() => setTopic(t)} block>{t}</Pill>
+            ))}
           </div>
-          <div className="xs ct3 mb2">
-            💡 The mix is honoured — pick a single band for all-one-difficulty, or Mixed for a realistic ≈30/40/30 spread. The generator scales the numbers and steps to match.
+        );
+      case 4:
+        return (
+          <div className="flex g1 wrap">
+            {[3, 5, 10, 20].map((n) => (
+              <Pill key={n} active={count === n} onClick={() => setCount(n)}>{n} questions</Pill>
+            ))}
           </div>
+        );
+      case 5:
+        return (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 7 }}>
+              {(['MIXED', 'EASY', 'MEDIUM', 'HARD'] as Mix[]).map((m) => {
+                const meta = m !== 'MIXED' ? diffMeta(m) : null;
+                return (
+                  <Pill key={m} active={mix === m} onClick={() => setMix(m)} block>
+                    {m === 'MIXED' ? '🎲 Mixed · spread' : `${meta!.icon} ${meta!.label}`}
+                  </Pill>
+                );
+              })}
+            </div>
+            <div className="xs ct3 mt1">
+              💡 The mix is honoured — a single band makes them all that difficulty; Mixed gives a realistic ≈30/40/30 spread, with the numbers and steps scaled to match.
+            </div>
+          </>
+        );
+      default:
+        return null;
+    }
+  }
 
-          {/* Generate button */}
+  return (
+    <div>
+      {/* ─── One button + history ─── */}
+      <div className="ca" style={{
+        padding: 16, marginBottom: 14,
+        background: 'linear-gradient(135deg, rgba(20,184,166,.07), rgba(14,165,233,.04))',
+        border: '1px solid rgba(20,184,166,.25)',
+      }}>
+        <div className="flex jb ia wrap g2">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>⚡ Generate Questions</div>
+            <div className="xs ct3">One button — we’ll prompt you for everything: curriculum, subject, grade, topic, count, difficulty.</div>
+          </div>
           <button
-            className="btn bg-btn wf"
-            onClick={generate}
-            disabled={busy || !topic}
-            style={{
-              padding: '12px',
-              background: theme!.fg,
-              fontSize: 14, fontWeight: 700,
-            }}
+            className="btn bg-btn"
+            onClick={openWizard}
+            style={{ background: 'var(--p)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '11px 20px' }}
           >
-            {busy
-              ? `⚡ Generating ${count} questions…`
-              : `⚡ Generate ${count} ${curriculum} ${theme!.short} question${count === 1 ? '' : 's'} on ${topic}`}
+            ⚡ Generate Questions
           </button>
+        </div>
 
-          {recent.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div className="flex jb ia mb1">
-                <div className="sm bold">🔍 Just generated · {recent.length} <span className="xs ct3" style={{ fontWeight: 400 }}>· in review</span></div>
-                {batchId && (
-                  <a
-                    href={`#batch-${batchId}`}
-                    onClick={(e) => { e.preventDefault(); setViewBatchId(batchId); }}
-                    className="xs bold"
-                    style={{ color: theme!.fg, textDecoration: 'underline', cursor: 'pointer' }}
+        {/* Past batches — generation history */}
+        {batches.length > 0 && (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--bd)' }}>
+            <div className="flex jb ia mb1">
+              <div className="sm bold">🗂 Recent generations · {batches.length}</div>
+              <button
+                type="button" className="xs ct3"
+                onClick={() => setShowAllBatches((v) => !v)}
+                style={{ background: 'transparent', border: 0, cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                {showAllBatches ? 'Show recent' : 'Show all'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {(showAllBatches ? batches : batches.slice(0, 5)).map((b) => {
+                const subj = b.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setViewBatchId(b.id)}
+                    style={{
+                      background: 'var(--bg)', cursor: 'pointer',
+                      border: '1px solid var(--bd)', borderRadius: 10,
+                      padding: '8px 12px', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}
                   >
-                    🔗 Review &amp; approve this batch →
-                  </a>
-                )}
+                    <span style={{ fontSize: 18 }}>{subj.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="sm bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {b.topic} · Gr {b.grade}
+                      </div>
+                      <div className="xs ct3">
+                        {b.questionCount} question{b.questionCount === 1 ? '' : 's'} · {b.difficulty || 'MIXED'} · {relTime(b.createdAt)}
+                      </div>
+                    </div>
+                    {b.reviewCount > 0 ? (
+                      <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700, background: 'rgba(180,83,9,.12)', color: '#b45309', whiteSpace: 'nowrap' }} title="Questions still awaiting review">🔍 {b.reviewCount} to review</span>
+                    ) : (
+                      <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700, background: 'rgba(21,128,61,.12)', color: '#15803d', whiteSpace: 'nowrap' }} title="All questions signed off">✅ Approved</span>
+                    )}
+                    <span className="xs ct3" style={{ whiteSpace: 'nowrap' }}>View →</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─── The guided wizard modal ─── */}
+      {open && (
+        <Modal
+          title={done ? '✅ Questions generated' : `⚡ Generate Questions · Step ${step + 1} of 6`}
+          onClose={() => setOpen(false)}
+          wide
+        >
+          {done ? (
+            // ── Results view ──────────────────────────────────────
+            <div>
+              <div style={{
+                padding: '12px 14px', borderRadius: 10, marginBottom: 12,
+                background: 'rgba(180,83,9,.07)', border: '1px solid rgba(180,83,9,.3)',
+              }}>
+                <div className="sm bold">🔍 {recent.length} {curriculum} {theme.short} question(s) generated — in review</div>
+                <div className="xs ct2" style={{ marginTop: 2 }}>
+                  They’re in your bank as <b>In review</b>. Approve the batch before they can be bundled into a Pack.
+                </div>
               </div>
-              <div className="xs ct3 mb1">
-                These are in <b>review</b> — open the batch to approve them before they can be bundled into a Pack.
-              </div>
-              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
+              <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10, marginBottom: 12 }}>
                 {recent.map((q, i) => {
                   const meta = diffMeta(q.difficulty);
                   return (
@@ -329,81 +298,138 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="sm" style={{ fontWeight: 600 }}>{q.question}</div>
                       </div>
+                      {q.imageData && <span className="badge bcy" style={{ flexShrink: 0 }}>🖼</span>}
                       <span style={{
-                        padding: '2px 8px', borderRadius: 99,
-                        fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
+                        padding: '2px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
                         background: meta.bg, color: meta.fg, border: `1px solid ${meta.borderColor}`,
                       }}>{meta.icon} {meta.label}</span>
                     </div>
                   );
                 })}
               </div>
+              <div className="flex g1 wrap">
+                {batchId && (
+                  <button className="btn bg-btn" style={{ background: '#15803d', color: '#fff', border: 'none' }}
+                    onClick={() => { setOpen(false); setViewBatchId(batchId); }}>
+                    🔍 Review &amp; approve this batch
+                  </button>
+                )}
+                <button className="btn ba" onClick={() => { setStep(0); setDone(false); setRecent([]); setBatchId(null); }}>
+                  ⚡ Generate another set
+                </button>
+                <button className="btn ba" onClick={() => setOpen(false)}>Done</button>
+              </div>
+            </div>
+          ) : (
+            // ── Wizard step view ──────────────────────────────────
+            <div>
+              {/* Stepper dots */}
+              <div className="flex ia g1 mb2" style={{ flexWrap: 'wrap' }}>
+                {STEP_LABELS.map((lbl, i) => (
+                  <span
+                    key={lbl}
+                    title={lbl}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99,
+                      background: i === step ? 'var(--p)' : i < step ? 'rgba(20,184,166,.14)' : 'var(--bg)',
+                      color: i === step ? '#fff' : i < step ? 'var(--p)' : 'var(--t3)',
+                      border: `1px solid ${i <= step ? 'var(--p)' : 'var(--bd)'}`,
+                    }}
+                  >
+                    {i < step ? '✓' : i + 1}. {lbl}
+                  </span>
+                ))}
+              </div>
+
+              <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16, marginBottom: 4 }}>
+                {step + 1}. {
+                  step === 0 ? 'Which curriculum?'
+                  : step === 1 ? 'Which subject?'
+                  : step === 2 ? 'Which grade?'
+                  : step === 3 ? 'Which topic?'
+                  : step === 4 ? 'How many questions?'
+                  : 'What difficulty mix?'
+                }
+              </div>
+              <div className="xs ct3 mb2">
+                {step === 3 ? `${theme.label} · Grade ${grade} — pick a CAPS topic.` : 'Tap to choose, then Next.'}
+              </div>
+
+              <div style={{ marginBottom: 18 }}>{renderStep()}</div>
+
+              {/* Footer — Back / Next / Generate */}
+              <div className="flex jb ia" style={{ gap: 8, borderTop: '1px solid var(--bd)', paddingTop: 12 }}>
+                <button
+                  className="btn ba"
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  disabled={step === 0}
+                  style={{ opacity: step === 0 ? 0.5 : 1 }}
+                >
+                  ← Back
+                </button>
+                <div className="xs ct3">
+                  {curriculum} · {theme.short} · Gr {grade}{step >= 3 && topic ? ` · ${topic}` : ''}{step >= 4 ? ` · ${count}Q` : ''}
+                </div>
+                {step < 5 ? (
+                  <button className="btn bg-btn" style={{ background: 'var(--p)', color: '#fff' }} onClick={() => setStep((s) => s + 1)}>
+                    Next →
+                  </button>
+                ) : (
+                  <button
+                    className="btn bg-btn"
+                    style={{ background: 'var(--p)', color: '#fff', fontWeight: 700 }}
+                    onClick={generate}
+                    disabled={busy || !topic}
+                  >
+                    {busy ? '⚡ Generating…' : `⚡ Generate ${count} questions`}
+                  </button>
+                )}
+              </div>
             </div>
           )}
-        </>
-      )}
-
-      {/* Past batches — generation history */}
-      {batches.length > 0 && (
-        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--bd)' }}>
-          <div className="flex jb ia mb1">
-            <div className="sm bold">🗂 Recent generations · {batches.length}</div>
-            <button
-              type="button"
-              className="xs ct3"
-              onClick={() => setShowAllBatches((v) => !v)}
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {showAllBatches ? 'Show recent' : 'Show all'}
-            </button>
-          </div>
-          <div style={{ display: 'grid', gap: 6 }}>
-            {(showAllBatches ? batches : batches.slice(0, 5)).map((b) => {
-              const subj = b.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
-              const ago = relTime(b.createdAt);
-              return (
-                <button
-                  key={b.id}
-                  onClick={() => setViewBatchId(b.id)}
-                  style={{
-                    background: 'var(--bg)', cursor: 'pointer',
-                    border: '1px solid var(--bd)', borderRadius: 10,
-                    padding: '8px 12px', textAlign: 'left',
-                    display: 'flex', alignItems: 'center', gap: 10,
-                  }}
-                >
-                  <span style={{ fontSize: 18 }}>{subj.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="sm bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {b.topic} · Gr {b.grade}
-                    </div>
-                    <div className="xs ct3">
-                      {b.questionCount} question{b.questionCount === 1 ? '' : 's'} · {b.difficulty || 'MIXED'} · {ago}
-                    </div>
-                  </div>
-                  {b.reviewCount > 0 ? (
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
-                      background: 'rgba(180,83,9,.12)', color: '#b45309', whiteSpace: 'nowrap',
-                    }} title="Questions still awaiting review">🔍 {b.reviewCount} to review</span>
-                  ) : (
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
-                      background: 'rgba(21,128,61,.12)', color: '#15803d', whiteSpace: 'nowrap',
-                    }} title="All questions signed off">✅ Approved</span>
-                  )}
-                  <span className="xs ct3" style={{ whiteSpace: 'nowrap' }}>View →</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {viewBatchId && (
         <BatchViewer id={viewBatchId} onClose={() => setViewBatchId(null)} onDelete={() => { setViewBatchId(null); refreshBatches(); }} />
       )}
     </div>
+  );
+}
+
+// ─── Small presentational helpers ────────────────────────────────────
+function Choices({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>{children}</div>;
+}
+function PickCard({ active, accent, onClick, children }: { active: boolean; accent?: string; onClick: () => void; children: React.ReactNode }) {
+  const c = accent || 'var(--p)';
+  return (
+    <button
+      type="button" onClick={onClick}
+      style={{
+        cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+        padding: '13px 14px', borderRadius: 12,
+        background: active ? `${c}1a` : 'var(--bg)',
+        border: `2px solid ${active ? c : 'var(--bd)'}`,
+        color: 'var(--t)', transition: 'all .12s',
+      }}
+    >{children}</button>
+  );
+}
+function Pill({ active, onClick, block, children }: { active: boolean; onClick: () => void; block?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="button" onClick={onClick}
+      style={{
+        cursor: 'pointer', padding: '9px 14px', borderRadius: 10,
+        textAlign: block ? 'left' : 'center',
+        background: active ? 'var(--p)' : 'var(--bg)',
+        color: active ? '#fff' : 'var(--t)',
+        border: `1.5px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+        fontWeight: active ? 700 : 600, fontSize: 13,
+        flex: block ? undefined : '0 1 auto',
+      }}
+    >{children}</button>
   );
 }
 
@@ -447,7 +473,7 @@ function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
         r.failed ? 'warn' : 'success',
       );
       fetchBatch();
-      onDelete(); // refreshes the parent list
+      onDelete();
     } catch (e) { showToast(String((e as Error).message), 'err'); }
     finally { setBusy(false); }
   }
@@ -488,7 +514,6 @@ function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
         </div>
       </div>
 
-      {/* Review summary + actions */}
       <div style={{
         padding: '10px 12px', borderRadius: 10, marginBottom: 12,
         background: reviewCount ? 'rgba(180,83,9,.07)' : 'rgba(21,128,61,.07)',

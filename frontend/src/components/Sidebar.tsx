@@ -150,7 +150,7 @@ export default function Sidebar({ onToggle, open }: { onToggle: () => void; open
       <aside className={`sb ${open ? 'open' : ''}`}>
         <div className="sb-hd">
           <div className="sb-logo">🔬</div>
-          <div className="sb-brand">EduSpark<small>Maths &amp; Science Platform</small></div>
+          <div className="sb-brand">EduSpark<small>CAPS &amp; IEB · Maths &amp; Science</small></div>
         </div>
 
         <div className="sb-usr" onClick={() => setShowProfile(true)}>

@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.10.1] — 2026-05-14 — One-button generator, half-diagram, split analytics, CAPS+IEB branding
+
+Four targeted asks, all shipped.
+
+### Changed — One button, fully guided generation
+- The Question Bank generator is now a **single `⚡ Generate Questions` button**. Pressing it opens a stepped wizard that prompts for every detail in turn — Curriculum → Subject → Grade → Topic → How many → Difficulty — each step a screen of tappable cards/pills with a Back/Next footer and stepper dots. No more always-open inline form; no detail can be missed because every one is its own step. The wizard ends on a results view (review & approve the batch, or generate another set). The recent-generations history stays inline on the card.
+
+### Changed — Half the questions carry a diagram
+- The `/generate` route now does a **coin-flip per question** (`Math.random() < 0.5`) on whether to attach a diagram, so a batch lands at roughly 50% illustrated. Only topics with a genuinely relevant diagram kind are eligible — the rest never get a misleading picture.
+
+### Changed — Maths and Physics on separate graphs
+- Analytics' topic-performance chart is **split into two neat graphs** — 📐 Mathematics — Score by Topic and ⚗️ Physical Sciences — Score by Topic — side by side, each in its own subject hue. The `/analytics/topic-performance` route now returns a per-topic `subject` so the split is data-driven. Weekly Activity Trend moved to its own full-width row.
+
+### Changed — CAPS + IEB branding everywhere
+- Swept out every stale "SA CAPS" / "SA CAPS Maths Platform" string — page `<title>` + meta description, both `package.json` descriptions, the sidebar brand, the login tagline, the parent-view footers, the student/admin report headers, and the PDF practice-material brand strip. The platform now reads **"CAPS & IEB · Maths & Science"** consistently.
+
+---
+
 ## [2.10.0] — 2026-05-14 — CAPS + IEB, varied difficulty-aware generators, scale, tests
 
 The five "lagging behind" items, all addressed — plus IEB support.

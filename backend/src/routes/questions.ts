@@ -236,7 +236,10 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
           answer: d.ans,
           solution: d.sol,
           visibility: 'ALL',
-          imageData: makeDiagramOfKind(meta.diagram),
+          // ~half of generated questions carry a diagram — a coin-flip per
+          // question (only topics with a genuinely relevant diagram kind are
+          // eligible; the rest never get a misleading picture).
+          imageData: Math.random() < 0.5 ? makeDiagramOfKind(meta.diagram) : null,
           capsCode: meta.caps,
           cognitiveLevel: meta.cognitiveLevel,
           status: 'REVIEW',

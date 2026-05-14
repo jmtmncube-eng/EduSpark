@@ -28,7 +28,7 @@ interface StuReport {
 export default function AdminAnalytics() {
   const [tab, setTab] = useState<'class' | 'student'>('class');
   const [overview, setOverview] = useState<Overview>({ attempts: 0, avgScore: 0, completionRate: 0, avgTime: 0 });
-  const [topics, setTopics] = useState<{ topic: string; avgScore: string; attempts: number }[]>([]);
+  const [topics, setTopics] = useState<{ topic: string; avgScore: string; attempts: number; subject?: string }[]>([]);
   const [diff, setDiff] = useState<Record<string, { correct: number; total: number }>>({});
   const [weekly, setWeekly] = useState<{ week: string; attempts: number; avgScore: number }[]>([]);
   const [allStudents, setAllStudents] = useState<User[]>([]);
@@ -39,7 +39,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     analytics.overview().then((d) => setOverview(d as Overview));
-    analytics.topicPerformance().then((d) => setTopics(d as { topic: string; avgScore: string; attempts: number }[]));
+    analytics.topicPerformance().then((d) => setTopics(d as { topic: string; avgScore: string; attempts: number; subject?: string }[]));
     analytics.difficultyBreakdown().then((d) => setDiff(d as Record<string, { correct: number; total: number }>));
     analytics.weeklyActivity().then((d) => setWeekly(d as { week: string; attempts: number; avgScore: number }[])).catch(() => {});
     studentsApi.list().then((d) => setAllStudents(d as User[]));
@@ -54,12 +54,17 @@ export default function AdminAnalytics() {
       .finally(() => setStuLoading(false));
   }, [selId]);
 
-  const pal = topics.map((_, i) => dk ? `hsl(${170 + i * 12},60%,${44 + i * 2}%)` : `hsl(${165 + i * 10},55%,${32 + i * 2}%)`);
-
-  const topicChart = {
-    labels: topics.map((t) => t.topic.length > 16 ? t.topic.slice(0, 15) + '…' : t.topic),
-    datasets: [{ data: topics.map((t) => Number(t.avgScore)), backgroundColor: pal, borderRadius: 8, barThickness: 18 }],
-  };
+  // Split topic performance into separate Maths vs Physical Sciences charts.
+  const mathsTopics = topics.filter((t) => t.subject === 'MATHEMATICS');
+  const physicsTopics = topics.filter((t) => t.subject === 'PHYSICAL_SCIENCES');
+  const subjectTopicChart = (list: typeof topics, hue: number) => ({
+    labels: list.map((t) => t.topic.length > 16 ? t.topic.slice(0, 15) + '…' : t.topic),
+    datasets: [{
+      data: list.map((t) => Number(t.avgScore)),
+      backgroundColor: list.map((_, i) => dk ? `hsl(${hue + i * 8},60%,${46 + i * 2}%)` : `hsl(${hue + i * 7},55%,${34 + i * 2}%)`),
+      borderRadius: 8, barThickness: 18,
+    }],
+  });
 
   const hiAmt = (diff.EASY?.correct || 0) + (diff.MEDIUM?.correct || 0) + (diff.HARD?.correct || 0);
   const loAmt = ((diff.EASY?.total || 0) - (diff.EASY?.correct || 0)) + ((diff.MEDIUM?.total || 0) - (diff.MEDIUM?.correct || 0)) + ((diff.HARD?.total || 0) - (diff.HARD?.correct || 0));
@@ -129,17 +134,30 @@ export default function AdminAnalytics() {
             ))}
           </div>
 
-          {/* Topic chart + Correct/Wrong doughnut */}
+          {/* Score by Topic — Maths and Physical Sciences in separate graphs */}
           <div className="grid2 mb2">
             <div className="cc">
-              <div className="cc-h">📊 Score by Topic</div>
-              <div className="cc-s">Average score per CAPS topic</div>
+              <div className="cc-h">📐 Mathematics — Score by Topic</div>
+              <div className="cc-s">Average score per Maths topic</div>
               <div style={{ height: 260, position: 'relative' }}>
-                {topics.length > 0 ? (
-                  <Bar data={topicChart} options={{ ...chartOpts, indexAxis: 'y' as const, scales: { x: { ...chartOpts.scales.x, beginAtZero: true, max: 100 }, y: chartOpts.scales.y } }} />
-                ) : <div className="no-data">No quiz data yet</div>}
+                {mathsTopics.length > 0 ? (
+                  <Bar data={subjectTopicChart(mathsTopics, dk ? 165 : 160)} options={{ ...chartOpts, indexAxis: 'y' as const, scales: { x: { ...chartOpts.scales.x, beginAtZero: true, max: 100 }, y: chartOpts.scales.y } }} />
+                ) : <div className="no-data">No Maths quiz data yet</div>}
               </div>
             </div>
+            <div className="cc">
+              <div className="cc-h">⚗️ Physical Sciences — Score by Topic</div>
+              <div className="cc-s">Average score per Physics topic</div>
+              <div style={{ height: 260, position: 'relative' }}>
+                {physicsTopics.length > 0 ? (
+                  <Bar data={subjectTopicChart(physicsTopics, dk ? 255 : 250)} options={{ ...chartOpts, indexAxis: 'y' as const, scales: { x: { ...chartOpts.scales.x, beginAtZero: true, max: 100 }, y: chartOpts.scales.y } }} />
+                ) : <div className="no-data">No Physical Sciences quiz data yet</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* Correct/Wrong doughnut + Difficulty insight */}
+          <div className="grid2 mb2">
             <div className="cc">
               <div className="cc-h">🎯 Correct vs Incorrect</div>
               <div className="cc-s">Based on all question answers</div>
@@ -147,10 +165,6 @@ export default function AdminAnalytics() {
                 <Doughnut data={doughnutData(['Correct', 'Incorrect'], [Math.max(hiAmt, 1), Math.max(loAmt, 1)], dk ? ['rgba(45,212,191,.75)','rgba(248,113,113,.55)'] : ['rgba(13,148,136,.70)','rgba(220,38,38,.45)'])} options={doughnutOpts} />
               </div>
             </div>
-          </div>
-
-          {/* Difficulty insight + Trend line */}
-          <div className="grid2 mb2">
             <div className="cc">
               <div className="cc-h">🔬 Difficulty Performance</div>
               <div className="cc-s">Pass rate per difficulty level</div>
@@ -171,12 +185,14 @@ export default function AdminAnalytics() {
                 );
               })}
             </div>
-            <div className="cc">
-              <div className="cc-h">📅 Weekly Activity Trend</div>
-              <div className="cc-s">Score &amp; attempt volume over time</div>
-              <div style={{ height: 220, position: 'relative', marginTop: 8 }}>
-                {lineData ? <Line data={lineData} options={lineOpts} /> : <div className="no-data">Need more quiz data for trends</div>}
-              </div>
+          </div>
+
+          {/* Weekly trend — full width for readability */}
+          <div className="cc mb2">
+            <div className="cc-h">📅 Weekly Activity Trend</div>
+            <div className="cc-s">Score &amp; attempt volume over time</div>
+            <div style={{ height: 220, position: 'relative', marginTop: 8 }}>
+              {lineData ? <Line data={lineData} options={lineOpts} /> : <div className="no-data">Need more quiz data for trends</div>}
             </div>
           </div>
 

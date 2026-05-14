@@ -55,7 +55,12 @@ export default function AStudentFactory() {
           <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>A-Student Factory</div>
           <div className="xs ct3">Leading indicators: who's on track to top of class.</div>
         </div>
-        <span style={{ fontSize: 14, color: 'var(--t3)' }}>{open ? '▴' : '▾'}</span>
+        <span aria-hidden style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 28, height: 28, borderRadius: 8,
+          background: 'rgba(20,184,166,.14)', color: 'var(--p)',
+          fontSize: 16, fontWeight: 800, lineHeight: 1,
+        }}>{open ? '▴' : '▾'}</span>
       </button>
 
       {open && (

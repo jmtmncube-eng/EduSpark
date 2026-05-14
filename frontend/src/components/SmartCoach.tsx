@@ -97,14 +97,19 @@ export default function SmartCoach() {
         <div className="flex ia" style={{ gap: 10 }}>
           <span style={{ fontSize: 26 }}>🧠</span>
           <div>
-            <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>SmartCoach</div>
-            <div className="xs ct3">Your personal study plan · updated after every quiz</div>
+            <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16, color: 'var(--t)' }}>SmartCoach</div>
+            <div style={{ fontSize: 11.5, color: 'var(--t2)' }}>Your personal study plan · updated after every quiz</div>
           </div>
         </div>
         <div className="flex ia g2" style={{ flexWrap: 'wrap' }}>
           <Pill icon="🔥" label={`${streak}-day streak`} tone={streak > 0 ? 'hot' : 'mute'} />
           <Pill icon="🎯" label={`${avgScore}% avg`} tone={avgScore >= 80 ? 'good' : avgScore >= 60 ? 'mid' : 'low'} />
-          <span aria-hidden style={{ fontSize: 14, color: 'var(--t3)', marginLeft: 4 }}>{collapsed ? '▾' : '▴'}</span>
+          <span aria-hidden style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 28, height: 28, borderRadius: 8,
+            background: 'rgba(20,184,166,.14)', color: 'var(--p)',
+            fontSize: 16, fontWeight: 800, lineHeight: 1, marginLeft: 4,
+          }}>{collapsed ? '▾' : '▴'}</span>
         </div>
       </button>
 
@@ -119,10 +124,10 @@ export default function SmartCoach() {
         border: '1px solid var(--bd)', marginBottom: 12,
       }}>
         <div className="flex jb ia">
-          <div style={{ fontSize: 13, fontWeight: 700 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t)' }}>
             {dailyGoal.complete ? '✅ Daily goal smashed!' : `🎯 Daily goal: ${dailyGoal.done}/${dailyGoal.target} questions`}
           </div>
-          <div className="xs ct3">{dailyGoal.minutesToday} min today</div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', fontWeight: 600 }}>{dailyGoal.minutesToday} min today</div>
         </div>
         <div style={{ height: 8, background: 'var(--bd)', borderRadius: 99, overflow: 'hidden', marginTop: 8 }}>
           <div style={{
@@ -150,15 +155,15 @@ export default function SmartCoach() {
           border: '1px solid rgba(239,68,68,.2)',
           borderRadius: 12, padding: 12,
         }}>
-          <div className="sm bold" style={{ marginBottom: 6 }}>🎯 Focus next</div>
+          <div className="sm bold" style={{ marginBottom: 6, color: '#b91c1c' }}>🎯 Focus next</div>
           {weakTopics.length === 0 ? (
-            <div className="xs ct3">Solid across the board — keep it up!</div>
+            <div className="xs" style={{ color: 'var(--t2)' }}>Solid across the board — keep it up!</div>
           ) : (
             weakTopics.map((t) => (
               <div key={t.topic} style={{ padding: '6px 0', borderTop: '1px solid var(--bd)' }}>
-                <div className="xs bold">{t.topic}</div>
-                <div className="xs ct3 mt1">
-                  Avg {t.avgScore}% {t.trend === 'up' ? ' · improving 📈' : t.trend === 'down' ? ' · slipping 📉' : ''}
+                <div className="xs bold" style={{ color: 'var(--t)' }}>{t.topic}</div>
+                <div className="xs mt1" style={{ color: 'var(--t2)' }}>
+                  Avg <b style={{ color: 'var(--t)' }}>{t.avgScore}%</b> {t.trend === 'up' ? ' · improving 📈' : t.trend === 'down' ? ' · slipping 📉' : ''}
                 </div>
                 {t.suggestedPack && (
                   <button
@@ -180,14 +185,14 @@ export default function SmartCoach() {
           border: '1px solid rgba(34,197,94,.2)',
           borderRadius: 12, padding: 12,
         }}>
-          <div className="sm bold" style={{ marginBottom: 6 }}>🏆 Strengths</div>
+          <div className="sm bold" style={{ marginBottom: 6, color: '#16a34a' }}>🏆 Strengths</div>
           {strongTopics.length === 0 ? (
-            <div className="xs ct3">Keep practicing to build mastery (≥85% on any topic).</div>
+            <div className="xs" style={{ color: 'var(--t2)' }}>Keep practicing to build mastery (≥85% on any topic).</div>
           ) : (
             strongTopics.map((t) => (
               <div key={t.topic} style={{ padding: '6px 0', borderTop: '1px solid var(--bd)' }}>
-                <div className="xs bold">{t.topic}</div>
-                <div className="xs ct3">Avg {t.avgScore}% — mastered ✨</div>
+                <div className="xs bold" style={{ color: 'var(--t)' }}>{t.topic}</div>
+                <div className="xs" style={{ color: '#16a34a', fontWeight: 600 }}>Avg {t.avgScore}% — mastered ✨</div>
               </div>
             ))
           )}

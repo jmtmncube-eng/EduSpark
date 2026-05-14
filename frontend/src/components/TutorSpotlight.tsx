@@ -107,7 +107,12 @@ export default function TutorSpotlight() {
           })}
         </div>
 
-        <span style={{ fontSize: 14, color: 'var(--t3)', marginLeft: 4 }}>{open ? '▴' : '▾'}</span>
+        <span aria-hidden style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 28, height: 28, borderRadius: 8,
+          background: 'rgba(20,184,166,.14)', color: 'var(--p)',
+          fontSize: 16, fontWeight: 800, lineHeight: 1, marginLeft: 4,
+        }}>{open ? '▴' : '▾'}</span>
       </button>
 
       {/* Expanded body */}

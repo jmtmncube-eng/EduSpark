@@ -45,10 +45,17 @@ lacks() { # <description> <pattern> <file>
 gone() { # <path> <description>
   if [ -e "$1" ]; then bad "$2 — $1 still exists"; else ok "$2"; fi
 }
-# run a build/check command IF its toolchain (node_modules) is installed.
-# If not installed, SKIP it — that host builds inside Docker instead.
+# run a build/check command IF the Node toolchain is actually usable here:
+#   • the runner binary (npm/npx) is on PATH, AND
+#   • the project's node_modules are installed.
+# Otherwise SKIP it — that host (the VPS) builds inside Docker instead.
 run_if_deps() { # <description> <dir> <command...>
   local desc="$1" dir="$2"; shift 2
+  local bin="$1"
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    skip "$desc — '$bin' not on PATH (Node toolchain not installed on this host)"
+    return
+  fi
   if [ ! -d "$dir/node_modules" ]; then
     skip "$desc — $dir/node_modules not installed (build runs inside Docker here)"
     return
@@ -64,10 +71,8 @@ run_if_deps() { # <description> <dir> <command...>
 
 echo "🛫 EduSpark Preflight — $(date '+%Y-%m-%d %H:%M:%S')"
 
-HOST_TOOLCHAIN=0
-[ -d backend/node_modules ] && [ -d frontend/node_modules ] && HOST_TOOLCHAIN=1
-if [ "$HOST_TOOLCHAIN" -eq 0 ]; then
-  echo "   ℹ No host node_modules — compile/build steps will be skipped (this looks like the VPS)."
+if ! command -v npm >/dev/null 2>&1 || [ ! -d backend/node_modules ] || [ ! -d frontend/node_modules ]; then
+  echo "   ℹ No usable host Node toolchain — compile/build steps will be skipped (this looks like the VPS)."
 fi
 
 # ── 1. Compiles ────────────────────────────────────────────────────

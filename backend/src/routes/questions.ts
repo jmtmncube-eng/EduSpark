@@ -91,9 +91,12 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     if (visibility && user.role === 'ADMIN') where.visibility = visMap[visibility as string] || visibility;
 
-    // Admin can slice by review status + quality flag
-    if (user.role === 'ADMIN') {
+    // Admin + tutor can slice by review status (e.g. pack pickers ask for
+    // status=PUBLISHED). The quality-flag filter stays admin-only.
+    if (user.role === 'ADMIN' || user.role === 'TUTOR') {
       if (status && STATUSES.includes(status as QuestionStatus)) where.status = status;
+    }
+    if (user.role === 'ADMIN') {
       if (qualityFlag === 'flagged') where.qualityFlag = { in: ['broken', 'trivial', 'low_discrimination'] };
       else if (qualityFlag && qualityFlag !== 'all') where.qualityFlag = qualityFlag;
     }

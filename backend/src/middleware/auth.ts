@@ -15,7 +15,12 @@ declare global {
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.split(' ')[1];
+  // Prefer the Authorization header. Fall back to a `?token=` query param so
+  // that browser-native requests that cannot set headers — <iframe src>,
+  // <img src>, <a href target="_blank"> for streamed PDFs — still authenticate.
+  const headerToken = req.headers.authorization?.split(' ')[1];
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const token = headerToken || queryToken;
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || 'eduspark-secret') as AuthPayload;

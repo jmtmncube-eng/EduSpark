@@ -202,7 +202,10 @@ function PackEditor({ pack, onClose, onSaved }: { pack: Pack | null; onClose: ()
   const [tab, setTab] = useState<'meta' | 'questions' | 'pdfs'>('meta');
 
   useEffect(() => {
-    questionsApi.list({ grade: String(grade), subject: subject.toLowerCase() }).then((d) => setAllQ(d as Question[])).catch(() => {});
+    // Only PUBLISHED questions are eligible for a Pack — show only those so
+    // the picker can't silently drop a DRAFT/REVIEW question on save.
+    questionsApi.list({ grade: String(grade), subject: subject.toLowerCase(), status: 'PUBLISHED' })
+      .then((d) => setAllQ(d as Question[])).catch(() => {});
     docsApi.list().then((d) => setAllD(d as PdfDocument[])).catch(() => {});
   }, [grade, subject]);
 
@@ -280,10 +283,11 @@ function PackEditor({ pack, onClose, onSaved }: { pack: Pack | null; onClose: ()
       {tab === 'questions' && (
         <div>
           <div className="xs ct3" style={{ marginBottom: 8 }}>
-            Filtered by Grade {grade} · {subject === 'MATHEMATICS' ? 'Maths' : 'Phys Sci'}. Change in Details.
+            ✅ Published questions only · Grade {grade} · {subject === 'MATHEMATICS' ? 'Maths' : 'Phys Sci'} — change in Details.
+            Questions in review won’t appear here until you publish them in the Question Bank.
           </div>
           <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
-            {allQ.length === 0 && <div className="ct3" style={{ padding: 20, textAlign: 'center' }}>No questions yet. Add some via Question Bank.</div>}
+            {allQ.length === 0 && <div className="ct3" style={{ padding: 20, textAlign: 'center' }}>No published questions for this grade &amp; subject yet. Publish some in the Question Bank.</div>}
             {allQ.map((q) => {
               const checked = selectedQ.includes(q.id);
               return (

@@ -3,6 +3,7 @@ import { documents as docsApi } from '../../services/api';
 import type { PdfDocument } from '../../types';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
+import PdfViewer from '../../components/PdfViewer';
 
 const KINDS = [
   { id: 'practice', label: '📝 Practice', color: 'rgba(20,184,166,.15)' },
@@ -142,19 +143,13 @@ export default function AdminPdfLibrary() {
       )}
 
       {preview && (
-        <Modal title={`📄 ${preview.title}`} onClose={() => setPreview(null)}>
-          <div style={{ width: '100%', height: '70vh', border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden' }}>
-            <iframe
-              src={docsApi.fileUrl(preview.id)}
-              title={preview.title}
-              style={{ width: '100%', height: '100%', border: 0 }}
-            />
+        <Modal title={`📄 ${preview.title}`} onClose={() => setPreview(null)} wide>
+          <div className="xs ct3 mb2">
+            {preview.pageCount} page{preview.pageCount === 1 ? '' : 's'} · {fmtSize(preview.fileSize)}
+            {preview.description ? ` · ${preview.description}` : ''}
           </div>
-          <div className="xs ct3 mt1">If the PDF won't load, your browser may block authenticated iframe streams. Open in a new tab instead.</div>
+          <PdfViewer documentId={preview.id} title={preview.title} />
           <div className="flex g2 mt2">
-            <a href={docsApi.fileUrl(preview.id)} target="_blank" rel="noreferrer" className="btn ba wf" style={{ textAlign: 'center' }}>
-              ↗ Open in new tab
-            </a>
             <button className="btn bg-btn wf" onClick={() => setPreview(null)}>Close</button>
           </div>
         </Modal>

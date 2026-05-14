@@ -53,7 +53,7 @@ export default function AdminAssignments() {
   async function openCreate() {
     setEditId(''); setSelQIds(new Set()); setDocs([]); setMaxAttempts(3); setSelStu(null); setStuSearch('');
     setForm({ title: '', dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], subject: 'mathematics', grade: '10', topic: 'Algebra', assignTo: 'all', specificStu: '' });
-    const qs = await questionsApi.list();
+    const qs = await questionsApi.list({ status: 'PUBLISHED' });
     setAllQs(qs as Question[]);
     setShowCreate(true);
   }
@@ -65,7 +65,7 @@ export default function AdminAssignments() {
     setForm({ title: a.title, dueDate: a.dueDate.split('T')[0], subject: a.subject.toLowerCase(), grade: String(a.grade), topic: a.topic, assignTo: ['all','gr10','gr11','gr12','none'].includes(a.assignTo) ? a.assignTo : 'all', specificStu: '' });
     setSelQIds(new Set(a.questions.map((q) => q.question.id)));
     setDocs(a.documents.map((d) => ({ id: d.id, title: d.title, content: d.content || '', imageData: d.imageData || '' })));
-    const qs = await questionsApi.list();
+    const qs = await questionsApi.list({ status: 'PUBLISHED' });
     setAllQs(qs as Question[]);
     setShowCreate(true);
   }

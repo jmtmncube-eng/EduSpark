@@ -94,6 +94,8 @@ export default function AdminQuestions() {
   const filterTopics = filterSub && filterGrade ? TOPICS[filterSub]?.[Number(filterGrade)] || [] : [];
   const formTopics = TOPICS[form.subject]?.[Number(form.grade)] || [];
   const gradeOptions = isTutor && user?.teachGrades?.length ? (user.teachGrades as number[]).sort() : [10, 11, 12];
+  const baseGrade = isTutor && user?.teachGrades?.length ? defaultGrade : '';
+  const anyFilter = !!(search || filterSub || filterTopic || filterStatus || filterGrade !== baseGrade);
 
   async function saveQ() {
     if (!form.topic || !form.question || !form.answer) { showToast('Fill required fields', 'warn'); return; }
@@ -216,22 +218,26 @@ export default function AdminQuestions() {
         <p>The source pool that feeds your Content Packs.</p>
       </div>
 
-      {/* How this fits banner */}
+      {/* Flow strip — where the bank sits in the pipeline */}
       <div className="ca" style={{
-        padding: '12px 14px', marginBottom: 14,
-        background: 'linear-gradient(135deg, rgba(20,184,166,.08), rgba(14,165,233,.05))',
-        border: '1px solid rgba(20,184,166,.25)',
+        padding: '9px 14px', marginBottom: 12,
+        background: 'linear-gradient(135deg, rgba(20,184,166,.07), rgba(14,165,233,.04))',
+        border: '1px solid rgba(20,184,166,.22)',
       }}>
-        <div className="flex ia g2" style={{ flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 22 }}>💡</span>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontFamily: 'var(--fh)', fontWeight: 700, fontSize: 13 }}>How this fits the flow</div>
-            <div className="xs ct2" style={{ lineHeight: 1.45 }}>
-              Generate or write questions here, then bundle them into a <b>📦 Content Pack</b>.
-              Packs are what you share with tutors, and tutors unlock for students.
-              Students never see raw questions — only the packs unlocked for them.
-            </div>
-          </div>
+        <div className="flex ia g1 wrap" style={{ fontSize: 12 }}>
+          <span className="xs bold ct2" style={{ letterSpacing: .3 }}>HOW IT FLOWS</span>
+          {[
+            { i: '✏️', t: 'Create or generate' },
+            { i: '🔍', t: 'Review' },
+            { i: '✅', t: 'Publish' },
+            { i: '📦', t: 'Bundle into a Pack' },
+          ].map((s, idx, arr) => (
+            <span key={s.t} className="flex ia" style={{ gap: 5 }}>
+              <span style={{ fontWeight: 600 }}>{s.i} {s.t}</span>
+              {idx < arr.length - 1 && <span className="ct3" style={{ margin: '0 2px' }}>→</span>}
+            </span>
+          ))}
+          <div style={{ flex: 1 }} />
           {selectedIds.size > 0 && (
             <button className="btn bg-btn btn-sm" onClick={() => setAttachOpen(true)}>
               📦 Add {selectedIds.size} to Pack →
@@ -246,51 +252,116 @@ export default function AdminQuestions() {
       {/* Guided generator */}
       <QuestionGenerator onDone={() => load()} />
 
-      {/* Manual entry / import / multi-select toolbar */}
-      <div className="flex g1 wrap mb2">
-        <button className="btn ba" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add manually</button>
-        <button className="btn ba" onClick={() => setShowImport(true)}>📂 Import from text</button>
-        <button
-          className={`btn ${selectMode ? 'bg-btn' : 'ba'}`}
-          onClick={() => { setSelectMode((v) => !v); if (selectMode) setSelectedIds(new Set()); }}
-          title="Select multiple questions to add to a Pack"
-        >
-          {selectMode ? '✓ Selecting' : '☑ Multi-select for Pack'}
-        </button>
-        {isAdmin && (
-          <button className="btn ba" onClick={() => setShowQuality(true)} title="Health check across the whole bank">
-            📊 Quality report
-          </button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex g2 mb2 wrap">
-        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
-          <input type="text" className="input" style={{ paddingLeft: 34 }} placeholder="Search question text or topic" value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* ─── Your Question Bank — actions + browse, in one coherent panel ─── */}
+      <div className="ca" style={{ padding: 14, marginBottom: 14 }}>
+        <div className="flex jb ia wrap g2" style={{ marginBottom: 12 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 15 }}>📚 Your Question Bank</div>
+            <div className="xs ct3">
+              {qs.length} question{qs.length === 1 ? '' : 's'}{anyFilter ? ' match your filters' : ' in total'}
+              {' · '}group, review &amp; bundle below
+            </div>
+          </div>
+          <div className="flex g1 wrap">
+            <button className="btn ba btn-sm" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add manually</button>
+            <button className="btn ba btn-sm" onClick={() => setShowImport(true)}>📂 Import</button>
+            <button
+              className={`btn btn-sm ${selectMode ? 'bg-btn' : 'ba'}`}
+              onClick={() => { setSelectMode((v) => !v); if (selectMode) setSelectedIds(new Set()); }}
+              title="Select multiple questions to add to a Pack"
+            >
+              {selectMode ? `✓ Selecting ${selectedIds.size}` : '☑ Select for Pack'}
+            </button>
+            {isAdmin && (
+              <button className="btn ba btn-sm" onClick={() => setShowQuality(true)} title="Health check across the whole bank">
+                📊 Quality report
+              </button>
+            )}
+          </div>
         </div>
-        <select className="select" style={{ width: 'auto' }} value={filterSub} onChange={(e) => { setFilterSub(e.target.value); setFilterTopic(''); }}>
-          <option value="">All subjects</option><option value="mathematics">Maths</option><option value="physical_sciences">Physics</option>
-        </select>
-        <select className="select" style={{ width: 'auto' }} value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); setFilterTopic(''); }}>
-          <option value="">All grades</option>
-          {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
-        </select>
-        <select className="select" style={{ width: 'auto' }} value={filterTopic} onChange={(e) => setFilterTopic(e.target.value)} disabled={filterTopics.length === 0}>
-          <option value="">{filterTopics.length === 0 ? 'Pick subject & grade first' : 'All topics'}</option>
-          {filterTopics.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        {isAdmin && (
-          <select className="select" style={{ width: 'auto' }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} title="Review status">
-            <option value="">All statuses</option>
-            <option value="REVIEW">🔍 In review</option>
-            <option value="PUBLISHED">✅ Published</option>
-            <option value="DRAFT">✏️ Draft</option>
-            <option value="RETIRED">📦 Retired</option>
-            <option value="FLAGGED">🚩 Quality-flagged</option>
+
+        {/* Browse bar — search + pill filters, mirroring the generator's language */}
+        <div style={{ position: 'relative', marginBottom: 8 }}>
+          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
+          <input
+            type="text" className="input" style={{ paddingLeft: 34 }}
+            placeholder="Search question text or topic…"
+            value={search} onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex ia g2 wrap">
+          {/* Subject pills */}
+          <div className="flex ia g1 wrap">
+            {([
+              { v: '', label: 'All subjects', icon: '' },
+              { v: 'mathematics', label: SUBJECT_THEME.mathematics.short, icon: SUBJECT_THEME.mathematics.icon },
+              { v: 'physical_sciences', label: SUBJECT_THEME.physical_sciences.short, icon: SUBJECT_THEME.physical_sciences.icon },
+            ] as const).map((opt) => {
+              const active = filterSub === opt.v;
+              return (
+                <button
+                  key={opt.v || 'all'} type="button"
+                  onClick={() => { setFilterSub(opt.v); setFilterTopic(''); }}
+                  className="btn btn-sm"
+                  style={{
+                    background: active ? 'var(--p)' : 'var(--bg)',
+                    color: active ? '#fff' : 'var(--t)',
+                    border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                  }}
+                >{opt.icon ? `${opt.icon} ` : ''}{opt.label}</button>
+              );
+            })}
+          </div>
+          <span className="ct3" style={{ opacity: .5 }}>·</span>
+          {/* Grade pills */}
+          <div className="flex ia g1 wrap">
+            <button
+              type="button" className="btn btn-sm"
+              onClick={() => { setFilterGrade(''); setFilterTopic(''); }}
+              style={{
+                background: filterGrade === '' ? 'var(--p)' : 'var(--bg)',
+                color: filterGrade === '' ? '#fff' : 'var(--t)',
+                border: `1px solid ${filterGrade === '' ? 'var(--p)' : 'var(--bd)'}`,
+              }}
+            >All grades</button>
+            {gradeOptions.map((g) => {
+              const active = filterGrade === String(g);
+              return (
+                <button
+                  key={g} type="button" className="btn btn-sm"
+                  onClick={() => { setFilterGrade(String(g)); setFilterTopic(''); }}
+                  style={{
+                    background: active ? 'var(--p)' : 'var(--bg)',
+                    color: active ? '#fff' : 'var(--t)',
+                    border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                  }}
+                >Gr {g}</button>
+              );
+            })}
+          </div>
+          <span className="ct3" style={{ opacity: .5 }}>·</span>
+          {/* Topic + status selects */}
+          <select className="select btn-sm" style={{ width: 'auto' }} value={filterTopic} onChange={(e) => setFilterTopic(e.target.value)} disabled={filterTopics.length === 0}>
+            <option value="">{filterTopics.length === 0 ? 'Pick subject + grade for topics' : 'All topics'}</option>
+            {filterTopics.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-        )}
+          {isAdmin && (
+            <select className="select btn-sm" style={{ width: 'auto' }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} title="Review status">
+              <option value="">All statuses</option>
+              <option value="REVIEW">🔍 In review</option>
+              <option value="PUBLISHED">✅ Published</option>
+              <option value="DRAFT">✏️ Draft</option>
+              <option value="RETIRED">📦 Retired</option>
+              <option value="FLAGGED">🚩 Quality-flagged</option>
+            </select>
+          )}
+          {anyFilter && (
+            <button
+              type="button" className="btn ba btn-sm"
+              onClick={() => { setSearch(''); setFilterSub(''); setFilterGrade(baseGrade); setFilterTopic(''); setFilterStatus(''); }}
+            >✕ Clear</button>
+          )}
+        </div>
       </div>
 
       {/* Grouped list — subject · grade · topic, each collapsible & deletable */}
@@ -590,6 +661,7 @@ export default function AdminQuestions() {
       {attachOpen && (
         <AttachToPackModal
           questionIds={Array.from(selectedIds)}
+          unpublishedCount={qs.filter((q) => selectedIds.has(q.id) && q.status !== 'PUBLISHED').length}
           onClose={() => setAttachOpen(false)}
           onDone={() => {
             setAttachOpen(false);
@@ -708,11 +780,14 @@ function QualityReportModal({ onClose, onJump }: { onClose: () => void; onJump: 
 }
 
 // ─── Bulk-attach selected questions to a Pack ────────────────────
-function AttachToPackModal({ questionIds, onClose, onDone }: { questionIds: string[]; onClose: () => void; onDone: () => void }) {
+function AttachToPackModal({ questionIds, unpublishedCount, onClose, onDone }: {
+  questionIds: string[]; unpublishedCount: number; onClose: () => void; onDone: () => void;
+}) {
   const [list, setList] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [activeId, setActiveId] = useState<string>('');
+  const publishedCount = questionIds.length - unpublishedCount;
 
   useEffect(() => {
     packsApi.list()
@@ -729,11 +804,22 @@ function AttachToPackModal({ questionIds, onClose, onDone }: { questionIds: stri
       const existingQIds = pack.questions.map((q) => q.questionId);
       const existingDIds = pack.documents.map((d) => d.documentId);
       const merged = Array.from(new Set([...existingQIds, ...questionIds]));
-      await packsApi.update(activeId, {
+      // The backend only accepts PUBLISHED questions into a pack and tells us
+      // how many it dropped — surface that so the user isn't surprised.
+      const updated = await packsApi.update(activeId, {
         questionIds: merged,
         documentIds: existingDIds,
-      });
-      showToast(`Added ${questionIds.length} question(s) to "${pack.title}"`, 'success');
+      }) as { skippedUnpublished?: number };
+      const skipped = updated.skippedUnpublished ?? 0;
+      const added = questionIds.length - skipped;
+      if (skipped > 0) {
+        showToast(
+          `Added ${added} to "${pack.title}". ${skipped} skipped — only Published questions can go in a Pack.`,
+          'warn',
+        );
+      } else {
+        showToast(`Added ${added} question(s) to "${pack.title}"`, 'success');
+      }
       onDone();
     } catch (e: unknown) {
       showToast((e as Error).message, 'err');
@@ -742,6 +828,19 @@ function AttachToPackModal({ questionIds, onClose, onDone }: { questionIds: stri
 
   return (
     <Modal title={`📦 Add ${questionIds.length} question(s) to a Pack`} onClose={onClose}>
+      {unpublishedCount > 0 && (
+        <div style={{
+          padding: '8px 11px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(180,83,9,.09)', border: '1px solid rgba(180,83,9,.3)',
+        }}>
+          <div className="xs" style={{ fontWeight: 700, color: '#b45309' }}>
+            ⚠ {unpublishedCount} of your {questionIds.length} selected question(s) aren’t Published yet
+          </div>
+          <div className="xs ct2" style={{ marginTop: 2 }}>
+            Only <b>Published</b> questions go into a Pack — {publishedCount > 0 ? `${publishedCount} will be added, the rest skipped.` : 'none will be added until you publish them.'} Publish them first from the bank.
+          </div>
+        </div>
+      )}
       {loading ? (
         <div className="ct3" style={{ padding: 20 }}>Loading packs…</div>
       ) : list.length === 0 ? (

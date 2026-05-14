@@ -381,7 +381,8 @@ function CustomPackEditor({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    questionsApi.list({ subject: subject.toLowerCase(), grade: String(grade) })
+    // Only PUBLISHED questions can be bundled into a pack.
+    questionsApi.list({ subject: subject.toLowerCase(), grade: String(grade), status: 'PUBLISHED' })
       .then((d) => setAllQ(d as Question[]))
       .catch(() => setAllQ([]));
   }, [subject, grade]);

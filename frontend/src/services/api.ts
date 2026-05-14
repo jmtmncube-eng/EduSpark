@@ -419,9 +419,30 @@ export const documents = {
     }
     return res.json();
   },
+  /**
+   * Streamed-file URL with the JWT in a `?token=` param. The backend's
+   * authMiddleware accepts this for browser-native requests (new-tab links).
+   * Prefer `fileBlob()` for embedding — it keeps the token out of the URL.
+   */
   fileUrl: (id: string) => {
     const token = localStorage.getItem('es_token') || '';
     return `${BASE}/documents/${id}/file?token=${encodeURIComponent(token)}`;
+  },
+  /**
+   * Fetch the PDF as a blob using the Authorization header (no token in URL),
+   * returning an object-URL ready to drop into an <iframe>/<object>. The
+   * caller is responsible for `URL.revokeObjectURL` when done.
+   */
+  fileBlob: async (id: string): Promise<string> => {
+    const token = localStorage.getItem('es_token');
+    const res = await fetch(`${BASE}/documents/${id}/file`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Could not load PDF');
+    }
+    return URL.createObjectURL(await res.blob());
   },
   update: (id: string, data: object) =>
     request<object>(`/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.1] — 2026-05-14 — PDF viewer fix + coherent Question Bank & pack/assignment wiring
+
+### Fixed — Critical
+- **PDF viewer "No token provided"** — the authenticated file stream is loaded by `<iframe>` / new-tab links that can't send an `Authorization` header. `authMiddleware` now also accepts a `?token=` query param for browser-native requests, so previews and "Open in new tab" work everywhere.
+- **New `PdfViewer` component** — fetches the PDF as a blob with the auth header (no token in the URL), embeds it via an object-URL, revokes it on unmount, and falls back to a new-tab link if a browser refuses to render PDFs inline. Wired into the PDF Library preview (now a wide modal with page/size metadata).
+
+### Changed — Question Bank coherence
+- Reworked the top of the Question Bank into one coherent panel: a slim **"how it flows"** strip (Create → Review → Publish → Bundle), then the generator, then a single **📚 Your Question Bank** card holding the actions + a modern browse bar — search plus **subject & grade pill toggles** (same visual language as the generator) instead of a dense row of raw dropdowns, with a one-click **✕ Clear**.
+
+### Fixed — Pack / Assignment wiring (GIGO follow-through)
+- Pack editors (admin + tutor) and the Assignment question picker now request **PUBLISHED questions only** — a DRAFT/REVIEW question can no longer be silently dropped on save. The backend `GET /api/questions` honours `?status=` for tutors too.
+- `Add to Pack` flow surfaces unpublished questions up front (a warning banner before you pick a pack) and reports exactly how many were skipped after saving.
+
+---
+
 ## [2.9.0] — 2026-05-14 — Question quality pipeline: review workflow, validation, modular generators, GIGO stats
 
 The Question Bank now has real quality gates — Garbage In, Garbage Out defence at every stage of the store → generate → allocate → track flow.

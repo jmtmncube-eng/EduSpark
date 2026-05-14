@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { auth } from '../services/api';
 import { showToast } from '../components/Toast';
 import Modal from '../components/Modal';
+import PillSelect from '../components/PillSelect';
 import type { User } from '../types';
 
 const MOTIVATIONAL = [
@@ -419,7 +420,7 @@ export default function Login() {
               { ico: '📄', title: 'Branded PDFs',    sub: 'Worksheet + Memo exports' },
             ].map((c) => (
               <div key={c.title} style={{
-                background: 'rgba(255,255,255,.5)',
+                background: 'var(--cs)',
                 border: '1px solid var(--bd)',
                 borderRadius: 10,
                 padding: '8px 10px',
@@ -535,12 +536,17 @@ export default function Login() {
           </div>
 
           <div className="fg">
-            <label className="lbl">Grade</label>
-            <select className="select" value={grade} onChange={(e) => setGrade(e.target.value)}>
-              <option value="10">Grade 10</option>
-              <option value="11">Grade 11</option>
-              <option value="12">Grade 12</option>
-            </select>
+            <label className="lbl">Which grade are you in?</label>
+            <PillSelect
+              ariaLabel="Grade"
+              value={grade}
+              onChange={setGrade}
+              options={[
+                { value: '10', label: 'Grade 10' },
+                { value: '11', label: 'Grade 11' },
+                { value: '12', label: 'Grade 12' },
+              ]}
+            />
             <div className="xs ct3 mt1">Content follows the SA CAPS curriculum for Maths &amp; Physical Sciences.</div>
           </div>
 
@@ -637,15 +643,33 @@ export default function Login() {
             <p className="xs ct3 mt1">Your answer is stored encrypted — even admins can't see it.</p>
           </div>
 
-          <label className="lbl">Question</label>
-          <select
-            className="select"
-            value={secQuestion}
-            onChange={(e) => setSecQuestion(e.target.value)}
-          >
-            {SECURITY_QUESTIONS.map((q) => <option key={q} value={q}>{q}</option>)}
-            <option value="__custom__">✏️ Write my own question</option>
-          </select>
+          <label className="lbl">Pick your recovery question</label>
+          <div style={{ display: 'grid', gap: 6, marginTop: 4 }}>
+            {[...SECURITY_QUESTIONS, '__custom__'].map((q) => {
+              const active = secQuestion === q;
+              const isCustom = q === '__custom__';
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setSecQuestion(q)}
+                  aria-pressed={active}
+                  style={{
+                    textAlign: 'left', cursor: 'pointer',
+                    padding: '10px 12px', borderRadius: 10,
+                    border: `1.5px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                    background: active ? 'rgba(20,184,166,.10)' : 'var(--cm)',
+                    color: 'var(--t)', fontSize: 13, fontWeight: active ? 700 : 500,
+                    display: 'flex', alignItems: 'center', gap: 9,
+                    transition: 'border-color .12s, background .12s',
+                  }}
+                >
+                  <span style={{ fontSize: 15 }}>{active ? '🔘' : '⚪'}</span>
+                  {isCustom ? '✏️ Write my own question' : q}
+                </button>
+              );
+            })}
+          </div>
 
           {secQuestion === '__custom__' && (
             <div className="fg mt2">

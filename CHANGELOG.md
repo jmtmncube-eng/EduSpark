@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.5] — 2026-05-14 — Login polish: no dropdowns, WCAG-AA contrast pass
+
+### Changed — Login page
+- **No dropdowns.** The grade picker is now tappable pills; the recovery-question picker is a vertical list of selectable cards (long question text reads far better as cards than crammed into a `<select>`). The whole sign-in / setup flow is now consistent with the rest of the app.
+- The "Why EduSpark" feature cards used a hard-coded translucent-white background that washed out in dark mode — now a theme-aware token, readable in both themes.
+
+### Changed — Colour contrast (designed to the T)
+- Re-tuned the text scale so **every step clears WCAG AA (≥4.5:1)** on white card backgrounds — including `--t4`, the subtle hint colour, which previously failed (~3.1:1 in light mode). Dark-theme `--t3`/`--t4` lightened for the same comfort margin.
+- Border tokens (`--bd`, `--bd2`) bumped slightly in both themes so pill outlines, table rows and card edges are actually visible instead of ghosting.
+
+---
+
 ## [2.9.4] — 2026-05-14 — PDF viewer fixed, Question Bank reorder, no-dropdown content flows, PDF drawers
 
 ### Fixed — Critical

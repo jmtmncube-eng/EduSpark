@@ -152,6 +152,12 @@ has   "Pack-from-template uses pill prompts"         "PillSelect"       frontend
 has   "Assignment create modal uses pill prompts"    "PillSelect"       frontend/src/pages/admin/Assignments.tsx
 has   "PDF Library segments into kind drawers"       "File under"       frontend/src/pages/admin/PdfLibrary.tsx
 
+echo " v2.9.5 — login dropdowns gone, WCAG-AA contrast pass"
+lacks "Login page has zero <select> dropdowns"       "<select"          frontend/src/pages/Login.tsx
+has   "Login uses pill / card prompts"               "PillSelect"       frontend/src/pages/Login.tsx
+has   "Text scale tuned for WCAG-AA contrast"        "--t4:#3C7257"     frontend/src/index.css
+has   "Idle auto-logout still wired"                 "IDLE_LIMIT_MS"    frontend/src/context/AuthContext.tsx
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

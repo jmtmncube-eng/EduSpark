@@ -5,10 +5,12 @@
 :root{
   --bg:#E8F7EF;--bg2:#D4EEDF;
   --cs:rgba(255,255,255,.88);--cm:rgba(255,255,255,.55);
-  --bd:rgba(15,118,110,.22);--bd2:rgba(15,118,110,.44);
+  --bd:rgba(15,118,110,.30);--bd2:rgba(15,118,110,.48);
   --sh:rgba(0,55,40,.10);--glow:rgba(255,255,255,.92);
-  /* Text scale — t (primary) → t2 (secondary) → t3 (muted) → t4 (very subtle) */
-  --t:#06140E;--t2:#1A4634;--t3:#326B4E;--t4:#5E8E76;
+  /* Text scale — t (primary) → t2 (secondary) → t3 (muted) → t4 (subtle).
+     Every step is tuned to clear WCAG AA (≥4.5:1) on white card backgrounds —
+     even t4, the subtle hint colour, is genuinely readable. */
+  --t:#06140E;--t2:#184030;--t3:#2C5F44;--t4:#3C7257;
   --p:#0D9488;--pl:#14B8A6;--pll:#5EEAD4;
   --s:#059669;--sl:#10B981;
   --a:#0E7490;--al:#06B6D4;
@@ -20,10 +22,10 @@
 [data-theme=dark]{
   --bg:#06121A;--bg2:#0A1B26;
   --cs:rgba(6,18,32,.94);--cm:rgba(14,30,52,.46);
-  --bd:rgba(94,234,212,.22);--bd2:rgba(94,234,212,.42);
+  --bd:rgba(94,234,212,.30);--bd2:rgba(94,234,212,.48);
   --sh:rgba(0,0,0,.55);--glow:rgba(45,212,191,.10);
-  /* Light-text scale on dark bg — every step must be readable */
-  --t:#E8F8F1;--t2:#A8DFD0;--t3:#7DBAAA;--t4:#5A8C7D;
+  /* Light-text scale on dark bg — every step clears WCAG AA, t4 included */
+  --t:#E8F8F1;--t2:#A8DFD0;--t3:#86C3B3;--t4:#6FA192;
   --p:#2DD4BF;--pl:#5EEAD4;--pll:#99F6E4;
   --s:#34D399;--sl:#6EE7B7;
   --a:#67E8F9;--al:#22D3EE;

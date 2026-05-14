@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.4] — 2026-05-14 — PDF viewer fixed, Question Bank reorder, no-dropdown content flows, PDF drawers
+
+### Fixed — Critical
+- **PDF viewer "Server error"** — the document stream set `Content-Disposition: inline; filename="<title>.pdf"`, but titles like *"Grade 10 Physics — Newton's Laws Notes"* contain an em-dash and a curly apostrophe. HTTP headers are Latin-1 only, so `res.setHeader()` threw and 500'd every request. Now sends an ASCII-safe `filename=` plus an RFC 5987 `filename*=UTF-8''…` for the real name, and the file stream has its own error handler so a mid-stream failure can't crash the response.
+
+### Changed — Question Bank layout
+- Reordered as asked: **`📚 My Question Bank` heading + search + filters + actions are pinned to the top**, then the generator, then the grouped questions. After a generation run the bank now **auto-focuses its filters on exactly what you just made**, so new questions are visible immediately (no more "I generated questions but the bank looks empty"). The list loader also surfaces errors with a toast instead of failing silently.
+
+### Changed — No dropdowns left in the content-creation flows
+- **Pack-from-template** and the **Assignment create modal** now use the same tappable `PillSelect` prompts as the Question Bank and generator — subject / grade / topic / assign-to / max-attempts are all visible pill choices, no native `<select>` anywhere in the question/pack/assignment creation path.
+
+### Changed — PDF Library: a real filing system
+- The flat grid is gone. PDFs are now filed into three labelled **drawers — 📝 Practice · 📊 Tests · 📒 Notes** — each a colour-coded section with its own count. Uploads pick their drawer up front (the drop-zone shows where the file will land), there's a **search box**, and every card carries its drawer's colour down the side. Built to stay scannable as the library grows.
+
+---
+
 ## [2.9.3] — 2026-05-14 — Guided Question Bank, idle logout, Tier-3 polish, preflight gate
 
 ### Changed — Question Bank: dropdowns out, prompting in

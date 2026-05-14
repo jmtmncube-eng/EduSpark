@@ -145,6 +145,13 @@ else
   ok "Dead /grade-segments endpoint removed"
 fi
 
+echo " v2.9.4 — PDF header fix, bank reorder, no-dropdown content flows, PDF drawers"
+has   "PDF Content-Disposition is ASCII/UTF-8 safe"  "filename*=UTF-8"  backend/src/routes/documents.ts
+has   "Question Bank heading + search pinned to top" "My Question Bank" frontend/src/pages/admin/Questions.tsx
+has   "Pack-from-template uses pill prompts"         "PillSelect"       frontend/src/components/PackTemplatePicker.tsx
+has   "Assignment create modal uses pill prompts"    "PillSelect"       frontend/src/pages/admin/Assignments.tsx
+has   "PDF Library segments into kind drawers"       "File under"       frontend/src/pages/admin/PdfLibrary.tsx
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

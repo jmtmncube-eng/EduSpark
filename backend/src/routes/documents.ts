@@ -196,11 +196,29 @@ router.get('/:id/file', authMiddleware, async (req: Request, res: Response) => {
     const fp = path.join(UPLOAD_DIR, doc.filePath);
     if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
 
+    // Content-Disposition is an HTTP header — it can only carry Latin-1/ASCII.
+    // Titles like "Grade 10 Physics — Newton's Notes" contain an em-dash and a
+    // curly apostrophe, which made res.setHeader() throw and 500 the request.
+    // Fix: an ASCII-safe `filename=` plus an RFC 5987 `filename*=` for the
+    // real, accented name in modern browsers.
+    const rawName = `${doc.title || 'document'}`.slice(0, 120);
+    const asciiName = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${doc.title}.pdf"`);
-    return fs.createReadStream(fp).pipe(res);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${asciiName}.pdf"; filename*=UTF-8''${encodeURIComponent(rawName)}.pdf`,
+    );
+
+    const stream = fs.createReadStream(fp);
+    stream.on('error', (e) => {
+      console.error('[documents/file] stream error:', e);
+      if (!res.headersSent) res.status(500).json({ error: 'Could not read file' });
+      else res.destroy();
+    });
+    stream.pipe(res);
+    return;
   } catch (err) {
-    console.error(err);
+    console.error('[documents/file]', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });

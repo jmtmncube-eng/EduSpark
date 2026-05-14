@@ -80,14 +80,20 @@ export default function AdminQuestions() {
       if (filterStatus === 'FLAGGED') params.qualityFlag = 'flagged';
       else params.status = filterStatus;
     }
-    const data = await questionsApi.list(params);
-    setQs(data as Question[]);
-    // Quality signals — fetched in parallel, overlaid on cards
     try {
-      const ids = (data as Question[]).map((q) => q.id).slice(0, 200);
-      if (ids.length) setStats(await questionsApi.stats(ids));
-      else setStats({});
-    } catch { /* silent — stats are best-effort */ }
+      const data = await questionsApi.list(params);
+      setQs(data as Question[]);
+      // Quality signals — fetched in parallel, overlaid on cards
+      try {
+        const ids = (data as Question[]).map((q) => q.id).slice(0, 200);
+        if (ids.length) setStats(await questionsApi.stats(ids));
+        else setStats({});
+      } catch { /* silent — stats are best-effort */ }
+    } catch (e: unknown) {
+      // Don't fail silently — a broken list call is why "I generated
+      // questions but the bank is empty" happens. Surface it.
+      showToast((e as Error).message || 'Could not load the question bank', 'err');
+    }
   }, [search, filterSub, filterGrade, filterTopic, filterStatus]);
 
   useEffect(() => { load(); }, [load]);
@@ -215,53 +221,16 @@ export default function AdminQuestions() {
   return (
     <div>
       <div className="ph">
-        <h2>📝 Question Bank</h2>
-        <p>The source pool that feeds your Content Packs.</p>
+        <h2>📚 My Question Bank</h2>
+        <p>Search, generate, review and bundle your CAPS questions — all in one place.</p>
       </div>
 
-      {/* Flow strip — where the bank sits in the pipeline */}
-      <div className="ca" style={{
-        padding: '9px 14px', marginBottom: 12,
-        background: 'linear-gradient(135deg, rgba(20,184,166,.07), rgba(14,165,233,.04))',
-        border: '1px solid rgba(20,184,166,.22)',
-      }}>
-        <div className="flex ia g1 wrap" style={{ fontSize: 12 }}>
-          <span className="xs bold ct2" style={{ letterSpacing: .3 }}>HOW IT FLOWS</span>
-          {[
-            { i: '✏️', t: 'Create or generate' },
-            { i: '🔍', t: 'Review' },
-            { i: '✅', t: 'Publish' },
-            { i: '📦', t: 'Bundle into a Pack' },
-          ].map((s, idx, arr) => (
-            <span key={s.t} className="flex ia" style={{ gap: 5 }}>
-              <span style={{ fontWeight: 600 }}>{s.i} {s.t}</span>
-              {idx < arr.length - 1 && <span className="ct3" style={{ margin: '0 2px' }}>→</span>}
-            </span>
-          ))}
-          <div style={{ flex: 1 }} />
-          {selectedIds.size > 0 && (
-            <button className="btn bg-btn btn-sm" onClick={() => setAttachOpen(true)}>
-              📦 Add {selectedIds.size} to Pack →
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Difficulty key — only shown to tutors/admins */}
-      <DifficultyKey />
-
-      {/* Guided generator */}
-      <QuestionGenerator onDone={() => load()} />
-
-      {/* ─── Your Question Bank — actions + browse, in one coherent panel ─── */}
+      {/* ─── Browse & manage — search + filters + actions, pinned to the top ─── */}
       <div className="ca" style={{ padding: 14, marginBottom: 14 }}>
-        <div className="flex jb ia wrap g2" style={{ marginBottom: 12 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 15 }}>📚 Your Question Bank</div>
-            <div className="xs ct3">
-              {qs.length} question{qs.length === 1 ? '' : 's'}{anyFilter ? ' match your filters' : ' in total'}
-              {' · '}group, review &amp; bundle below
-            </div>
+        <div className="flex jb ia wrap g2" style={{ marginBottom: 10 }}>
+          <div className="xs ct3">
+            {qs.length} question{qs.length === 1 ? '' : 's'}{anyFilter ? ' match your filters' : ' in your bank'}
+            {' · '}generate below, grouped further down
           </div>
           <div className="flex g1 wrap">
             <button className="btn ba btn-sm" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add manually</button>
@@ -273,6 +242,11 @@ export default function AdminQuestions() {
             >
               {selectMode ? `✓ Selecting ${selectedIds.size}` : '☑ Select for Pack'}
             </button>
+            {selectedIds.size > 0 && (
+              <button className="btn bg-btn btn-sm" onClick={() => setAttachOpen(true)}>
+                📦 Add {selectedIds.size} to Pack →
+              </button>
+            )}
             {isAdmin && (
               <button className="btn ba btn-sm" onClick={() => setShowQuality(true)} title="Health check across the whole bank">
                 📊 Quality report
@@ -360,6 +334,47 @@ export default function AdminQuestions() {
           )}
         </div>
       </div>
+
+      {/* Flow strip — where the bank sits in the pipeline */}
+      <div className="ca" style={{
+        padding: '9px 14px', marginBottom: 12,
+        background: 'linear-gradient(135deg, rgba(20,184,166,.07), rgba(14,165,233,.04))',
+        border: '1px solid rgba(20,184,166,.22)',
+      }}>
+        <div className="flex ia g1 wrap" style={{ fontSize: 12 }}>
+          <span className="xs bold ct2" style={{ letterSpacing: .3 }}>HOW IT FLOWS</span>
+          {[
+            { i: '✏️', t: 'Create or generate' },
+            { i: '🔍', t: 'Review' },
+            { i: '✅', t: 'Publish' },
+            { i: '📦', t: 'Bundle into a Pack' },
+          ].map((s, idx, arr) => (
+            <span key={s.t} className="flex ia" style={{ gap: 5 }}>
+              <span style={{ fontWeight: 600 }}>{s.i} {s.t}</span>
+              {idx < arr.length - 1 && <span className="ct3" style={{ margin: '0 2px' }}>→</span>}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Difficulty key — only shown to tutors/admins */}
+      <DifficultyKey />
+
+      {/* Guided generator — generate, then it auto-focuses the bank on what you made */}
+      <QuestionGenerator onDone={(created) => {
+        // After a generation run, point the bank's filters at exactly what was
+        // just created so the new questions are visible immediately — fixes
+        // "I generated questions but the bank still looks empty".
+        const first = created?.[0];
+        if (first) {
+          setFilterSub(first.subject.toLowerCase());
+          setFilterGrade(String(first.grade));
+          setFilterTopic(first.topic);
+          setFilterStatus('');
+        } else {
+          load();
+        }
+      }} />
 
       {/* Grouped list — subject · grade · topic, each collapsible & deletable */}
       {qs.length === 0 ? (

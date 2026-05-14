@@ -7,6 +7,7 @@ import Modal from '../../components/Modal';
 import type { Assignment, Question } from '../../types';
 import { subjectBadge, fmtDate, compressImage, compressDiagram } from '../../utils/helpers';
 import { diffMeta } from '../../utils/difficulty';
+import PillSelect from '../../components/PillSelect';
 import DiagramViewer from '../../components/DiagramViewer';
 import AssignmentLiveTray from '../../components/AssignmentLiveTray';
 import AssignmentHeatmap from '../../components/AssignmentHeatmap';
@@ -223,38 +224,62 @@ export default function AdminAssignments() {
           <div className="grid2" style={{ gap: 10 }}>
             <div className="fg"><label className="lbl">Title</label><input type="text" className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Algebra Test 1" /></div>
             <div className="fg"><label className="lbl">Due Date</label><input type="date" className="input" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-            <div className="fg"><label className="lbl">Subject</label>
-              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
-                <option value="mathematics">Mathematics</option><option value="physical_sciences">Physical Sciences</option>
-              </select>
-            </div>
-            <div className="fg"><label className="lbl">Grade</label>
-              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
-                <option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option>
-              </select>
-            </div>
+          </div>
+          <div className="fg"><label className="lbl">Subject</label>
+            <PillSelect
+              ariaLabel="Subject"
+              value={form.subject}
+              onChange={(v) => setForm({ ...form, subject: v, topic: TOPICS[v]?.[Number(form.grade)]?.[0] || '' })}
+              options={[
+                { value: 'mathematics', label: 'Mathematics', icon: '📐' },
+                { value: 'physical_sciences', label: 'Physical Sciences', icon: '⚗️' },
+              ]}
+            />
+          </div>
+          <div className="fg"><label className="lbl">Grade</label>
+            <PillSelect
+              ariaLabel="Grade"
+              value={form.grade}
+              onChange={(v) => setForm({ ...form, grade: v, topic: TOPICS[form.subject]?.[Number(v)]?.[0] || '' })}
+              options={[10, 11, 12].map((g) => ({ value: String(g), label: `Grade ${g}` }))}
+            />
           </div>
           <div className="fg"><label className="lbl">Topic</label>
-            <input list="asgn-topics-list" className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Type or select a topic…" />
-            <datalist id="asgn-topics-list">{topics.map((t) => <option key={t} value={t} />)}</datalist>
+            <PillSelect
+              ariaLabel="Topic"
+              value={form.topic}
+              onChange={(v) => setForm({ ...form, topic: v })}
+              options={topics.map((t) => ({ value: t, label: t }))}
+            />
           </div>
-          <div className="grid2" style={{ gap: 10 }}>
-            <div className="fg"><label className="lbl">Assign To</label>
-              <select className="select" value={form.assignTo} onChange={(e) => setForm({ ...form, assignTo: e.target.value, specificStu: '' })}>
-                <option value="all">All Students</option><option value="gr10">Grade 10 Only</option><option value="gr11">Grade 11 Only</option><option value="gr12">Grade 12 Only</option>
-                <option value="specific">Specific Student (enter PIN/ID below)</option>
-                <option value="none">🚫 Hidden (archived)</option>
-              </select>
-            </div>
-            <div className="fg"><label className="lbl">Max Attempts per Student</label>
-              <select className="select" value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))}>
-                <option value="1">1 — Single attempt</option>
-                <option value="2">2 attempts</option>
-                <option value="3">3 attempts (recommended)</option>
-                <option value="5">5 attempts</option>
-                <option value="99">Unlimited</option>
-              </select>
-            </div>
+          <div className="fg"><label className="lbl">Assign to</label>
+            <PillSelect
+              ariaLabel="Assign to"
+              value={form.assignTo}
+              onChange={(v) => setForm({ ...form, assignTo: v, specificStu: '' })}
+              options={[
+                { value: 'all', label: 'All students' },
+                { value: 'gr10', label: 'Grade 10 only' },
+                { value: 'gr11', label: 'Grade 11 only' },
+                { value: 'gr12', label: 'Grade 12 only' },
+                { value: 'specific', label: 'A specific student', icon: '🎯' },
+                { value: 'none', label: 'Hidden (archived)', icon: '🚫' },
+              ]}
+            />
+          </div>
+          <div className="fg"><label className="lbl">Max attempts per student</label>
+            <PillSelect
+              ariaLabel="Max attempts"
+              value={String(maxAttempts)}
+              onChange={(v) => setMaxAttempts(Number(v))}
+              options={[
+                { value: '1', label: '1 attempt' },
+                { value: '2', label: '2 attempts' },
+                { value: '3', label: '3 (recommended)' },
+                { value: '5', label: '5 attempts' },
+                { value: '99', label: 'Unlimited' },
+              ]}
+            />
           </div>
           {form.assignTo === 'specific' && (
             <div className="fg">

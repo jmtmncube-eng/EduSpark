@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import PillSelect from './PillSelect';
 import { packs as packsApi } from '../services/api';
 import { showToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -108,25 +109,36 @@ export default function PackTemplatePicker({ onClose, onCreated }: Props) {
           </div>
 
           <div className="fg">
-            <label className="lbl">Subject</label>
-            <select className="select" value={subject} onChange={(e) => setSubject(e.target.value as 'MATHEMATICS' | 'PHYSICAL_SCIENCES')}>
-              <option value="MATHEMATICS">📐 Mathematics</option>
-              <option value="PHYSICAL_SCIENCES">⚗️ Physical Sciences</option>
-            </select>
+            <label className="lbl">1. Which subject?</label>
+            <PillSelect
+              ariaLabel="Subject"
+              value={subject}
+              onChange={(v) => setSubject(v)}
+              options={[
+                { value: 'MATHEMATICS', label: 'Mathematics', icon: '📐' },
+                { value: 'PHYSICAL_SCIENCES', label: 'Physical Sciences', icon: '⚗️' },
+              ]}
+            />
           </div>
 
           <div className="fg">
-            <label className="lbl">Grade</label>
-            <select className="select" value={grade} onChange={(e) => setGrade(Number(e.target.value))}>
-              {tutorGrades.map((g) => <option key={g} value={g}>Grade {g}</option>)}
-            </select>
+            <label className="lbl">2. Which grade?</label>
+            <PillSelect
+              ariaLabel="Grade"
+              value={String(grade)}
+              onChange={(v) => setGrade(Number(v))}
+              options={tutorGrades.map((g) => ({ value: String(g), label: `Grade ${g}` }))}
+            />
           </div>
 
           <div className="fg">
-            <label className="lbl">Topic</label>
-            <select className="select" value={topic} onChange={(e) => setTopic(e.target.value)}>
-              {topics.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <label className="lbl">3. Which topic?</label>
+            <PillSelect
+              ariaLabel="Topic"
+              value={topic}
+              onChange={setTopic}
+              options={topics.map((t) => ({ value: t, label: t }))}
+            />
           </div>
 
           <div className="fg">

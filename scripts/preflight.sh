@@ -7,6 +7,10 @@
 #   2. Assert that the specific fixes we shipped are actually present in the
 #      source — a regression tripwire so a future edit can't quietly revert them.
 #
+# KEEP THIS IN SYNC: whenever you ship a fix/feature, add a matching assertion
+# under section 3 (grouped by version). The script is only as honest as its
+# checklist — an un-asserted fix is a fix that can silently regress.
+#
 # Environment-aware:
 #   • On a DEV machine (where `npm install` has been run) it does the full
 #     type-check + build.
@@ -44,6 +48,10 @@ lacks() { # <description> <pattern> <file>
 # assert a path is gone
 gone() { # <path> <description>
   if [ -e "$1" ]; then bad "$2 — $1 still exists"; else ok "$2"; fi
+}
+# assert a path exists
+present() { # <path> <description>
+  if [ -e "$1" ]; then ok "$2"; else bad "$2 — $1 is missing"; fi
 }
 # run a build/check command IF the Node toolchain is actually usable here:
 #   • the runner binary (npm/npx) is on PATH, AND
@@ -87,37 +95,50 @@ run_if_deps "backend build (tsc)"   backend  npm run build
 run_if_deps "frontend build (vite)" frontend npm run build
 
 # ── 3. Shipped fixes are present (regression tripwire) ─────────────
-# These run everywhere — they only read source files.
+# These run everywhere — they only read source files. Grouped by the
+# release that introduced them; add a new block whenever you ship.
 hdr "3. Shipped fixes present"
 
-# v2.9.1 — PDF viewer
+echo " v2.8.0 — schema-drift fix, PDF uploads, grouped bank"
+present backend/prisma/migrations/20260514120000_audit_batches_security/migration.sql \
+        "Audit/batches schema-drift migration committed"
+has   "Dockerfile self-heals schema (migrate + db push)"  "prisma db push"  backend/Dockerfile
+has   "PDF upload boot-time writability check"      "ensureUploadDir"  backend/src/routes/documents.ts
+has   "PDF upload multer error wrapper"             "uploadSingle"     backend/src/routes/documents.ts
+has   "Bulk-delete endpoint (group delete)"         "bulk-delete"      backend/src/routes/questions.ts
+present backend/src/db/seed-pdfs.ts                 "Mock-PDF seed present"
+present scripts/doctor.sh                           "doctor.sh health-check present"
+
+echo " v2.9.0 — question quality pipeline"
+has   "QuestionStatus review-pipeline enum"         "enum QuestionStatus"  backend/prisma/schema.prisma
+present backend/prisma/migrations/20260514130000_question_quality_pipeline/migration.sql \
+        "Quality-pipeline migration committed"
+present backend/src/utils/questionValidation.ts     "Validation pipeline present"
+present backend/src/generators/index.ts             "Modular generator registry present"
+has   "Smarter diagrams — explicit-kind renderer"   "makeDiagramOfKind" backend/src/utils/diagramTemplates.ts
+has   "Batch approve/discard endpoint"              "batches/:id/approve"  backend/src/routes/questions.ts
+
+echo " v2.9.1 — PDF viewer + PUBLISHED-only packs"
 has   "PDF auth accepts ?token= query param"        "req.query.token"  backend/src/middleware/auth.ts
 has   "Blob-based PdfViewer component exists"       "fileBlob"         frontend/src/components/PdfViewer.tsx
+has   "Packs accept PUBLISHED questions only"       "publishedOnly"    backend/src/routes/packs.ts
 
-# v2.9.2 — student cold-start + dead-route fixes
+echo " v2.9.2 — student cold-start + verified defects"
 gone  frontend/src/pages/student/Questions.tsx      "Orphaned student/Questions.tsx removed"
 has   "Student cold-start 'connect a tutor' card"   "Connect with a tutor" frontend/src/pages/student/Dashboard.tsx
 has   "analytics/overview returns questions count"  "questionCount"    backend/src/routes/analytics.ts
 
-# Question Bank — no native dropdowns, guided pill UI
+echo " v2.9.3 — guided Question Bank, idle logout, Tier-3 polish"
 lacks "Question Bank has zero <select> dropdowns"   "<select"          frontend/src/pages/admin/Questions.tsx
 has   "PillSelect guided control exists"            "PillOption"       frontend/src/components/PillSelect.tsx
 has   "Add-question modal is a numbered prompt"     "Which subject?"   frontend/src/pages/admin/Questions.tsx
-
-# Idle auto-logout
 has   "Idle auto-logout after 2 minutes"            "IDLE_LIMIT_MS"    frontend/src/context/AuthContext.tsx
-
-# Tier 3 — tutor
 has   "Tutor: per-student attempt history list"     "Attempt history"  frontend/src/pages/admin/Students.tsx
 has   "TutorSpotlight rows have inline Assign"      "onAssign"         frontend/src/components/TutorSpotlight.tsx
 has   "Assignments page honours prefill deep-link"  "prefillHandled"   frontend/src/pages/admin/Assignments.tsx
-
-# Tier 3 — admin
 has   "analytics/overview returns content-health"   "reviewQueue"      backend/src/routes/analytics.ts
 has   "Dashboard shows content-health chips"        "CONTENT HEALTH"   frontend/src/pages/admin/Dashboard.tsx
 has   "AuditLog renders top-actions strip"          "MOST ACTIVE"      frontend/src/pages/admin/AuditLog.tsx
-
-# Tier 3 — dead-code cleanup
 if grep -rqF "grade-segments" backend/src 2>/dev/null; then
   bad "Dead /grade-segments endpoint removed — still referenced in backend/src"
 else

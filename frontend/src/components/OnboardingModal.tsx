@@ -26,9 +26,9 @@ const STEPS: Record<'ADMIN' | 'TUTOR' | 'STUDENT', Step[]> = {
     { id: 'tutor_assign',  ico: '📋', title: 'Create your first assignment',   body: 'Pick questions from your library and set a due date.',          cta: 'Assignments', link: '/app/assignments' },
   ],
   STUDENT: [
-    { id: 'student_pin',      ico: '🔑', title: 'Save your PIN somewhere safe',     body: 'You use this PIN every time you sign in.',                         cta: 'Profile',     link: '/app/dashboard' },
-    { id: 'student_practice', ico: '📚', title: 'Try a practice quiz',              body: 'Practice the topics your tutor has unlocked for you.',             cta: 'Practice',    link: '/app/practice' },
-    { id: 'student_work',     ico: '📋', title: 'Open your first assignment',       body: 'Complete assignments before the due date to earn XP.',             cta: 'My Work',     link: '/app/my-work' },
+    { id: 'student_pin',      ico: '🔑', title: 'Save your PIN somewhere safe',     body: 'You use this PIN every time you sign in.',                                cta: 'Got it',      link: '/app/dashboard' },
+    { id: 'student_practice', ico: '🤝', title: 'Connect with a tutor',             body: 'Ask your Maths or Science teacher to add you — they unlock your practice.', cta: 'Dashboard',   link: '/app/dashboard' },
+    { id: 'student_work',     ico: '📋', title: 'Practice & assignments appear here', body: 'Once your tutor unlocks a pack or sets work, find it under Practice & My Work.', cta: 'Practice',  link: '/app/practice' },
   ],
 };
 

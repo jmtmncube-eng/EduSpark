@@ -58,7 +58,7 @@ export default function SmartCoach() {
             </div>
           </div>
           {nextPack ? (
-            <button className="btn bg-btn" onClick={() => navigate('/app/practice')}>
+            <button className="btn bg-btn" onClick={() => navigate('/app/practice', { state: { packId: nextPack.id } })}>
               Start →
             </button>
           ) : (
@@ -141,7 +141,10 @@ export default function SmartCoach() {
         {!dailyGoal.complete && (
           <button
             className="btn bg-btn btn-sm mt1"
-            onClick={() => navigate(nextPack ? '/app/practice' : '/app/my-work')}
+            onClick={() => navigate(
+              nextPack ? '/app/practice' : '/app/my-work',
+              nextPack ? { state: { packId: nextPack.id } } : undefined,
+            )}
           >
             ▶ Practice now ({dailyGoal.target - dailyGoal.done} to go)
           </button>
@@ -169,7 +172,7 @@ export default function SmartCoach() {
                   <button
                     className="btn ba btn-sm mt1"
                     style={{ fontSize: 11 }}
-                    onClick={() => navigate('/app/practice')}
+                    onClick={() => navigate('/app/practice', { state: { packId: t.suggestedPack!.id } })}
                   >
                     {t.suggestedPack.coverEmoji} {t.suggestedPack.title} →
                   </button>

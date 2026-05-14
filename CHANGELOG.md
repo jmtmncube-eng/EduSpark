@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.2] — 2026-05-14 — Full-system audit fixes: student cold-start + verified defects
+
+Outcome of a three-persona audit (student / tutor / admin). Tier 1 (verified defects) + Tier 2 (the student cold-start gap) — refinements only, no scope increase.
+
+### Fixed — Student
+- **Dead navigation removed** — the student Dashboard's "Question Bank →" pointed at `/app/questions`, a route that only redirected back to `/app/practice`. It now links straight to Practice, the redirect route is gone, and the orphaned `student/Questions.tsx` (~310 lines of unreachable dead code) was deleted.
+- **SmartCoach suggestions now actually open the pack** — the weak-topic "suggested pack", the first-quiz "Start", and the daily-goal "Practice now" buttons previously just dumped the student on the generic Practice list. They now deep-link the specific pack via router state, and Practice auto-opens it.
+- **Registration no longer collects-and-discards** — the curriculum dropdown was captured but never sent to the backend. Removed (content is CAPS; the field was a dead promise).
+
+### Added — Student cold-start path
+- **"Connect with a tutor" card** on the student Dashboard, shown whenever the student has no tutor assigned. A brand-new student previously landed on a wall of empty screens with no explanation; now the tutor dependency is explicit, with the student's name + grade shown so a teacher can find them. Onboarding modal steps reworded to match (no longer promise practice/assignments that a tutorless student can't reach).
+
+### Fixed — Tutor / Admin
+- **Tutor comment no longer silently lost** — `StudentReport`'s comment was local state wiped on navigate. It now persists per-student in the browser (survives navigation + refresh before printing) and the label says so honestly.
+- **Admin Dashboard "Questions" stat fixed** — `analytics/overview` never returned a `questions` count, so the card always showed 0. It now returns the real question-bank size.
+
+---
+
 ## [2.9.1] — 2026-05-14 — PDF viewer fix + coherent Question Bank & pack/assignment wiring
 
 ### Fixed — Critical

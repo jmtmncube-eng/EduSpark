@@ -58,6 +58,21 @@ export default function AdminStudentReport() {
       .catch(() => setLoading(false));
   }, [studentId]);
 
+  // Tutor comment is kept per-student in this browser so it survives navigating
+  // away and coming back (and a page refresh) before you print the report.
+  const commentKey = studentId ? `es_tutor_comment_${studentId}` : '';
+  useEffect(() => {
+    if (!commentKey) return;
+    try { setTeacherComment(localStorage.getItem(commentKey) || ''); } catch { /* ignore */ }
+  }, [commentKey]);
+  useEffect(() => {
+    if (!commentKey) return;
+    try {
+      if (teacherComment) localStorage.setItem(commentKey, teacherComment);
+      else localStorage.removeItem(commentKey);
+    } catch { /* ignore */ }
+  }, [commentKey, teacherComment]);
+
   const today = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
 
   if (loading) return <div className="empty"><div className="eico">⏳</div><h3>Loading report…</h3></div>;
@@ -207,7 +222,7 @@ export default function AdminStudentReport() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
             <div className="sec-h" style={{ marginBottom: 2 }}>✏️ Tutor Comment</div>
-            <div className="xs ct3">This comment will appear on the printed report</div>
+            <div className="xs ct3">Saved on this device · appears on the printed report</div>
           </div>
           <button className="btn ba btn-sm no-print" onClick={() => setEditingComment((v) => !v)}>
             {editingComment ? '✅ Done' : '✏️ Edit'}

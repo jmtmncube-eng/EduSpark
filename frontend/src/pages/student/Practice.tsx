@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { packs as packsApi, documents as docsApi, results as resultsApi } from '../../services/api';
 import type { Pack, Question } from '../../types';
 import { showToast } from '../../components/Toast';
@@ -8,9 +8,13 @@ import { diffMeta } from '../../utils/difficulty';
 import DiagramViewer from '../../components/DiagramViewer';
 
 export default function StudentPractice() {
+  const location = useLocation();
   const [packs, setPacks] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Pack | null>(null);
+  // SmartCoach / Dashboard can deep-link to a specific pack via router state.
+  const requestedPackId = (location.state as { packId?: string } | null)?.packId;
+  const autoOpened = useRef(false);
 
   useEffect(() => {
     packsApi.list()
@@ -18,6 +22,16 @@ export default function StudentPractice() {
       .catch((e) => showToast(String((e as Error).message), 'err'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Auto-open the deep-linked pack once, as soon as packs are loaded.
+  useEffect(() => {
+    if (autoOpened.current || !requestedPackId || packs.length === 0) return;
+    const target = packs.find((p) => p.id === requestedPackId);
+    if (target && target.questions.length > 0) {
+      autoOpened.current = true;
+      setActive(target);
+    }
+  }, [packs, requestedPackId]);
 
   if (loading) return <div className="ct3" style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
 

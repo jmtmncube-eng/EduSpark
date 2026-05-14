@@ -137,7 +137,6 @@ function AppShell() {
               <>
                 <Route path="dashboard" element={<StudentDashboard />} />
                 <Route path="practice" element={<StudentPractice />} />
-                <Route path="questions" element={<Navigate to="../practice" replace />} />
                 <Route path="my-work" element={<StudentMyWork />} />
                 <Route path="progress" element={<StudentProgress />} />
                 <Route path="history" element={<StudentHistory />} />

@@ -41,6 +41,9 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
       scopeIds ? { where: { tutorId: userId } } : undefined
     );
 
+    // Total question bank size — drives the Dashboard "Questions" stat card.
+    const questionCount = await prisma.question.count();
+
     const avgScore = results.length
       ? (results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(1) : '0';
     const avgTime = results.length
@@ -91,7 +94,7 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
       ? Number((results.length / activeStudentIds.size).toFixed(2)) : 0;
 
     return res.json({
-      students: studentCount, assignments: assignmentCount, attempts: results.length,
+      students: studentCount, assignments: assignmentCount, questions: questionCount, attempts: results.length,
       avgScore, avgTime, completionRate, passRate, topicMastery, improvementTrend, difficultyInsight, engagementScore,
     });
   } catch (err) {

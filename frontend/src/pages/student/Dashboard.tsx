@@ -53,6 +53,41 @@ export default function StudentDashboard() {
       </div>
       <SmartCoach />
 
+      {/* Cold start — no tutor yet. This is the path forward for a brand-new
+          student: everything (practice, assignments) flows through a tutor. */}
+      {!user.teacherId && (
+        <div className="ca" style={{
+          padding: 18, marginBottom: 16,
+          background: 'linear-gradient(135deg, rgba(14,165,233,.10), rgba(20,184,166,.06))',
+          border: '1px solid rgba(14,165,233,.3)',
+        }}>
+          <div className="flex ia g2" style={{ flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 34 }}>🤝</span>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>
+                Connect with a tutor to start learning
+              </div>
+              <div className="sm ct2" style={{ marginTop: 3, lineHeight: 1.5 }}>
+                Your practice packs and assignments are unlocked by a tutor. Ask your Maths or
+                Physical Sciences teacher to add you on EduSpark — they’ll search for you by name.
+              </div>
+              <div style={{
+                marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '7px 12px', borderRadius: 10,
+                background: 'var(--bg)', border: '1px solid var(--bd)',
+              }}>
+                <span className="xs ct3">Give your teacher:</span>
+                <span className="sm bold">{user.name}</span>
+                <span className="badge btl">Grade {user.grade}</span>
+              </div>
+            </div>
+          </div>
+          <div className="xs ct3" style={{ marginTop: 10 }}>
+            💡 Already connected today? Sign out and back in to refresh — your tutor’s packs will appear under <b>Practice</b>.
+          </div>
+        </div>
+      )}
+
       {/* Motivational banner */}
       <div className="motivational-banner mb2">
         <span style={{ fontSize: 22 }}>{motivation.ico}</span>
@@ -99,7 +134,7 @@ export default function StudentDashboard() {
 
       <div className="sec-h">📋 My Assigned Quizzes</div>
       {asgns.length === 0 ? (
-        <div className="empty"><div className="eico">📭</div><h3>No quizzes assigned yet</h3><p>Your tutor hasn't assigned any work yet. In the meantime, practise in the <button className="btn bp btn-sm" style={{ marginTop: 4 }} onClick={() => navigate('/app/questions')}>Question Bank →</button></p></div>
+        <div className="empty"><div className="eico">📭</div><h3>No quizzes assigned yet</h3><p>Your tutor hasn't assigned any work yet. In the meantime, head to <button className="btn bp btn-sm" style={{ marginTop: 4 }} onClick={() => navigate('/app/practice')}>Practice →</button></p></div>
       ) : (
         <div className="gauto">
           {asgns.length > 0 && asgns.every((a) => doneIds.includes(a.id)) ? (

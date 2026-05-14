@@ -68,7 +68,6 @@ export default function Login() {
   const [gradeModal, setGradeModal] = useState(false);
   const [pendingName, setPendingName] = useState('');
   const [grade, setGrade] = useState('10');
-  const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB' | 'NSC' | 'CAMBRIDGE'>('CAPS');
 
   // Tutor profile state
   const [tutorModal, setTutorModal] = useState(false);
@@ -542,17 +541,7 @@ export default function Login() {
               <option value="11">Grade 11</option>
               <option value="12">Grade 12</option>
             </select>
-          </div>
-
-          <div className="fg">
-            <label className="lbl">Curriculum</label>
-            <select className="select" value={curriculum} onChange={(e) => setCurriculum(e.target.value as 'CAPS' | 'IEB' | 'NSC' | 'CAMBRIDGE')}>
-              <option value="CAPS">CAPS (most SA schools)</option>
-              <option value="IEB">IEB (Independent Examinations Board)</option>
-              <option value="NSC">NSC (National Senior Certificate)</option>
-              <option value="CAMBRIDGE">Cambridge / IGCSE</option>
-            </select>
-            <div className="xs ct3 mt1">We'll match content to your curriculum where possible.</div>
+            <div className="xs ct3 mt1">Content follows the SA CAPS curriculum for Maths &amp; Physical Sciences.</div>
           </div>
 
           <div className="flex g1 mt2">

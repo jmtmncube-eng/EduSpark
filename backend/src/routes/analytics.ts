@@ -43,6 +43,11 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
 
     // Total question bank size — drives the Dashboard "Questions" stat card.
     const questionCount = await prisma.question.count();
+    // Content-health signals for the admin Dashboard (v2.9 quality pipeline).
+    const reviewQueue = await prisma.question.count({ where: { status: 'REVIEW' } });
+    const flaggedQuestions = await prisma.question.count({
+      where: { qualityFlag: { in: ['broken', 'trivial', 'low_discrimination'] } },
+    });
 
     const avgScore = results.length
       ? (results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(1) : '0';
@@ -94,7 +99,8 @@ router.get('/overview', authMiddleware, adminOrTutorOnly, async (req: Request, r
       ? Number((results.length / activeStudentIds.size).toFixed(2)) : 0;
 
     return res.json({
-      students: studentCount, assignments: assignmentCount, questions: questionCount, attempts: results.length,
+      students: studentCount, assignments: assignmentCount, questions: questionCount,
+      reviewQueue, flaggedQuestions, attempts: results.length,
       avgScore, avgTime, completionRate, passRate, topicMastery, improvementTrend, difficultyInsight, engagementScore,
     });
   } catch (err) {
@@ -467,31 +473,6 @@ router.get('/a-student-factory', authMiddleware, async (req: Request, res: Respo
       activity: { practiceLast7: practiceLast7Total, assignmentsLast7: assignmentsLast7Total },
       gradeSegments,
     });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Grade segmentation list (admin) — students grouped by grade for easy allocation
-router.get('/grade-segments', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    if (req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Admins only' });
-    const students = await prisma.user.findMany({
-      where: { role: 'STUDENT', active: true },
-      select: {
-        id: true, name: true, grade: true, xp: true, pin: true,
-        teacherId: true,
-        teacher: { select: { id: true, name: true } },
-      },
-      orderBy: [{ grade: 'asc' }, { name: 'asc' }],
-    });
-    const byGrade: Record<number, typeof students> = {};
-    students.forEach((s) => {
-      const g = s.grade ?? 0;
-      (byGrade[g] ||= []).push(s);
-    });
-    return res.json({ segments: Object.entries(byGrade).map(([g, list]) => ({ grade: Number(g), students: list })) });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

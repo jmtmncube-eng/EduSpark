@@ -230,14 +230,32 @@ export default function AdminStudents() {
               <div key={k} className="flex jb" style={{ padding: '7px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}><span className="ct2">{k}</span><span className="bold">{v}</span></div>
             ))}
           </div>
-          <div className="sec-h">Recent Results</div>
-          {(viewStu.results || []).slice(0, 5).map((r) => (
-            <div key={r.id} className="flex jb ia" style={{ padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
-              <span>{r.assignment?.title || 'Quiz'}</span>
-              <span className={`bold ${r.score >= 70 ? 'cs' : r.score >= 50 ? 'cwr' : 'cdr'}`}>{r.score}%</span>
+          <div className="sec-h">
+            Attempt history {viewStu.results?.length ? `(${viewStu.results.length})` : ''}
+          </div>
+          {!(viewStu.results?.length) ? (
+            <p className="sm ct2">No attempts yet.</p>
+          ) : (
+            <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
+              {[...viewStu.results]
+                .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+                .map((r) => {
+                  const isPractice = r.resultType === 'PRACTICE';
+                  const label = isPractice
+                    ? `🎯 Practice${r.practiceTopic ? ` · ${r.practiceTopic}` : ''}`
+                    : `📋 ${r.assignment?.title || 'Assignment quiz'}`;
+                  return (
+                    <div key={r.id} className="flex jb ia" style={{ padding: '8px 12px', borderBottom: '1px solid var(--bd)', fontSize: 13, gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+                        <div className="xs ct3">{fmtDate(r.completedAt)} · {r.correct}/{r.total} correct</div>
+                      </div>
+                      <span className={`bold ${r.score >= 70 ? 'cs' : r.score >= 50 ? 'cwr' : 'cdr'}`} style={{ flexShrink: 0 }}>{r.score}%</span>
+                    </div>
+                  );
+                })}
             </div>
-          ))}
-          {!(viewStu.results?.length) && <p className="sm ct2">No results yet</p>}
+          )}
           <div className="flex g1 mt2 wrap">
             <button className="btn bp" onClick={() => { navigate(`/app/report/${viewStu.id}`); setViewStu(null); }}>📊 Exam Report</button>
             <button className="btn bw-btn" onClick={() => { setResetPinStu(viewStu); setViewStu(null); setCustomPin(''); setNewPin(''); }}>🔑 Reset PIN</button>

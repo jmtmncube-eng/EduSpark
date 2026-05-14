@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { assignments as assignmentsApi, questions as questionsApi, studentSearch } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
@@ -50,13 +51,46 @@ export default function AdminAssignments() {
     return () => clearTimeout(t);
   }, [stuSearch]);
 
-  async function openCreate() {
-    setEditId(''); setSelQIds(new Set()); setDocs([]); setMaxAttempts(3); setSelStu(null); setStuSearch('');
-    setForm({ title: '', dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], subject: 'mathematics', grade: '10', topic: 'Algebra', assignTo: 'all', specificStu: '' });
+  // Prefill support — TutorSpotlight's "📋 Assign" deep-links here with a
+  // student (and optionally their weakest topic) so the loop from "spot a
+  // struggling student" to "set them work" is a single tap.
+  async function openCreate(prefill?: { studentId: string; studentName: string; grade: number; topic?: string }) {
+    setEditId(''); setSelQIds(new Set()); setDocs([]); setMaxAttempts(3); setStuSearch('');
+    setSelStu(prefill ? { id: prefill.studentId, name: prefill.studentName, grade: prefill.grade } : null);
+    // Resolve the subject from the prefilled topic (could be Maths or Physics).
+    let subject = 'mathematics';
+    let topic = 'Algebra';
+    if (prefill?.topic) {
+      const g = prefill.grade;
+      if ((TOPICS.physical_sciences[g] || []).includes(prefill.topic)) { subject = 'physical_sciences'; topic = prefill.topic; }
+      else if ((TOPICS.mathematics[g] || []).includes(prefill.topic)) { subject = 'mathematics'; topic = prefill.topic; }
+    }
+    if (topic === 'Algebra') topic = TOPICS[subject]?.[prefill?.grade ?? 10]?.[0] || 'Algebra';
+    setForm({
+      title: prefill ? `Practice for ${prefill.studentName}` : '',
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      subject, grade: prefill ? String(prefill.grade) : '10', topic,
+      assignTo: 'all', specificStu: '',
+    });
     const qs = await questionsApi.list({ status: 'PUBLISHED' });
     setAllQs(qs as Question[]);
     setShowCreate(true);
   }
+
+  // Honour a deep-link prefill once on mount, then clear router state so a
+  // refresh doesn't re-open the modal.
+  const location = useLocation();
+  const prefillHandled = useRef(false);
+  useEffect(() => {
+    if (prefillHandled.current) return;
+    const prefill = (location.state as { prefill?: { studentId: string; studentName: string; grade: number; topic?: string } } | null)?.prefill;
+    if (prefill) {
+      prefillHandled.current = true;
+      openCreate(prefill);
+      window.history.replaceState({}, '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   async function openEdit(a: Assignment) {
     setEditId(a.id);
@@ -126,7 +160,7 @@ export default function AdminAssignments() {
 
       <div className="flex jb ia mb2">
         <span className="sm ct2">{list.length} assignment(s)</span>
-        <button className="btn bg-btn" onClick={openCreate}>+ Create assignment</button>
+        <button className="btn bg-btn" onClick={() => openCreate()}>+ Create assignment</button>
       </div>
 
       {list.length === 0 ? (

@@ -147,7 +147,14 @@ export default function TutorSpotlight() {
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {sorted.map((s) => (
-                <StudentRow key={s.id} student={s} onClick={() => navigate(`/app/report/${s.id}`)} />
+                <StudentRow
+                  key={s.id}
+                  student={s}
+                  onReport={() => navigate(`/app/report/${s.id}`)}
+                  onAssign={() => navigate('/app/assignments', {
+                    state: { prefill: { studentId: s.id, studentName: s.name, grade: s.grade, topic: s.weakestTopic || undefined } },
+                  })}
+                />
               ))}
             </div>
           )}
@@ -169,13 +176,13 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function StudentRow({ student, onClick }: { student: Student; onClick: () => void }) {
+function StudentRow({ student, onReport, onAssign }: {
+  student: Student; onReport: () => void; onAssign: () => void;
+}) {
   const meta = STATUS_META[student.status];
   return (
-    <button
-      onClick={onClick}
+    <div
       style={{
-        textAlign: 'left', cursor: 'pointer',
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '8px 12px', borderRadius: 10,
         background: meta.bg, border: `1px solid ${meta.bd}`,
@@ -198,8 +205,15 @@ function StudentRow({ student, onClick }: { student: Student; onClick: () => voi
         </div>
       </div>
 
-      {/* CTA — only obviously useful for students with data */}
-      <span className="xs ct3" style={{ whiteSpace: 'nowrap' }}>View report →</span>
-    </button>
+      {/* Inline actions — spot → act in one tap */}
+      <div className="flex ia g1" style={{ flexShrink: 0 }}>
+        <button className="btn ba btn-sm" style={{ fontSize: 11 }} onClick={onAssign} title="Create a targeted assignment for this student">
+          📋 Assign
+        </button>
+        <button className="btn bg-btn btn-sm" style={{ fontSize: 11 }} onClick={onReport}>
+          📊 Report
+        </button>
+      </div>
+    </div>
   );
 }

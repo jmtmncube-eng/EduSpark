@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.3] — 2026-05-14 — Guided Question Bank, idle logout, Tier-3 polish, preflight gate
+
+### Changed — Question Bank: dropdowns out, prompting in
+- Every native `<select>` in the Question Bank is gone. New shared **`PillSelect`** control — every option visible, one tap to choose. The browse bar (subject / grade / topic / status) and the **Add-a-Question modal** are now fully tappable, the modal reading as a numbered prompt ("1. Which subject? → 2. Which grade? → …"). Same visual language as the generator wizard.
+
+### Added — Security
+- **Idle auto-logout** — after 2 minutes of no interaction the session signs out (with a toast saying why). A single 15-second poll watches activity, so it costs nothing on every mouse-move. Protects shared school-lab machines.
+
+### Added / Changed — Tier-3 polish (tutor)
+- **Per-student attempt history** — the tutor's "View" modal now lists *every* attempt (practice + assignment) with date, score and correct/total, sorted newest-first — not just the last 5.
+- **TutorSpotlight rows are actionable** — each flagged student now has an inline **📋 Assign** button alongside **📊 Report**. "Assign" deep-links straight into the Assignments create modal, pre-filled with the student and their weakest topic — spot → act in one tap.
+
+### Added / Changed — Tier-3 polish (admin)
+- **Dashboard is now a launchpad, not a mini-Analytics** — removed the duplicated Subject-Performance / Weekly-Activity charts (Analytics owns charts). Added a **Content Health** chip row (review-queue size + quality-flagged count) sourced from the v2.9 pipeline, and a role-aware subtitle ("Platform overview" vs "Your class at a glance").
+- **Audit Log** now renders the already-computed **"Most active"** top-actions strip (tap to filter), and labels the v2.9 question actions properly.
+- Removed the dead, unused `/api/analytics/grade-segments` endpoint + its client method.
+
+### Changed — Tier-3 polish (student)
+- De-conflicted **My Work** vs **Quiz History**: My Work's "History" tab is renamed **✅ Completed** (it's the assignment tracker), and Quiz History is now clearly the full attempt log — every row tagged **PRACTICE** or **ASSIGNMENT** with its topic.
+
+### Added — Tooling
+- **`scripts/preflight.sh`** — run before every push: type-checks + builds both apps, validates the Prisma schema, then asserts each shipped fix is still present in source (a regression tripwire). 21 checks, exits non-zero on any failure.
+
+---
+
 ## [2.9.2] — 2026-05-14 — Full-system audit fixes: student cold-start + verified defects
 
 Outcome of a three-persona audit (student / tutor / admin). Tier 1 (verified defects) + Tier 2 (the student cold-start gap) — refinements only, no scope increase.

@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Bar, Line } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend } from 'chart.js';
 import { analytics } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import TutorSpotlight from '../../components/TutorSpotlight';
@@ -8,64 +6,47 @@ import AStudentFactory from '../../components/AStudentFactory';
 import ClockWeather from '../../components/ClockWeather';
 import { useAuth } from '../../context/AuthContext';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend);
-
-function isDk() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
-
+/**
+ * The Dashboard is the *launchpad* — at-a-glance health + quick navigation.
+ * Deep charts and breakdowns live in Analytics; we deliberately don't
+ * duplicate them here.
+ */
 export default function AdminDashboard() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [overview, setOverview] = useState<Record<string, string | number>>({});
-  const [subjData, setSubjData] = useState<{ subject: string; avgScore: string }[]>([]);
-  const [weekData, setWeekData] = useState<{ date: string; count: number }[]>([]);
   const navigate = useNavigate();
-  const dk = isDk();
 
   useEffect(() => {
-    analytics.overview().then((d) => setOverview(d as Record<string, string | number>));
-    analytics.subjectPerformance().then((d) => setSubjData(d as { subject: string; avgScore: string }[]));
-    analytics.weeklyActivity().then((d) => setWeekData(d as { date: string; count: number }[]));
+    analytics.overview().then((d) => setOverview(d as Record<string, string | number>)).catch(() => {});
   }, []);
 
-  const barData = {
-    labels: subjData.map((s) => s.subject === 'MATHEMATICS' ? 'Mathematics' : 'Physical Sciences'),
-    datasets: [{
-      data: subjData.map((s) => Number(s.avgScore)),
-      backgroundColor: dk ? ['rgba(45,212,191,.62)', 'rgba(52,211,153,.55)'] : ['rgba(13,148,136,.62)', 'rgba(16,185,129,.52)'],
-      borderColor: dk ? ['#2DD4BF', '#34D399'] : ['#0D9488', '#10B981'],
-      borderWidth: 2, borderRadius: 13,
-    }],
-  };
-
-  const days = weekData.map((d) => new Date(d.date + 'T00:00').toLocaleDateString('en-ZA', { weekday: 'short' }));
-  const lineData = {
-    labels: days,
-    datasets: [{
-      data: weekData.map((d) => d.count),
-      borderColor: dk ? '#2DD4BF' : '#0D9488',
-      backgroundColor: dk ? 'rgba(45,212,191,.10)' : 'rgba(13,148,136,.10)',
-      fill: true, tension: 0.45, pointBackgroundColor: dk ? '#2DD4BF' : '#0D9488', pointRadius: 5,
-    }],
-  };
-
-  const chartOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { cornerRadius: 10 } }, scales: { x: { grid: { color: dk ? 'rgba(45,212,191,.09)' : 'rgba(13,148,136,.09)' }, ticks: { color: dk ? '#7FCFBE' : '#2D5E4A', font: { family: 'Plus Jakarta Sans', size: 11 } } }, y: { grid: { color: dk ? 'rgba(45,212,191,.09)' : 'rgba(13,148,136,.09)' }, ticks: { color: dk ? '#7FCFBE' : '#2D5E4A', font: { family: 'Plus Jakarta Sans', size: 11 } }, beginAtZero: true, max: 100 } } };
-
   const stats = [
-    { ico: '📝', val: overview.questions || 0, lbl: 'Questions', ch: '↑ CAPS' },
-    { ico: '👥', val: overview.students || 0, lbl: 'Students', ch: 'Active' },
-    { ico: '📋', val: overview.assignments || 0, lbl: 'Assignments', ch: 'Live' },
-    { ico: '🏆', val: `${overview.avgScore || 0}%`, lbl: 'Avg Score', ch: `${overview.attempts || 0} attempts` },
+    { ico: '📝', val: overview.questions ?? 0, lbl: 'Questions', ch: 'In the bank' },
+    { ico: '👥', val: overview.students ?? 0, lbl: isAdmin ? 'Students' : 'My students', ch: 'Active' },
+    { ico: '📋', val: overview.assignments ?? 0, lbl: 'Assignments', ch: 'Live' },
+    { ico: '🏆', val: `${overview.avgScore ?? 0}%`, lbl: 'Avg Score', ch: `${overview.attempts ?? 0} attempts` },
   ];
+
+  // Content-health chips — admin-only governance signal, sourced from the
+  // v2.9 quality pipeline. Keeps "what reaches students" visible without a
+  // separate page.
+  const reviewQueue = Number(overview.reviewQueue ?? 0);
+  const flaggedQuestions = Number(overview.flaggedQuestions ?? 0);
 
   return (
     <div>
       <div className="ph" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <h2 style={{ margin: 0 }}>📊 Dashboard</h2>
-          <p style={{ margin: 0 }}>Platform overview</p>
+          <p style={{ margin: 0 }}>{isAdmin ? 'Platform overview & launchpad' : 'Your class at a glance'}</p>
         </div>
         <ClockWeather />
       </div>
-      <AdminOrTutor />
+
+      {isAdmin && <AStudentFactory />}
       <TutorSpotlight />
+
       <div className="stats">
         {stats.map((s) => (
           <div className="scard" key={s.lbl}>
@@ -76,23 +57,50 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
-      <div className="grid2 mb2">
-        <div className="cc">
-          <div className="cc-h">Subject Performance</div>
-          <div className="cc-s">Average scores</div>
-          <div style={{ height: 200, position: 'relative' }}><Bar data={barData} options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, max: 100 } } }} /></div>
+
+      {/* Content health — admin governance at a glance */}
+      {isAdmin && (
+        <div className="ca" style={{ padding: '11px 14px', margin: '12px 0' }}>
+          <div className="flex ia g2 wrap">
+            <span className="xs bold ct3" style={{ letterSpacing: .3 }}>CONTENT HEALTH</span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => navigate('/app/questions')}
+              title="Questions awaiting review before they can reach students"
+              style={{
+                background: reviewQueue > 0 ? 'rgba(180,83,9,.12)' : 'rgba(21,128,61,.10)',
+                color: reviewQueue > 0 ? '#b45309' : '#15803d',
+                border: `1px solid ${reviewQueue > 0 ? 'rgba(180,83,9,.3)' : 'rgba(21,128,61,.3)'}`,
+              }}
+            >
+              🔍 {reviewQueue} in review
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => navigate('/app/questions')}
+              title="Published questions auto-flagged as broken, trivial or low-discrimination"
+              style={{
+                background: flaggedQuestions > 0 ? 'rgba(185,28,28,.10)' : 'rgba(21,128,61,.10)',
+                color: flaggedQuestions > 0 ? '#b91c1c' : '#15803d',
+                border: `1px solid ${flaggedQuestions > 0 ? 'rgba(185,28,28,.3)' : 'rgba(21,128,61,.3)'}`,
+              }}
+            >
+              🚩 {flaggedQuestions} quality-flagged
+            </button>
+            {reviewQueue === 0 && flaggedQuestions === 0 && (
+              <span className="xs ct3">✅ Bank is clean — nothing waiting on you.</span>
+            )}
+          </div>
         </div>
-        <div className="cc">
-          <div className="cc-h">Weekly Activity</div>
-          <div className="cc-s">Completions last 7 days</div>
-          <div style={{ height: 200, position: 'relative' }}><Line data={lineData} options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, max: undefined, ticks: { ...chartOpts.scales.y.ticks, stepSize: 1 } } } }} /></div>
-        </div>
-      </div>
+      )}
+
       <div className="grid3">
         {[
           { ico: '📝', label: 'Question Bank', sub: 'Manage & generate', path: '/app/questions' },
           { ico: '📋', label: 'Assignments', sub: 'Create & allocate', path: '/app/assignments' },
-          { ico: '📈', label: 'Analytics', sub: 'Reports', path: '/app/analytics' },
+          { ico: '📈', label: 'Analytics', sub: 'Charts & deep dive', path: '/app/analytics' },
         ].map((c) => (
           <div key={c.path} className="card" style={{ cursor: 'pointer', flexDirection: 'column', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'center' }} onClick={() => navigate(c.path)}>
             <span style={{ fontSize: 34 }}>{c.ico}</span>
@@ -103,11 +111,4 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
-}
-
-// Show A-Student Factory only for admins (the endpoint enforces it too,
-// but rendering it for tutors would just show a silent failure card)
-function AdminOrTutor() {
-  const { user } = useAuth();
-  return user?.role === 'ADMIN' ? <AStudentFactory /> : null;
 }

@@ -291,9 +291,6 @@ export const analytics = {
     activity: { practiceLast7: number; assignmentsLast7: number };
     gradeSegments: { grade: number; students: number; avgScore: number; activeLast7: number; activeRatio: number }[];
   }>('/analytics/a-student-factory'),
-  gradeSegments: () => request<{
-    segments: { grade: number; students: { id: string; name: string; grade: number; xp: number; pin: string; teacher: { id: string; name: string } | null }[] }[];
-  }>('/analytics/grade-segments'),
 };
 
 // ─── Parent Access ────────────────────────────────────────────────

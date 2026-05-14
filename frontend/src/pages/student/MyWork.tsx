@@ -106,7 +106,7 @@ export default function StudentMyWork() {
   const FILTERS: { key: Filter; label: string; count: number }[] = [
     { key: 'pending', label: '⏳ To do', count: pendingCount },
     { key: 'overdue', label: '⚠️ Overdue', count: overdueCount },
-    { key: 'done', label: '🗂 History', count: doneCount },
+    { key: 'done', label: '✅ Completed', count: doneCount },
     { key: 'all', label: 'All', count: total },
   ];
 
@@ -173,9 +173,9 @@ export default function StudentMyWork() {
       {/* Assignment list */}
       {visible.length === 0 ? (
         <div className="empty">
-          <div className="eico">{filter === 'done' ? '🗂' : filter === 'overdue' ? '✅' : filter === 'pending' ? '🎉' : '📭'}</div>
+          <div className="eico">{filter === 'done' ? '✅' : filter === 'overdue' ? '✅' : filter === 'pending' ? '🎉' : '📭'}</div>
           <h3>{
-            filter === 'done'     ? 'Nothing here yet'
+            filter === 'done'     ? 'No completed assignments yet'
             : filter === 'overdue' ? 'No overdue work — great job!'
             : filter === 'pending' ? 'All caught up!'
             : 'No assignments yet'
@@ -183,7 +183,7 @@ export default function StudentMyWork() {
           <p>{
             filter === 'pending' ? 'Anything new from your tutor will land here.'
             : filter === 'overdue' ? 'Keep it up.'
-            : filter === 'done' ? 'Finished assignments move here once you complete them.'
+            : filter === 'done' ? 'Assignments you finish show here with your best score. For every attempt (including practice), see Quiz History.'
             : 'Your teacher will assign quizzes soon.'
           }</p>
         </div>

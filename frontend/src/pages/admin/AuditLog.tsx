@@ -38,6 +38,12 @@ const ACTION_META: Record<string, { icon: string; label: string; color: string }
   'tutorRequest.approve':         { icon: '✅', label: 'Tutor request approved',   color: '#16a34a' },
   'tutorRequest.deny':            { icon: '❌', label: 'Tutor request denied',     color: '#dc2626' },
   'questions.generate':           { icon: '⚡', label: 'Questions generated',      color: '#d97706' },
+  'questions.import':             { icon: '📂', label: 'Questions imported',       color: '#d97706' },
+  'questions.delete':             { icon: '🗑',  label: 'Questions deleted',        color: '#dc2626' },
+  'question.status':              { icon: '🔁', label: 'Question status changed',  color: 'var(--p)' },
+  'questions.batchApprove':       { icon: '✅', label: 'Batch approved',           color: '#16a34a' },
+  'questions.batchDiscard':       { icon: '🗑',  label: 'Batch discarded',          color: '#dc2626' },
+  'questions.recomputeFlags':     { icon: '📊', label: 'Quality flags recomputed', color: 'var(--p)' },
 };
 function meta(action: string) {
   return ACTION_META[action] || { icon: '•', label: action, color: 'var(--t2)' };
@@ -159,6 +165,34 @@ export default function AdminAuditLog() {
           <span className="ca" style={{ padding: '6px 12px' }}>
             Today <span style={{ color: 'var(--p)', fontWeight: 700, marginLeft: 6 }}>{summary.today}</span>
           </span>
+        </div>
+      )}
+
+      {/* Top actions — most-frequent events, tap to filter */}
+      {summary && summary.topActions.length > 0 && (
+        <div className="flex g1 ia mb2" style={{ flexWrap: 'wrap' }}>
+          <span className="xs bold ct3" style={{ letterSpacing: .3 }}>MOST ACTIVE</span>
+          {summary.topActions.map((ta) => {
+            const m = meta(ta.action);
+            const active = actionFilter === ta.action;
+            return (
+              <button
+                key={ta.action}
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setActionFilter(active ? '' : ta.action)}
+                title={`Filter to: ${m.label}`}
+                style={{
+                  fontSize: 11,
+                  background: active ? 'var(--p)' : 'var(--bg)',
+                  color: active ? '#fff' : 'var(--t)',
+                  border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                }}
+              >
+                {m.icon} {m.label} · <b>{ta.count}</b>
+              </button>
+            );
+          })}
         </div>
       )}
 

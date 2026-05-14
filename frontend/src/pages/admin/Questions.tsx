@@ -11,6 +11,7 @@ import { diffMeta } from '../../utils/difficulty';
 import DifficultyKey from '../../components/DifficultyKey';
 import QuestionGenerator, { SUBJECT_THEME } from '../../components/QuestionGenerator';
 import { statusMeta, qualityMeta, COGNITIVE_LEVELS } from '../../utils/questionMeta';
+import PillSelect from '../../components/PillSelect';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: {
@@ -280,8 +281,8 @@ export default function AdminQuestions() {
           </div>
         </div>
 
-        {/* Browse bar — search + pill filters, mirroring the generator's language */}
-        <div style={{ position: 'relative', marginBottom: 8 }}>
+        {/* Browse bar — every filter is a visible, tappable pill. No dropdowns. */}
+        <div style={{ position: 'relative', marginBottom: 10 }}>
           <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
           <input
             type="text" className="input" style={{ paddingLeft: 34 }}
@@ -289,77 +290,73 @@ export default function AdminQuestions() {
             value={search} onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex ia g2 wrap">
-          {/* Subject pills */}
-          <div className="flex ia g1 wrap">
-            {([
-              { v: '', label: 'All subjects', icon: '' },
-              { v: 'mathematics', label: SUBJECT_THEME.mathematics.short, icon: SUBJECT_THEME.mathematics.icon },
-              { v: 'physical_sciences', label: SUBJECT_THEME.physical_sciences.short, icon: SUBJECT_THEME.physical_sciences.icon },
-            ] as const).map((opt) => {
-              const active = filterSub === opt.v;
-              return (
-                <button
-                  key={opt.v || 'all'} type="button"
-                  onClick={() => { setFilterSub(opt.v); setFilterTopic(''); }}
-                  className="btn btn-sm"
-                  style={{
-                    background: active ? 'var(--p)' : 'var(--bg)',
-                    color: active ? '#fff' : 'var(--t)',
-                    border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
-                  }}
-                >{opt.icon ? `${opt.icon} ` : ''}{opt.label}</button>
-              );
-            })}
+        <div style={{ display: 'grid', gap: 7 }}>
+          <div className="flex ia g2 wrap">
+            <span className="xs bold ct3" style={{ minWidth: 56 }}>Subject</span>
+            <PillSelect
+              ariaLabel="Filter by subject"
+              value={filterSub}
+              onChange={(v) => { setFilterSub(v); setFilterTopic(''); }}
+              options={[
+                { value: '', label: 'All' },
+                { value: 'mathematics', label: SUBJECT_THEME.mathematics.short, icon: SUBJECT_THEME.mathematics.icon },
+                { value: 'physical_sciences', label: SUBJECT_THEME.physical_sciences.short, icon: SUBJECT_THEME.physical_sciences.icon },
+              ]}
+            />
           </div>
-          <span className="ct3" style={{ opacity: .5 }}>·</span>
-          {/* Grade pills */}
-          <div className="flex ia g1 wrap">
-            <button
-              type="button" className="btn btn-sm"
-              onClick={() => { setFilterGrade(''); setFilterTopic(''); }}
-              style={{
-                background: filterGrade === '' ? 'var(--p)' : 'var(--bg)',
-                color: filterGrade === '' ? '#fff' : 'var(--t)',
-                border: `1px solid ${filterGrade === '' ? 'var(--p)' : 'var(--bd)'}`,
-              }}
-            >All grades</button>
-            {gradeOptions.map((g) => {
-              const active = filterGrade === String(g);
-              return (
-                <button
-                  key={g} type="button" className="btn btn-sm"
-                  onClick={() => { setFilterGrade(String(g)); setFilterTopic(''); }}
-                  style={{
-                    background: active ? 'var(--p)' : 'var(--bg)',
-                    color: active ? '#fff' : 'var(--t)',
-                    border: `1px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
-                  }}
-                >Gr {g}</button>
-              );
-            })}
+          <div className="flex ia g2 wrap">
+            <span className="xs bold ct3" style={{ minWidth: 56 }}>Grade</span>
+            <PillSelect
+              ariaLabel="Filter by grade"
+              value={filterGrade}
+              onChange={(v) => { setFilterGrade(v); setFilterTopic(''); }}
+              options={[
+                { value: '', label: 'All' },
+                ...gradeOptions.map((g) => ({ value: String(g), label: `Gr ${g}` })),
+              ]}
+            />
           </div>
-          <span className="ct3" style={{ opacity: .5 }}>·</span>
-          {/* Topic + status selects */}
-          <select className="select btn-sm" style={{ width: 'auto' }} value={filterTopic} onChange={(e) => setFilterTopic(e.target.value)} disabled={filterTopics.length === 0}>
-            <option value="">{filterTopics.length === 0 ? 'Pick subject + grade for topics' : 'All topics'}</option>
-            {filterTopics.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <div className="flex ia g2 wrap">
+            <span className="xs bold ct3" style={{ minWidth: 56 }}>Topic</span>
+            {filterTopics.length === 0 ? (
+              <span className="xs ct3" style={{ fontStyle: 'italic' }}>Pick a subject &amp; grade above to filter by topic</span>
+            ) : (
+              <PillSelect
+                ariaLabel="Filter by topic"
+                value={filterTopic}
+                onChange={setFilterTopic}
+                options={[
+                  { value: '', label: 'All topics' },
+                  ...filterTopics.map((t) => ({ value: t, label: t })),
+                ]}
+              />
+            )}
+          </div>
           {isAdmin && (
-            <select className="select btn-sm" style={{ width: 'auto' }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} title="Review status">
-              <option value="">All statuses</option>
-              <option value="REVIEW">🔍 In review</option>
-              <option value="PUBLISHED">✅ Published</option>
-              <option value="DRAFT">✏️ Draft</option>
-              <option value="RETIRED">📦 Retired</option>
-              <option value="FLAGGED">🚩 Quality-flagged</option>
-            </select>
+            <div className="flex ia g2 wrap">
+              <span className="xs bold ct3" style={{ minWidth: 56 }}>Status</span>
+              <PillSelect
+                ariaLabel="Filter by review status"
+                value={filterStatus}
+                onChange={setFilterStatus}
+                options={[
+                  { value: '', label: 'All' },
+                  { value: 'REVIEW', label: 'In review', icon: '🔍' },
+                  { value: 'PUBLISHED', label: 'Published', icon: '✅' },
+                  { value: 'DRAFT', label: 'Draft', icon: '✏️' },
+                  { value: 'RETIRED', label: 'Retired', icon: '📦' },
+                  { value: 'FLAGGED', label: 'Quality-flagged', icon: '🚩' },
+                ]}
+              />
+            </div>
           )}
           {anyFilter && (
-            <button
-              type="button" className="btn ba btn-sm"
-              onClick={() => { setSearch(''); setFilterSub(''); setFilterGrade(baseGrade); setFilterTopic(''); setFilterStatus(''); }}
-            >✕ Clear</button>
+            <div>
+              <button
+                type="button" className="btn ba btn-sm"
+                onClick={() => { setSearch(''); setFilterSub(''); setFilterGrade(baseGrade); setFilterTopic(''); setFilterStatus(''); }}
+              >✕ Clear filters</button>
+            </div>
           )}
         </div>
       </div>
@@ -580,45 +577,74 @@ export default function AdminQuestions() {
         </>
       )}
 
-      {/* Add / Edit Modal */}
+      {/* Add / Edit Modal — guided, fully-tappable. No dropdowns. */}
       {showAdd && (
-        <Modal title={editId ? '✏️ Edit Question' : '📝 Add Question'} onClose={() => { setShowAdd(false); setEditId(''); }} wide>
+        <Modal title={editId ? '✏️ Edit Question' : '📝 Add a Question'} onClose={() => { setShowAdd(false); setEditId(''); }} wide>
+          <div className="xs ct3 mb2">Answer the prompts below — every choice is one tap.</div>
+          <div className="fg">
+            <label className="lbl">1. Which subject?</label>
+            <PillSelect
+              ariaLabel="Subject"
+              value={form.subject}
+              onChange={(v) => setForm({ ...form, subject: v, topic: TOPICS[v]?.[Number(form.grade)]?.[0] || '' })}
+              options={[
+                { value: 'mathematics', label: SUBJECT_THEME.mathematics.label, icon: SUBJECT_THEME.mathematics.icon },
+                { value: 'physical_sciences', label: SUBJECT_THEME.physical_sciences.label, icon: SUBJECT_THEME.physical_sciences.icon },
+              ]}
+            />
+          </div>
+          <div className="fg">
+            <label className="lbl">2. Which grade?</label>
+            <PillSelect
+              ariaLabel="Grade"
+              value={form.grade}
+              onChange={(v) => setForm({ ...form, grade: v, topic: TOPICS[form.subject]?.[Number(v)]?.[0] || '' })}
+              options={gradeOptions.map((g) => ({ value: String(g), label: `Grade ${g}` }))}
+            />
+          </div>
+          <div className="fg">
+            <label className="lbl">3. Which topic?</label>
+            <PillSelect
+              ariaLabel="Topic"
+              value={form.topic}
+              onChange={(v) => setForm({ ...form, topic: v })}
+              options={formTopics.map((t) => ({ value: t, label: t }))}
+            />
+          </div>
+          <div className="fg">
+            <label className="lbl">4. How hard is it?</label>
+            <PillSelect
+              ariaLabel="Difficulty"
+              value={form.difficulty}
+              onChange={(v) => setForm({ ...form, difficulty: v })}
+              options={(['Easy', 'Medium', 'Hard'] as const).map((d) => {
+                const m = diffMeta(d.toUpperCase());
+                return { value: d, label: m.label, icon: m.icon };
+              })}
+            />
+          </div>
           <div className="grid2" style={{ gap: 10 }}>
-            <div className="fg"><label className="lbl">Subject</label>
-              <select className="select" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value, topic: TOPICS[e.target.value]?.[Number(form.grade)]?.[0] || '' })}>
-                <option value="mathematics">Mathematics</option><option value="physical_sciences">Physical Sciences</option>
-              </select>
-            </div>
-            <div className="fg"><label className="lbl">Grade</label>
-              <select className="select" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value, topic: TOPICS[form.subject]?.[Number(e.target.value)]?.[0] || '' })}>
-                {gradeOptions.map((g) => <option key={g} value={String(g)}>Grade {g}</option>)}
-              </select>
-            </div>
-            <div className="fg"><label className="lbl">Topic</label>
-              <input list="form-topics-list" className="input" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Type or pick a topic" />
-              <datalist id="form-topics-list">{formTopics.map((t) => <option key={t} value={t} />)}</datalist>
-            </div>
-            <div className="fg"><label className="lbl">Difficulty</label>
-              <select className="select" value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
-                <option>Easy</option><option>Medium</option><option>Hard</option>
-              </select>
-            </div>
             <div className="fg"><label className="lbl">CAPS code <span className="xs ct3">(optional)</span></label>
               <input className="input" value={form.capsCode} onChange={(e) => setForm({ ...form, capsCode: e.target.value })} placeholder="e.g. M10-01" />
             </div>
-            <div className="fg"><label className="lbl">Cognitive level <span className="xs ct3">(CAPS 1-4)</span></label>
-              <select className="select" value={form.cognitiveLevel} onChange={(e) => setForm({ ...form, cognitiveLevel: e.target.value })}>
-                <option value="">— not set —</option>
-                {COGNITIVE_LEVELS.map((c) => <option key={c.value} value={String(c.value)} title={c.hint}>{c.label}</option>)}
-              </select>
+            <div className="fg"><label className="lbl">Cognitive level <span className="xs ct3">(CAPS 1-4 · optional)</span></label>
+              <PillSelect
+                ariaLabel="Cognitive level"
+                value={form.cognitiveLevel}
+                onChange={(v) => setForm({ ...form, cognitiveLevel: v })}
+                options={[
+                  { value: '', label: 'Not set' },
+                  ...COGNITIVE_LEVELS.map((c) => ({ value: String(c.value), label: `L${c.value}`, hint: c.hint })),
+                ]}
+              />
             </div>
           </div>
           <div className="fg">
-            <label className="lbl">Question</label>
+            <label className="lbl">5. Write the question</label>
             <textarea ref={questionRef} className="textarea" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="Type the question here" />
             <SnippetToolbar targetRef={questionRef} value={form.question} onChange={(v) => setForm({ ...form, question: v })} />
           </div>
-          <div className="fg"><label className="lbl">Image (optional)</label>
+          <div className="fg"><label className="lbl">6. Add a diagram <span className="xs ct3">(optional)</span></label>
             <div className="file-zone" onClick={() => document.getElementById('q-img-inp')?.click()}>
               <input type="file" id="q-img-inp" accept="image/*" style={{ display: 'none' }} onChange={handleImgUpload} />
               {form.imageData ? <img src={form.imageData} style={{ maxHeight: 150, maxWidth: '100%', borderRadius: 8 }} /> : <span className="sm ct3">📷 Click to attach an image</span>}
@@ -626,17 +652,17 @@ export default function AdminQuestions() {
             {form.imageData && <button className="btn ba btn-sm mt1" onClick={() => setForm({ ...form, imageData: '' })}>✕ Remove image</button>}
           </div>
           <div className="fg">
-            <label className="lbl">Options (one per line · prefix correct with ★)</label>
+            <label className="lbl">7. List the options <span className="xs ct3">(one per line · prefix the correct one with ★)</span></label>
             <textarea ref={optionsRef} className="textarea" value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder={'★ x = 5\nx = 3\nx = 7\nx = 10'} style={{ minHeight: 88 }} />
             <SnippetToolbar targetRef={optionsRef} value={form.options} onChange={(v) => setForm({ ...form, options: v })} />
           </div>
           <div className="fg">
-            <label className="lbl">Correct answer (must match one option exactly)</label>
+            <label className="lbl">8. Confirm the correct answer <span className="xs ct3">(must match one option exactly)</span></label>
             <input ref={answerRef} type="text" className="input" value={form.answer} onChange={(e) => setForm({ ...form, answer: e.target.value })} placeholder="e.g. x = 5" />
             <SnippetToolbar targetRef={answerRef} value={form.answer} onChange={(v) => setForm({ ...form, answer: v })} />
           </div>
           <div className="fg">
-            <label className="lbl">Step-by-step solution</label>
+            <label className="lbl">9. Explain the solution <span className="xs ct3">(step by step)</span></label>
             <textarea ref={solutionRef} className="textarea" value={form.solution} onChange={(e) => setForm({ ...form, solution: e.target.value })} placeholder={'Step 1: …\nStep 2: …'} style={{ minHeight: 85 }} />
             <SnippetToolbar targetRef={solutionRef} value={form.solution} onChange={(v) => setForm({ ...form, solution: v })} />
           </div>

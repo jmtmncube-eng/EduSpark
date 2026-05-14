@@ -224,18 +224,36 @@ export default function AdminQuestions() {
 
   return (
     <div>
-      <div className="ph">
-        <h2>📚 My Question Bank</h2>
-        <p>Search, generate, review and bundle your CAPS questions — all in one place.</p>
+      {/* ─── Sticky header — "My Question Bank" + search stay pinned just
+          below the topbar, so they're reachable from anywhere on the page. ─── */}
+      <div style={{
+        position: 'sticky', top: 56, zIndex: 30,
+        background: 'var(--bg)', padding: '6px 0 9px', marginBottom: 10,
+        borderBottom: '1px solid var(--bd)',
+      }}>
+        <div className="flex jb ia wrap g2">
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontFamily: 'var(--fh)', fontSize: 20 }}>📚 My Question Bank</h2>
+            <div className="xs ct3">
+              {qs.length} question{qs.length === 1 ? '' : 's'}{anyFilter ? ' match your filters' : ' in your bank'}
+              {' · '}generate &amp; group below
+            </div>
+          </div>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 460 }}>
+            <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
+            <input
+              type="text" className="input" style={{ paddingLeft: 34 }}
+              placeholder="Search question text or topic…"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* ─── Browse & manage — search + filters + actions, pinned to the top ─── */}
+      {/* ─── Browse & manage — actions + pill filters ─── */}
       <div className="ca" style={{ padding: 14, marginBottom: 14 }}>
         <div className="flex jb ia wrap g2" style={{ marginBottom: 10 }}>
-          <div className="xs ct3">
-            {qs.length} question{qs.length === 1 ? '' : 's'}{anyFilter ? ' match your filters' : ' in your bank'}
-            {' · '}generate below, grouped further down
-          </div>
+          <div className="xs ct3">Filter the bank, then act on what you find:</div>
           <div className="flex g1 wrap">
             <button className="btn ba btn-sm" onClick={() => { setForm(defaultForm()); setEditId(''); setShowAdd(true); }}>📝 Add manually</button>
             <button className="btn ba btn-sm" onClick={() => setShowImport(true)}>📂 Import</button>
@@ -259,15 +277,7 @@ export default function AdminQuestions() {
           </div>
         </div>
 
-        {/* Browse bar — every filter is a visible, tappable pill. No dropdowns. */}
-        <div style={{ position: 'relative', marginBottom: 10 }}>
-          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }}>🔍</span>
-          <input
-            type="text" className="input" style={{ paddingLeft: 34 }}
-            placeholder="Search question text or topic…"
-            value={search} onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        {/* Pill filters — every filter is a visible, tappable pill. No dropdowns. */}
         <div style={{ display: 'grid', gap: 7 }}>
           <div className="flex ia g2 wrap">
             <span className="xs bold ct3" style={{ minWidth: 56 }}>Subject</span>

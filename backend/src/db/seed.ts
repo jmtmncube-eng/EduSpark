@@ -72,7 +72,7 @@ async function main() {
           subject: 'MATHEMATICS', grade: 10, topic: 'Algebra', difficulty: 'EASY',
           question: 'Solve: 3x + 6 = 21',
           options: ['x=5', 'x=9', 'x=3', 'x=7'], answer: 'x=5',
-          solution: '3x=15, x=5', visibility: 'ALL', createdById: adminRef.id,
+          solution: '3x=15, x=5', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
       prisma.question.create({
@@ -80,7 +80,7 @@ async function main() {
           subject: 'MATHEMATICS', grade: 10, topic: 'Algebra', difficulty: 'MEDIUM',
           question: 'Factorise: x²−5x+6',
           options: ['(x−2)(x−3)', '(x+2)(x+3)', '(x−1)(x−6)', 'x(x−5)'], answer: '(x−2)(x−3)',
-          solution: 'Numbers: −2×−3=6, −2+(−3)=−5 → (x−2)(x−3)', visibility: 'ALL', createdById: adminRef.id,
+          solution: 'Numbers: −2×−3=6, −2+(−3)=−5 → (x−2)(x−3)', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
       prisma.question.create({
@@ -88,7 +88,7 @@ async function main() {
           subject: 'MATHEMATICS', grade: 11, topic: 'Quadratic Equations', difficulty: 'HARD',
           question: 'Solve 2x²−7x+3=0',
           options: ['x=3 or x=0.5', 'x=2 or x=1.5', 'x=−3 or x=−0.5', 'x=7'], answer: 'x=3 or x=0.5',
-          solution: 'Δ=49−24=25, x=(7±5)/4 → x=3 or x=0.5', visibility: 'ALL', createdById: adminRef.id,
+          solution: 'Δ=49−24=25, x=(7±5)/4 → x=3 or x=0.5', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
       prisma.question.create({
@@ -96,7 +96,7 @@ async function main() {
           subject: 'PHYSICAL_SCIENCES', grade: 10, topic: "Newton's Laws", difficulty: 'EASY',
           question: '10kg, a=3m/s². Net force?',
           options: ['30N', '13N', '7N', '300N'], answer: '30N',
-          solution: 'F=ma=10×3=30N', visibility: 'ALL', createdById: adminRef.id,
+          solution: 'F=ma=10×3=30N', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
       prisma.question.create({
@@ -104,7 +104,7 @@ async function main() {
           subject: 'PHYSICAL_SCIENCES', grade: 10, topic: 'Energy & Power', difficulty: 'EASY',
           question: 'KE of 5kg at 4m/s?',
           options: ['40J', '80J', '20J', '10J'], answer: '40J',
-          solution: 'KE=½mv²=½×5×16=40J', visibility: 'ALL', createdById: adminRef.id,
+          solution: 'KE=½mv²=½×5×16=40J', visibility: 'ALL', status: 'PUBLISHED', createdById: adminRef.id,
         },
       }),
     ]);

@@ -18,7 +18,7 @@
  *   • generic-axes       — fallback for "graphy" topics
  */
 
-type DiagramKind =
+export type DiagramKind =
   | 'triangle' | 'parabola' | 'coord-grid' | 'bar-chart'
   | 'vector' | 'incline' | 'circuit' | 'wave'
   | 'projectile' | 'generic-axes';
@@ -65,6 +65,20 @@ function fallbackKind(subject?: string): DiagramKind {
 export function makeDiagram(topic: string, subject?: string): string {
   const match = TOPIC_DIAGRAMS.find((m) => m.match.test(topic));
   const kind = match ? pick(match.kinds) : fallbackKind(subject);
+  return svgToDataUrl(renderSvg(kind));
+}
+
+/**
+ * Render a diagram for an EXPLICIT, known-relevant kind — or return null when
+ * the caller says there is no genuinely relevant diagram for this question.
+ *
+ * This is the v2.9 "smarter diagrams" path: the modular generator registry
+ * tells us exactly which diagram kind belongs to a topic, so we never attach
+ * a random parabola to a Statistics question. `null` in → `null` out: the
+ * question simply carries no image rather than a misleading one.
+ */
+export function makeDiagramOfKind(kind: DiagramKind | null | undefined): string | null {
+  if (!kind) return null;
   return svgToDataUrl(renderSvg(kind));
 }
 

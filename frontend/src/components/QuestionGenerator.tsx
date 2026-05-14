@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { questions as questionsApi } from '../services/api';
 import { showToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -280,7 +280,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
           {recent.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div className="flex jb ia mb1">
-                <div className="sm bold">✅ Just generated · {recent.length}</div>
+                <div className="sm bold">🔍 Just generated · {recent.length} <span className="xs ct3" style={{ fontWeight: 400 }}>· in review</span></div>
                 {batchId && (
                   <a
                     href={`#batch-${batchId}`}
@@ -288,9 +288,12 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
                     className="xs bold"
                     style={{ color: theme!.fg, textDecoration: 'underline', cursor: 'pointer' }}
                   >
-                    🔗 View this batch →
+                    🔗 Review &amp; approve this batch →
                   </a>
                 )}
+              </div>
+              <div className="xs ct3 mb1">
+                These are in <b>review</b> — open the batch to approve them before they can be bundled into a Pack.
               </div>
               <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
                 {recent.map((q, i) => {
@@ -353,6 +356,17 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
                       {b.questionCount} question{b.questionCount === 1 ? '' : 's'} · {b.difficulty || 'MIXED'} · {ago}
                     </div>
                   </div>
+                  {b.reviewCount > 0 ? (
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+                      background: 'rgba(180,83,9,.12)', color: '#b45309', whiteSpace: 'nowrap',
+                    }} title="Questions still awaiting review">🔍 {b.reviewCount} to review</span>
+                  ) : (
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+                      background: 'rgba(21,128,61,.12)', color: '#15803d', whiteSpace: 'nowrap',
+                    }} title="All questions signed off">✅ Approved</span>
+                  )}
                   <span className="xs ct3" style={{ whiteSpace: 'nowrap' }}>View →</span>
                 </button>
               );
@@ -380,12 +394,13 @@ function relTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-ZA');
 }
 
-// ─── Batch viewer modal ─────────────────────────────────────────────
+// ─── Batch viewer modal — review, approve or discard a generation run ──
 function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => void; onDelete: () => void }) {
   const [batch, setBatch] = useState<Awaited<ReturnType<typeof questionsApi.getBatch>> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const fetchBatch = useCallback(() => {
     setLoading(true);
     questionsApi.getBatch(id)
       .then(setBatch)
@@ -393,13 +408,37 @@ function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
       .finally(() => setLoading(false));
   }, [id, onClose]);
 
-  async function remove() {
-    if (!confirm('Remove this batch record? The individual questions stay in your bank.')) return;
+  useEffect(() => { fetchBatch(); }, [fetchBatch]);
+
+  async function approve() {
+    if (!confirm('Approve this batch? Every question that passes validation is published and becomes eligible for Packs.')) return;
+    setBusy(true);
     try {
-      await questionsApi.deleteBatch(id);
-      showToast('Batch record removed (questions kept)', 'info');
+      const r = await questionsApi.approveBatch(id);
+      showToast(
+        r.failed
+          ? `Published ${r.approved} · ${r.failed} still need fixing`
+          : `✅ Published all ${r.approved} question(s)`,
+        r.failed ? 'warn' : 'success',
+      );
+      fetchBatch();
+      onDelete(); // refreshes the parent list
+    } catch (e) { showToast(String((e as Error).message), 'err'); }
+    finally { setBusy(false); }
+  }
+
+  async function discard() {
+    if (!confirm('Discard this whole batch? Every question in it is permanently deleted (except any already bundled into a Pack). This cannot be undone.')) return;
+    setBusy(true);
+    try {
+      const r = await questionsApi.discardBatch(id);
+      showToast(
+        `🗑 Discarded ${r.deleted} question(s)` + (r.keptBecausePacked ? ` · kept ${r.keptBecausePacked} already in a Pack` : ''),
+        'info',
+      );
       onDelete();
     } catch (e) { showToast(String((e as Error).message), 'err'); }
+    finally { setBusy(false); }
   }
 
   if (loading || !batch) {
@@ -407,6 +446,9 @@ function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
   }
 
   const theme = batch.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+  const reviewCount = batch.questions.filter((q) => q.status === 'REVIEW' || q.status === 'DRAFT').length;
+  const flaggedCount = batch.questions.filter((q) => (q.validationErrors?.length ?? 0) > 0).length;
+
   return (
     <Modal title={`🗂 Batch · ${batch.topic}`} onClose={onClose}>
       <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -419,28 +461,64 @@ function BatchViewer({ id, onClose, onDelete }: { id: string; onClose: () => voi
             By {batch.createdBy.name} ({batch.createdBy.role.toLowerCase()}) · {new Date(batch.createdAt).toLocaleString('en-ZA')}
           </div>
         </div>
-        <button className="btn ba btn-sm" onClick={remove} title="Remove this batch record">🗑 Remove batch</button>
       </div>
 
-      <div className="xs ct3 mb2">
-        💡 These questions are already in your Question Bank — you can add them to a Pack from there.
+      {/* Review summary + actions */}
+      <div style={{
+        padding: '10px 12px', borderRadius: 10, marginBottom: 12,
+        background: reviewCount ? 'rgba(180,83,9,.07)' : 'rgba(21,128,61,.07)',
+        border: `1px solid ${reviewCount ? 'rgba(180,83,9,.3)' : 'rgba(21,128,61,.3)'}`,
+      }}>
+        <div className="sm" style={{ fontWeight: 700 }}>
+          {reviewCount
+            ? `🔍 ${reviewCount} of ${batch.questions.length} still awaiting review`
+            : `✅ All ${batch.questions.length} question(s) signed off`}
+        </div>
+        {flaggedCount > 0 && (
+          <div className="xs" style={{ color: '#b91c1c', marginTop: 2 }}>
+            ⚠ {flaggedCount} have validation errors — approve will leave those in review until fixed.
+          </div>
+        )}
+        <div className="xs ct2" style={{ marginTop: 4 }}>
+          Approve to publish the clean ones (eligible for Packs), or discard to bin the whole run.
+        </div>
+        <div className="flex g1 mt1 wrap">
+          <button className="btn btn-sm" onClick={approve} disabled={busy || reviewCount === 0}
+            style={{ background: '#15803d', color: '#fff', border: 'none' }}>
+            ✅ Approve batch
+          </button>
+          <button className="btn ba btn-sm" onClick={discard} disabled={busy}>🗑 Discard batch</button>
+        </div>
       </div>
 
-      <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
+      <div style={{ maxHeight: 380, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
         {batch.questions.map((q, i) => {
           const meta = diffMeta(q.difficulty);
+          const errs = q.validationErrors ?? [];
+          const published = q.status === 'PUBLISHED';
           return (
             <div key={q.id} style={{ padding: 10, borderBottom: '1px solid var(--bd)' }}>
-              <div className="flex jb ia">
+              <div className="flex jb ia" style={{ gap: 6, flexWrap: 'wrap' }}>
                 <span className="xs ct3">Q{i + 1} · ~{q.expectedSeconds}s</span>
-                <span style={{
-                  padding: '2px 8px', borderRadius: 99,
-                  fontSize: 10.5, fontWeight: 700,
-                  background: meta.bg, color: meta.fg, border: `1px solid ${meta.borderColor}`,
-                }}>{meta.icon} {meta.label}</span>
+                <div className="flex ia g1" style={{ flexWrap: 'wrap' }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+                    background: published ? 'rgba(21,128,61,.12)' : 'rgba(180,83,9,.12)',
+                    color: published ? '#15803d' : '#b45309',
+                  }}>{published ? '✅ Published' : '🔍 In review'}</span>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 700,
+                    background: meta.bg, color: meta.fg, border: `1px solid ${meta.borderColor}`,
+                  }}>{meta.icon} {meta.label}</span>
+                </div>
               </div>
               <div className="sm" style={{ fontWeight: 600, marginTop: 4 }}>{q.question}</div>
               <div className="xs ct2 mt1">Answer: <span style={{ fontWeight: 600 }}>{q.answer}</span></div>
+              {errs.length > 0 && (
+                <div className="xs" style={{ color: '#b91c1c', marginTop: 3 }}>
+                  ⚠ {errs.join(' · ')}
+                </div>
+              )}
             </div>
           );
         })}

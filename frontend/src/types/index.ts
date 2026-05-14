@@ -25,6 +25,8 @@ export interface User {
   daysLeft?: number;
 }
 
+export type QuestionStatus = 'DRAFT' | 'REVIEW' | 'PUBLISHED' | 'RETIRED';
+
 export interface Question {
   id: string;
   subject: Subject;
@@ -39,6 +41,13 @@ export interface Question {
   visibility: Visibility;
   imageData: string | null;
   createdAt: string;
+  // v2.9 — quality & review pipeline
+  status?: QuestionStatus;
+  capsCode?: string | null;
+  cognitiveLevel?: number | null;
+  qualityFlag?: string | null;
+  validationErrors?: string[];
+  reviewedAt?: string | null;
 }
 
 export interface AssignmentDocument {

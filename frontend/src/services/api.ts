@@ -127,14 +127,48 @@ export const questions = {
       '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count, difficulty }) }
     ),
   stats: (ids: string[]) => {
-    if (!ids.length) return Promise.resolve({} as Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>);
-    return request<Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>>(
+    if (!ids.length) return Promise.resolve({} as Record<string, QuestionStat>);
+    return request<Record<string, QuestionStat>>(
       `/questions/stats?ids=${encodeURIComponent(ids.join(','))}`
     );
   },
-  listBatches: () => request<{ id: string; subject: string; grade: number; topic: string; requestedCount: number; difficulty: string | null; createdAt: string; questionCount: number }[]>('/questions/batches'),
-  getBatch: (id: string) => request<{ id: string; subject: string; grade: number; topic: string; createdAt: string; createdBy: { name: string; role: string }; questions: { id: string; question: string; difficulty: string; topic: string; subject: string; options: string[]; answer: string; expectedSeconds: number }[] }>(`/questions/batches/${id}`),
+  listBatches: () => request<{
+    id: string; subject: string; grade: number; topic: string; requestedCount: number;
+    difficulty: string | null; status: string; createdAt: string; questionCount: number;
+    publishedCount: number; reviewCount: number; flaggedCount: number;
+  }[]>('/questions/batches'),
+  getBatch: (id: string) => request<{
+    id: string; subject: string; grade: number; topic: string; status: string;
+    createdAt: string; createdBy: { name: string; role: string };
+    questions: {
+      id: string; question: string; difficulty: string; topic: string; subject: string;
+      options: string[]; answer: string; expectedSeconds: number;
+      status?: string; validationErrors?: string[]; qualityFlag?: string | null;
+    }[];
+  }>(`/questions/batches/${id}`),
   deleteBatch: (id: string) => request<{ success: boolean }>(`/questions/batches/${id}`, { method: 'DELETE' }),
+  approveBatch: (id: string) =>
+    request<{ approved: number; failed: number; failedQuestions: { id: string; errors: string[] }[] }>(
+      `/questions/batches/${id}/approve`, { method: 'POST' }
+    ),
+  discardBatch: (id: string) =>
+    request<{ deleted: number; keptBecausePacked: number }>(
+      `/questions/batches/${id}/discard`, { method: 'POST' }
+    ),
+  setStatus: (id: string, status: string) =>
+    request<object>(`/questions/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  qualityReport: () =>
+    request<{
+      total: number;
+      counts: { broken: number; trivial: number; low_discrimination: number; no_attempts: number; healthy: number };
+      flagged: {
+        id: string; question: string; topic: string; subject: string; grade: number;
+        status: string; difficulty: string; attempts: number; correctRate: number;
+        discrimination: number; flag: string;
+      }[];
+    }>('/questions/quality-report'),
+  recomputeFlags: () =>
+    request<{ updated: number; total: number }>('/questions/recompute-flags', { method: 'POST' }),
   create: (data: object) =>
     request<object>('/questions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: object) =>
@@ -152,6 +186,15 @@ export const questions = {
       '/questions/import', { method: 'POST', body: JSON.stringify({ text }) }
     ),
 };
+
+export interface QuestionStat {
+  used: number;
+  packCount: number;
+  attempts: number;
+  correctRate: number;
+  discrimination: number;
+  qualityFlag: 'broken' | 'trivial' | 'low_discrimination' | 'no_attempts' | null;
+}
 
 // ─── Assignments ──────────────────────────────────────────────────
 export const assignments = {

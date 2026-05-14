@@ -65,6 +65,9 @@ model User {
   generationBatches  QuestionBatch[]   @relation("BatchCreator")
   auditTrail         AuditLog[]        @relation("AuditActor")
 
+  // v2.9 — questions this user has reviewed/approved
+  reviewedQuestions  Question[]        @relation("QuestionReviewer")
+
   @@map("users")
 }
 
@@ -83,6 +86,21 @@ model Question {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
+  // ─── Quality / review pipeline (v2.9) ─────────────────────────────
+  // status        : DRAFT → REVIEW → PUBLISHED (only PUBLISHED reaches packs) → RETIRED
+  // capsCode      : CAPS curriculum reference, e.g. "10.2.1" — lets stats slice by curriculum
+  // cognitiveLevel: CAPS cognitive level 1-4 (Knowledge · Routine · Complex · Problem-solving)
+  // qualityFlag   : auto-computed health flag — null = healthy, else 'broken'|'trivial'|'low_discrimination'|'no_attempts'
+  // validationErrors: blocking issues found by the validation pipeline (empty = clean)
+  status           QuestionStatus @default(DRAFT)
+  capsCode         String?
+  cognitiveLevel   Int?
+  qualityFlag      String?
+  validationErrors String[]
+  reviewedAt       DateTime?
+  reviewedById     String?
+  reviewedBy       User?          @relation("QuestionReviewer", fields: [reviewedById], references: [id])
+
   createdBy   User?   @relation(fields: [createdById], references: [id])
   createdById String?
 
@@ -91,6 +109,8 @@ model Question {
   packQuestions       PackQuestion[]
   batchItems          QuestionBatchItem[] @relation("BatchedQuestions")
 
+  @@index([status, subject, grade])
+  @@index([qualityFlag])
   @@map("questions")
 }
 
@@ -286,6 +306,14 @@ enum Difficulty {
   HARD
 }
 
+// v2.9 — review pipeline. Only PUBLISHED questions are pulled into Packs.
+enum QuestionStatus {
+  DRAFT       // freshly created, not yet checked
+  REVIEW      // generated/imported in bulk, awaiting human sign-off
+  PUBLISHED   // validated + approved — eligible for Packs & Assignments
+  RETIRED     // pulled from circulation (kept for historical results)
+}
+
 enum Visibility {
   ALL
   GR10
@@ -428,6 +456,8 @@ model QuestionBatch {
   requestedCount Int     @default(0)
   difficulty    String?  // 'MIXED' / 'EASY' / 'MEDIUM' / 'HARD' — the wizard's mix selector
   note          String?  @db.Text
+  // v2.9 — review state for the whole run: REVIEW → APPROVED (or DISCARDED)
+  status        String   @default("REVIEW")
   createdAt     DateTime @default(now())
 
   createdBy User             @relation("BatchCreator", fields: [createdById], references: [id], onDelete: Cascade)

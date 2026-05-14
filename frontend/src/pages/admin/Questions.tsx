@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { questions as questionsApi, packs as packsApi } from '../../services/api';
+import { questions as questionsApi, packs as packsApi, type QuestionStat } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '../../components/Toast';
 import Modal from '../../components/Modal';
 import SnippetToolbar from '../../components/SnippetToolbar';
-import type { Question, Pack } from '../../types';
+import type { Question, Pack, QuestionStatus } from '../../types';
 import { compressDiagram } from '../../utils/helpers';
 import DiagramViewer from '../../components/DiagramViewer';
 import { diffMeta } from '../../utils/difficulty';
 import DifficultyKey from '../../components/DifficultyKey';
 import QuestionGenerator, { SUBJECT_THEME } from '../../components/QuestionGenerator';
+import { statusMeta, qualityMeta, COGNITIVE_LEVELS } from '../../utils/questionMeta';
 
 const TOPICS: Record<string, Record<number, string[]>> = {
   mathematics: {
@@ -24,21 +25,33 @@ const TOPICS: Record<string, Record<number, string[]>> = {
   },
 };
 
-interface QForm { subject: string; grade: string; topic: string; difficulty: string; question: string; options: string; answer: string; solution: string; imageData: string; }
-const defaultForm = (): QForm => ({ subject: 'mathematics', grade: '10', topic: 'Algebra', difficulty: 'Easy', question: '', options: '', answer: '', solution: '', imageData: '' });
+interface QForm {
+  subject: string; grade: string; topic: string; difficulty: string;
+  question: string; options: string; answer: string; solution: string; imageData: string;
+  capsCode: string; cognitiveLevel: string;
+}
+const defaultForm = (): QForm => ({
+  subject: 'mathematics', grade: '10', topic: 'Algebra', difficulty: 'Easy',
+  question: '', options: '', answer: '', solution: '', imageData: '',
+  capsCode: '', cognitiveLevel: '',
+});
 
 export default function AdminQuestions() {
   const { user } = useAuth();
   const isTutor = user?.role === 'TUTOR';
   const defaultGrade = isTutor && user?.teachGrades?.length ? String(Math.min(...(user.teachGrades as number[]))) : '10';
 
+  const isAdmin = user?.role === 'ADMIN';
+
   const [qs, setQs] = useState<Question[]>([]);
   const [search, setSearch] = useState('');
   const [filterSub, setFilterSub] = useState('');
   const [filterGrade, setFilterGrade] = useState(isTutor && user?.teachGrades?.length ? defaultGrade : '');
   const [filterTopic, setFilterTopic] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showQuality, setShowQuality] = useState(false);
   const [form, setForm] = useState<QForm>(defaultForm());
   const [editId, setEditId] = useState('');
   const [importText, setImportText] = useState('');
@@ -54,7 +67,7 @@ export default function AdminQuestions() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [attachOpen, setAttachOpen] = useState(false);
 
-  const [stats, setStats] = useState<Record<string, { used: number; attempts: number; correctRate: number; packCount: number }>>({});
+  const [stats, setStats] = useState<Record<string, QuestionStat>>({});
 
   const load = useCallback(async () => {
     const params: Record<string, string> = {};
@@ -62,6 +75,10 @@ export default function AdminQuestions() {
     if (filterGrade) params.grade = filterGrade;
     if (filterTopic) params.topic = filterTopic;
     if (search) params.search = search;
+    if (filterStatus) {
+      if (filterStatus === 'FLAGGED') params.qualityFlag = 'flagged';
+      else params.status = filterStatus;
+    }
     const data = await questionsApi.list(params);
     setQs(data as Question[]);
     // Quality signals — fetched in parallel, overlaid on cards
@@ -70,7 +87,7 @@ export default function AdminQuestions() {
       if (ids.length) setStats(await questionsApi.stats(ids));
       else setStats({});
     } catch { /* silent — stats are best-effort */ }
-  }, [search, filterSub, filterGrade, filterTopic]);
+  }, [search, filterSub, filterGrade, filterTopic, filterStatus]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -87,6 +104,8 @@ export default function AdminQuestions() {
       question: form.question, options: opts, answer: form.answer, solution: form.solution,
       visibility: 'ALL', // legacy field — Packs now govern student visibility
       imageData: form.imageData || null,
+      capsCode: form.capsCode.trim() || null,
+      cognitiveLevel: form.cognitiveLevel ? Number(form.cognitiveLevel) : null,
     };
     try {
       if (editId) { await questionsApi.update(editId, payload); showToast('Updated', 'success'); }
@@ -99,6 +118,30 @@ export default function AdminQuestions() {
     if (!confirm('Delete this question? It will be removed from any Pack it belongs to.')) return;
     await questionsApi.delete(id);
     showToast('Deleted', 'info'); load();
+  }
+
+  // Move a single question through the review pipeline.
+  async function changeStatus(q: Question, status: QuestionStatus) {
+    try {
+      await questionsApi.setStatus(q.id, status);
+      showToast(`Moved to ${statusMeta(status).label}`, 'success');
+      load();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+  }
+
+  // Publish every clean (no validation errors) DRAFT/REVIEW question in a group.
+  async function publishGroup(groupKey: string, items: Question[]) {
+    const ready = items.filter(
+      (q) => q.status !== 'PUBLISHED' && (q.validationErrors?.length ?? 0) === 0,
+    );
+    if (!ready.length) { showToast('Nothing ready to publish in this group', 'warn'); return; }
+    if (!confirm(`Publish ${ready.length} validated question(s) in "${groupKey}"? They become eligible for Packs.`)) return;
+    let ok = 0;
+    for (const q of ready) {
+      try { await questionsApi.setStatus(q.id, 'PUBLISHED'); ok++; } catch { /* keep going */ }
+    }
+    showToast(`Published ${ok} question(s)`, 'success');
+    load();
   }
 
   async function delGroup(groupKey: string, ids: string[]) {
@@ -123,6 +166,7 @@ export default function AdminQuestions() {
       question: q.question,
       options: q.options.map((o) => (o === q.answer ? '★ ' : '') + o).join('\n'),
       answer: q.answer, solution: q.solution || '', imageData: q.imageData || '',
+      capsCode: q.capsCode || '', cognitiveLevel: q.cognitiveLevel ? String(q.cognitiveLevel) : '',
     });
     setEditId(q.id); setShowAdd(true);
   }
@@ -213,6 +257,11 @@ export default function AdminQuestions() {
         >
           {selectMode ? '✓ Selecting' : '☑ Multi-select for Pack'}
         </button>
+        {isAdmin && (
+          <button className="btn ba" onClick={() => setShowQuality(true)} title="Health check across the whole bank">
+            📊 Quality report
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -232,6 +281,16 @@ export default function AdminQuestions() {
           <option value="">{filterTopics.length === 0 ? 'Pick subject & grade first' : 'All topics'}</option>
           {filterTopics.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+        {isAdmin && (
+          <select className="select" style={{ width: 'auto' }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} title="Review status">
+            <option value="">All statuses</option>
+            <option value="REVIEW">🔍 In review</option>
+            <option value="PUBLISHED">✅ Published</option>
+            <option value="DRAFT">✏️ Draft</option>
+            <option value="RETIRED">📦 Retired</option>
+            <option value="FLAGGED">🚩 Quality-flagged</option>
+          </select>
+        )}
       </div>
 
       {/* Grouped list — subject · grade · topic, each collapsible & deletable */}
@@ -248,6 +307,11 @@ export default function AdminQuestions() {
             const groupIds = g.items.map((q) => q.id);
             const groupLabel = `${subj.short} · Gr${g.grade} · ${g.topic}`;
             const withImg = g.items.filter((q) => q.imageData).length;
+            const published = g.items.filter((q) => q.status === 'PUBLISHED').length;
+            const inReview = g.items.filter((q) => q.status === 'REVIEW' || q.status === 'DRAFT').length;
+            const readyToPublish = g.items.filter(
+              (q) => q.status !== 'PUBLISHED' && (q.validationErrors?.length ?? 0) === 0,
+            ).length;
             return (
               <div key={g.key} style={{ marginBottom: 12 }}>
                 {/* Group header */}
@@ -271,6 +335,8 @@ export default function AdminQuestions() {
                     {groupLabel}
                   </span>
                   <span className="badge btl">{g.items.length} question{g.items.length === 1 ? '' : 's'}</span>
+                  {published > 0 && <span className="badge" style={{ background: 'rgba(21,128,61,.12)', color: '#15803d' }} title="Published — eligible for Packs">✅ {published}</span>}
+                  {inReview > 0 && <span className="badge" style={{ background: 'rgba(180,83,9,.12)', color: '#b45309' }} title="Draft or in review — not yet eligible for Packs">🔍 {inReview}</span>}
                   {withImg > 0 && <span className="badge bcy" title="Questions with a diagram">🖼 {withImg}</span>}
                   <div style={{ flex: 1 }} />
                   {selectMode && (
@@ -285,6 +351,14 @@ export default function AdminQuestions() {
                       title="Select / deselect every question in this group"
                     >☑ Select group</button>
                   )}
+                  {readyToPublish > 0 && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => publishGroup(groupLabel, g.items)}
+                      title="Publish every validated question in this group"
+                      style={{ background: '#15803d', color: '#fff', border: 'none' }}
+                    >✅ Publish {readyToPublish}</button>
+                  )}
                   <button
                     className="btn btn-sm"
                     onClick={() => delGroup(groupLabel, groupIds)}
@@ -296,10 +370,15 @@ export default function AdminQuestions() {
                 {/* Group body */}
                 {!collapsed && g.items.map((q) => {
                   const isSel = selectedIds.has(q.id);
+                  const sm = statusMeta(q.status);
+                  const s = stats[q.id];
+                  const qFlag = qualityMeta(s?.qualityFlag || q.qualityFlag);
+                  const vErrors = q.validationErrors ?? [];
                   return (
                     <div className="qcard" key={q.id} style={{
                       marginTop: 8, marginLeft: 14,
-                      border: isSel ? '2px solid var(--p)' : undefined,
+                      border: isSel ? '2px solid var(--p)'
+                        : vErrors.length ? '1px solid rgba(185,28,28,.4)' : undefined,
                       background: isSel ? 'rgba(20,184,166,.06)' : undefined,
                     }}>
                       <div className="qhd">
@@ -312,6 +391,13 @@ export default function AdminQuestions() {
                               style={{ width: 18, height: 18, accentColor: 'var(--p)' }}
                             />
                           )}
+                          {/* Review status */}
+                          <span title={sm.hint} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 99,
+                            background: sm.bg, color: sm.fg, border: `1px solid ${sm.border}`,
+                            fontSize: 10.5, fontWeight: 700,
+                          }}>{sm.icon} {sm.label}</span>
                           {(() => {
                             const m = diffMeta(q.difficulty);
                             return (
@@ -323,33 +409,85 @@ export default function AdminQuestions() {
                               }}>{m.icon} {m.label}</span>
                             );
                           })()}
+                          {/* Auto quality flag */}
+                          {qFlag && (
+                            <span title={qFlag.hint} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '2px 8px', borderRadius: 99,
+                              background: qFlag.bg, color: qFlag.fg, border: `1px solid ${qFlag.border}`,
+                              fontSize: 10.5, fontWeight: 700,
+                            }}>{qFlag.icon} {qFlag.label}</span>
+                          )}
+                          {q.cognitiveLevel ? (
+                            <span className="badge btl" title="CAPS cognitive level">L{q.cognitiveLevel}</span>
+                          ) : null}
+                          {q.capsCode && <span className="xs ct3" title="CAPS curriculum index">{q.capsCode}</span>}
                           {q.imageData && <span className="badge bcy">🖼 Image</span>}
-                          {(() => {
-                            const s = stats[q.id];
-                            if (!s) return null;
-                            return (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
-                                <span title="Number of packs containing this question">📦 {s.packCount}</span>
-                                <span title="Total student attempts">🎯 {s.attempts}</span>
-                                {s.attempts > 0 && (
-                                  <span
-                                    title="Average correct rate"
-                                    style={{
-                                      fontWeight: 700,
-                                      color: s.correctRate >= 70 ? '#16a34a' : s.correctRate >= 40 ? '#b45309' : '#b91c1c',
-                                    }}
-                                  >{s.correctRate}%</span>
-                                )}
-                              </span>
-                            );
-                          })()}
+                          {s && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
+                              <span title="Number of packs containing this question">📦 {s.packCount}</span>
+                              <span title="Total student attempts">🎯 {s.attempts}</span>
+                              {s.attempts > 0 && (
+                                <span
+                                  title="Average correct rate"
+                                  style={{
+                                    fontWeight: 700,
+                                    color: s.correctRate >= 70 ? '#16a34a' : s.correctRate >= 40 ? '#b45309' : '#b91c1c',
+                                  }}
+                                >{s.correctRate}%</span>
+                              )}
+                              {s.attempts >= 4 && (
+                                <span
+                                  title="Discrimination — how well it separates strong from weak students (higher is better)"
+                                  style={{
+                                    fontWeight: 700,
+                                    color: s.discrimination >= 20 ? '#16a34a' : s.discrimination >= 10 ? '#b45309' : '#b91c1c',
+                                  }}
+                                >⚖️ {s.discrimination}</span>
+                              )}
+                            </span>
+                          )}
                         </div>
                         <div className="flex g1 wrap">
+                          {/* Review-pipeline actions */}
+                          {q.status !== 'PUBLISHED' && (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => changeStatus(q, 'PUBLISHED')}
+                              disabled={vErrors.length > 0}
+                              title={vErrors.length ? 'Fix validation errors before publishing' : 'Publish — eligible for Packs'}
+                              style={{
+                                background: vErrors.length ? 'var(--bg)' : '#15803d',
+                                color: vErrors.length ? 'var(--t3)' : '#fff',
+                                border: 'none', opacity: vErrors.length ? 0.6 : 1,
+                              }}
+                            >✅ Publish</button>
+                          )}
+                          {q.status === 'PUBLISHED' && (
+                            <button className="btn ba btn-sm" onClick={() => changeStatus(q, 'RETIRED')} title="Retire — pull from circulation">📦 Retire</button>
+                          )}
+                          {(q.status === 'PUBLISHED' || q.status === 'RETIRED' || q.status === 'DRAFT') && (
+                            <button className="btn ba btn-sm" onClick={() => changeStatus(q, 'REVIEW')} title="Send back to review">🔍 Review</button>
+                          )}
                           <button className="btn ba btn-sm" onClick={() => toggleExp(q.id)} title="Show answer & solution">👁</button>
                           <button className="btn ba btn-sm" onClick={() => editQ(q)} title="Edit">✏️</button>
                           <button className="btn ba btn-sm" onClick={() => delQ(q.id)} title="Delete">🗑</button>
                         </div>
                       </div>
+                      {/* Blocking validation errors */}
+                      {vErrors.length > 0 && (
+                        <div style={{
+                          marginTop: 6, padding: '7px 10px', borderRadius: 8,
+                          background: 'rgba(185,28,28,.08)', border: '1px solid rgba(185,28,28,.3)',
+                        }}>
+                          <div className="xs" style={{ fontWeight: 700, color: '#b91c1c' }}>
+                            ⚠ {vErrors.length} issue{vErrors.length === 1 ? '' : 's'} block publishing:
+                          </div>
+                          <ul style={{ margin: '3px 0 0', paddingLeft: 18 }}>
+                            {vErrors.map((er, i) => <li key={i} className="xs ct2">{er}</li>)}
+                          </ul>
+                        </div>
+                      )}
                       {q.imageData && <div style={{ marginTop: 6 }}><DiagramViewer src={q.imageData} alt="Question diagram" maxThumbHeight={220} /></div>}
                       <div className="qtxt">{q.question}</div>
                       <div className="qopts">{q.options.map((o, i) => <span key={i} className="qopt">{String.fromCharCode(65 + i)}. {o}</span>)}</div>
@@ -357,8 +495,8 @@ export default function AdminQuestions() {
                         <div className="qrev">
                           <div className="qrev-lbl">✅ Correct Answer</div>
                           <strong>{q.answer}</strong>
-                          <div style={{ marginTop: 8 }}>{(q.solution || '').split('\n').filter(Boolean).map((s, i) => (
-                            <div key={i} className="qstep"><div className="qsn">{i + 1}</div><div>{s}</div></div>
+                          <div style={{ marginTop: 8 }}>{(q.solution || '').split('\n').filter(Boolean).map((sol, i) => (
+                            <div key={i} className="qstep"><div className="qsn">{i + 1}</div><div>{sol}</div></div>
                           ))}</div>
                         </div>
                       )}
@@ -392,6 +530,15 @@ export default function AdminQuestions() {
             <div className="fg"><label className="lbl">Difficulty</label>
               <select className="select" value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
                 <option>Easy</option><option>Medium</option><option>Hard</option>
+              </select>
+            </div>
+            <div className="fg"><label className="lbl">CAPS code <span className="xs ct3">(optional)</span></label>
+              <input className="input" value={form.capsCode} onChange={(e) => setForm({ ...form, capsCode: e.target.value })} placeholder="e.g. M10-01" />
+            </div>
+            <div className="fg"><label className="lbl">Cognitive level <span className="xs ct3">(CAPS 1-4)</span></label>
+              <select className="select" value={form.cognitiveLevel} onChange={(e) => setForm({ ...form, cognitiveLevel: e.target.value })}>
+                <option value="">— not set —</option>
+                {COGNITIVE_LEVELS.map((c) => <option key={c.value} value={String(c.value)} title={c.hint}>{c.label}</option>)}
               </select>
             </div>
           </div>
@@ -451,7 +598,112 @@ export default function AdminQuestions() {
           }}
         />
       )}
+
+      {/* Quality Report Modal */}
+      {showQuality && (
+        <QualityReportModal
+          onClose={() => setShowQuality(false)}
+          onJump={(flag) => { setShowQuality(false); setFilterStatus(flag === 'all' ? 'FLAGGED' : 'FLAGGED'); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Quality report — bank-wide health check ─────────────────────
+function QualityReportModal({ onClose, onJump }: { onClose: () => void; onJump: (flag: string) => void }) {
+  const [data, setData] = useState<Awaited<ReturnType<typeof questionsApi.qualityReport>> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [recomputing, setRecomputing] = useState(false);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try { setData(await questionsApi.qualityReport()); }
+    catch (e: unknown) { showToast((e as Error).message, 'err'); onClose(); }
+    finally { setLoading(false); }
+  }, [onClose]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  async function recompute() {
+    setRecomputing(true);
+    try {
+      const r = await questionsApi.recomputeFlags();
+      showToast(`Recomputed flags on ${r.updated} question(s)`, 'success');
+      await fetch();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+    finally { setRecomputing(false); }
+  }
+
+  return (
+    <Modal title="📊 Question Bank — Quality Report" onClose={onClose} wide>
+      {loading || !data ? (
+        <div className="ct3" style={{ padding: 24, textAlign: 'center' }}>Crunching the numbers…</div>
+      ) : (
+        <>
+          <div className="xs ct2 mb2">
+            Every published &amp; in-review question, scored on real student attempts.
+            <b> Garbage In, Garbage Out</b> — fix or retire the flagged ones so your stats stay trustworthy.
+          </div>
+          {/* Count tiles */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, marginBottom: 14 }}>
+            {[
+              { k: 'healthy', label: 'Healthy', icon: '✅', color: '#15803d', n: data.counts.healthy },
+              { k: 'broken', label: 'Likely broken', icon: '🛑', color: '#b91c1c', n: data.counts.broken },
+              { k: 'low_discrimination', label: 'Low discrim.', icon: '⚖️', color: '#b45309', n: data.counts.low_discrimination },
+              { k: 'trivial', label: 'Too easy', icon: '😴', color: '#b45309', n: data.counts.trivial },
+              { k: 'no_attempts', label: 'Unproven', icon: '🆕', color: '#0369a1', n: data.counts.no_attempts },
+            ].map((t) => (
+              <div key={t.k} style={{
+                padding: '10px 12px', borderRadius: 10, border: '1px solid var(--bd)', background: 'var(--bg)',
+              }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: t.color }}>{t.icon} {t.n}</div>
+                <div className="xs ct3">{t.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex g1 mb2 wrap">
+            <button className="btn ba btn-sm" onClick={recompute} disabled={recomputing}>
+              {recomputing ? '↻ Recomputing…' : '↻ Recompute flags'}
+            </button>
+            {data.flagged.length > 0 && (
+              <button className="btn ba btn-sm" onClick={() => onJump('all')}>🔎 Show flagged in the bank</button>
+            )}
+          </div>
+          {/* Flagged list */}
+          {data.flagged.length === 0 ? (
+            <div className="empty" style={{ padding: 20 }}>
+              <div className="eico">🎉</div><h3>Nothing flagged</h3>
+              <p>Every question with enough attempts is performing well.</p>
+            </div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--bd)', borderRadius: 10 }}>
+              {data.flagged.map((f) => {
+                const qf = qualityMeta(f.flag);
+                return (
+                  <div key={f.id} style={{ padding: '9px 12px', borderBottom: '1px solid var(--bd)' }}>
+                    <div className="flex ia g1 wrap">
+                      {qf && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 700,
+                          background: qf.bg, color: qf.fg, border: `1px solid ${qf.border}`,
+                        }}>{qf.icon} {qf.label}</span>
+                      )}
+                      <span className="xs ct3">{f.subject === 'MATHEMATICS' ? 'Maths' : 'Phys Sci'} · Gr{f.grade} · {f.topic}</span>
+                      <div style={{ flex: 1 }} />
+                      <span className="xs ct2" title="Attempts">🎯 {f.attempts}</span>
+                      <span className="xs ct2" title="Correct rate">{f.correctRate}%</span>
+                      <span className="xs ct2" title="Discrimination">⚖️ {f.discrimination}</span>
+                    </div>
+                    <div className="sm" style={{ marginTop: 3 }}>{f.question}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }
 

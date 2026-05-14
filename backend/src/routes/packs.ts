@@ -6,8 +6,9 @@ import { notify } from '../utils/notify';
 import { renderPackPdf } from '../utils/pdfRenderer';
 import { audit } from '../utils/audit';
 import { PACK_TEMPLATES, getTemplate } from '../utils/packTemplates';
-import { generateQuestion } from '../utils/questionGenerators';
-import { makeDiagram } from '../utils/diagramTemplates';
+import { generateForTopic } from '../generators';
+import { makeDiagramOfKind } from '../utils/diagramTemplates';
+import { validateQuestion } from '../utils/questionValidation';
 import type { Difficulty } from '@prisma/client';
 
 const router = Router();
@@ -18,6 +19,21 @@ const subjectMap: Record<string, Subject> = {
   MATHEMATICS: 'MATHEMATICS',
   PHYSICAL_SCIENCES: 'PHYSICAL_SCIENCES',
 };
+
+/**
+ * Packs may only contain PUBLISHED questions — this is the GIGO gate.
+ * Filters a caller-supplied id list down to ids that are actually published,
+ * preserving the caller's ordering. DRAFT / REVIEW / RETIRED ids are dropped.
+ */
+async function publishedOnly(ids: string[]): Promise<string[]> {
+  if (!ids?.length) return [];
+  const rows = await prisma.question.findMany({
+    where: { id: { in: ids }, status: 'PUBLISHED' },
+    select: { id: true },
+  });
+  const ok = new Set(rows.map((r) => r.id));
+  return ids.filter((id) => ok.has(id));
+}
 
 const packInclude = {
   questions: {
@@ -131,6 +147,11 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
     const { title, description, subject, grade, topic, coverEmoji, questionIds, documentIds } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
 
+    // GIGO gate — only PUBLISHED questions may be bundled into a pack.
+    const requested = Array.isArray(questionIds) ? questionIds as string[] : [];
+    const qIds = await publishedOnly(requested);
+    const skipped = requested.length - qIds.length;
+
     const pack = await prisma.pack.create({
       data: {
         title: title.trim(),
@@ -141,7 +162,7 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
         coverEmoji: coverEmoji || '📦',
         createdById: req.user!.userId,
         questions: {
-          create: (questionIds || []).map((qId: string, order: number) => ({ questionId: qId, order })),
+          create: qIds.map((qId: string, order: number) => ({ questionId: qId, order })),
         },
         documents: {
           create: (documentIds || []).map((dId: string, order: number) => ({ documentId: dId, order })),
@@ -150,8 +171,8 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
       include: packInclude,
     });
 
-    await audit(req, 'pack.create', 'Pack', pack.id, { title: pack.title, subject: pack.subject, grade: pack.grade });
-    return res.status(201).json(pack);
+    await audit(req, 'pack.create', 'Pack', pack.id, { title: pack.title, subject: pack.subject, grade: pack.grade, skippedUnpublished: skipped });
+    return res.status(201).json({ ...pack, skippedUnpublished: skipped });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -183,6 +204,14 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
       await prisma.packDocument.deleteMany({ where: { packId: req.params.id } });
     }
 
+    // GIGO gate — only PUBLISHED questions may be bundled into a pack.
+    let qIds: string[] = [];
+    let skipped = 0;
+    if (Array.isArray(questionIds)) {
+      qIds = await publishedOnly(questionIds as string[]);
+      skipped = (questionIds as string[]).length - qIds.length;
+    }
+
     const pack = await prisma.pack.update({
       where: { id: req.params.id },
       data: {
@@ -194,7 +223,7 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
         coverEmoji,
         ...(Array.isArray(questionIds) && {
           questions: {
-            create: questionIds.map((qId: string, order: number) => ({ questionId: qId, order })),
+            create: qIds.map((qId: string, order: number) => ({ questionId: qId, order })),
           },
         }),
         ...(Array.isArray(documentIds) && {
@@ -206,8 +235,8 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
       include: packInclude,
     });
 
-    await audit(req, 'pack.update', 'Pack', pack.id, { title: pack.title });
-    return res.json(pack);
+    await audit(req, 'pack.update', 'Pack', pack.id, { title: pack.title, skippedUnpublished: skipped });
+    return res.json({ ...pack, skippedUnpublished: skipped });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
@@ -449,13 +478,19 @@ router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Requ
     const sub = (subjectMap[subject] || 'MATHEMATICS') as Subject;
     const diffOrder: ('EASY' | 'MEDIUM' | 'HARD')[] = ['EASY', 'MEDIUM', 'HARD'];
 
-    // Generate to the mix
-    const createdIds: string[] = [];
-    let order = 0;
+    // Generate to the mix. Each question is run through the validation
+    // pipeline: clean ones are PUBLISHED (so they land in the pack), any that
+    // fail validation are kept as REVIEW and left OUT of the pack — the pack
+    // never silently ships a broken question.
+    const publishedIds: string[] = [];
+    let flagged = 0;
     for (const diff of diffOrder) {
       const need = tpl.mix[diff];
       for (let i = 0; i < need; i++) {
-        const d = generateQuestion(topic, subject, Number(grade));
+        const { question: d, meta } = generateForTopic(topic, subject, Number(grade));
+        const errors = validateQuestion({ ...d, question: d.q, options: d.opts, answer: d.ans, solution: d.sol, topic, subject }).errors;
+        const clean = errors.length === 0;
+        if (!clean) flagged++;
         // Force this question's difficulty to match the template slot regardless
         // of what the underlying generator happened to produce.
         const q = await prisma.question.create({
@@ -469,12 +504,17 @@ router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Requ
             answer: d.ans,
             solution: d.sol,
             visibility: 'ALL',
-            imageData: makeDiagram(topic, subject),
+            imageData: makeDiagramOfKind(meta.diagram),
+            capsCode: meta.caps,
+            cognitiveLevel: meta.cognitiveLevel,
+            status: clean ? 'PUBLISHED' : 'REVIEW',
+            validationErrors: errors,
+            reviewedAt: clean ? new Date() : null,
+            reviewedById: clean ? req.user!.userId : null,
             createdById: req.user!.userId,
           },
         });
-        createdIds.push(q.id);
-        order++;
+        if (clean) publishedIds.push(q.id);
       }
     }
 
@@ -487,15 +527,16 @@ router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Requ
         topic,
         coverEmoji: tpl.emoji,
         createdById: req.user!.userId,
-        questions: { create: createdIds.map((qId, i) => ({ questionId: qId, order: i })) },
+        questions: { create: publishedIds.map((qId, i) => ({ questionId: qId, order: i })) },
       },
       include: packInclude,
     });
 
     await audit(req, 'pack.create', 'Pack', pack.id, {
-      template: templateId, title: pack.title, subject, grade, topic, items: createdIds.length,
+      template: templateId, title: pack.title, subject, grade, topic,
+      items: publishedIds.length, flaggedForReview: flagged,
     });
-    return res.status(201).json(pack);
+    return res.status(201).json({ ...pack, flaggedForReview: flagged });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOrTutorOnly } from '../middleware/auth';
-import { generateQuestion, expectedSecondsFor } from '../utils/questionGenerators';
+import { expectedSecondsFor } from '../utils/questionGenerators';
+import { generateForTopic } from '../generators';
+import { makeDiagramOfKind } from '../utils/diagramTemplates';
+import { validateQuestion } from '../utils/questionValidation';
 import { Difficulty, Subject } from '@prisma/client';
 import { notifyMany } from '../utils/notify';
 import { audit } from '../utils/audit';
@@ -135,16 +138,31 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
     let qIds: string[] = questionIds || [];
 
     if (!qIds.length) {
-      const existing = await prisma.question.findMany({ where: { subject: sub as Subject, topic }, take: 5 });
+      // Only pull PUBLISHED questions into an auto-built assignment.
+      const existing = await prisma.question.findMany({
+        where: { subject: sub as Subject, topic, status: 'PUBLISHED' }, take: 5,
+      });
       if (existing.length < 2) {
         for (let i = 0; i < 5; i++) {
-          const d = generateQuestion(topic, subject, Number(grade));
+          const { question: d, meta } = generateForTopic(topic, subject, Number(grade));
+          const errors = validateQuestion({
+            question: d.q, options: d.opts, answer: d.ans, solution: d.sol, topic, subject,
+          }).errors;
+          const clean = errors.length === 0;
           const q = await prisma.question.create({
             data: {
               subject: sub as Subject, grade: Number(grade), topic,
               difficulty: diffMap[d.diff] || 'EASY',
               question: d.q, options: d.opts, answer: d.ans, solution: d.sol,
-              visibility: 'ALL', createdById: req.user!.userId,
+              visibility: 'ALL',
+              imageData: makeDiagramOfKind(meta.diagram),
+              capsCode: meta.caps,
+              cognitiveLevel: meta.cognitiveLevel,
+              status: clean ? 'PUBLISHED' : 'REVIEW',
+              validationErrors: errors,
+              reviewedAt: clean ? new Date() : null,
+              reviewedById: clean ? req.user!.userId : null,
+              createdById: req.user!.userId,
             },
           });
           existing.push(q);

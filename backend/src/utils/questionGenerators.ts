@@ -2,7 +2,7 @@ const Ri = (a: number, b: number) => Math.floor(Math.random() * (b - a + 1)) + a
 const Rf = (a: number, b: number, d = 1) =>
   parseFloat((Math.random() * (b - a) + a).toFixed(d));
 
-interface GeneratedQuestion {
+export interface GeneratedQuestion {
   q: string;
   opts: string[];
   ans: string;
@@ -10,9 +10,14 @@ interface GeneratedQuestion {
   diff: string;
 }
 
-type GeneratorFn = () => GeneratedQuestion;
+export type GeneratorFn = () => GeneratedQuestion;
 
-const QG: Record<string, GeneratorFn> = {
+/**
+ * Raw per-topic generator functions. Keyed by CAPS topic name.
+ * The modular registry in `src/generators/` wraps each of these with
+ * metadata (subject, grades, the relevant diagram kind, CAPS code).
+ */
+export const QG: Record<string, GeneratorFn> = {
   Algebra: () => {
     const a = Ri(2, 8), b = Ri(1, 12), c = Ri(b + 1, 24);
     const ans = ((c - b) / a).toFixed(2);

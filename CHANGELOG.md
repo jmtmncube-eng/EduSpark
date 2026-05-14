@@ -5,6 +5,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.9.0] — 2026-05-14 — Question quality pipeline: review workflow, validation, modular generators, GIGO stats
+
+The Question Bank now has real quality gates — Garbage In, Garbage Out defence at every stage of the store → generate → allocate → track flow.
+
+### Added — Review workflow
+- **Question review pipeline** — new `QuestionStatus` (`DRAFT → REVIEW → PUBLISHED → RETIRED`). Generated and imported questions land as **REVIEW**; only **PUBLISHED** questions are eligible for Packs and auto-built Assignments.
+- **`POST /api/questions/:id/status`** — move a single question through the pipeline. Publishing is gated: a question with blocking validation errors cannot be PUBLISHED.
+- **Batch approve / discard** — `POST /api/questions/batches/:id/approve` publishes every question in a generation run that passes validation (leaving the rest in REVIEW); `POST /api/questions/batches/:id/discard` bins the whole run (keeping any question already bundled into a Pack). Batch status tracks `REVIEW → APPROVED / PARTIAL / DISCARDED`.
+- Question Bank UI: per-question status chips + Publish/Review/Retire actions, a per-group **✅ Publish N** action for all validated questions, a status filter (admin), and a "🔍 just generated · in review" hint on the generator. The batch viewer gained **Approve batch** / **Discard batch** with per-question validation readouts.
+
+### Added — Validation pipeline (`questionValidation.ts`)
+- Every question — generated, imported, or hand-written — is validated: question text present, ≥2 distinct options, **answer must exactly match an option**, topic set, worked solution present. Blocking errors are stored on `Question.validationErrors` and shown inline in the bank; warnings are advisory.
+
+### Added — Modular generator registry (`src/generators/`)
+- Generators are now a registry: one self-describing `TopicGenerator` entry per CAPS topic in `mathematics.ts` / `physics.ts`, behind a shared interface. Adding or tuning a topic is a one-line change. The registry also rebuilds `CAPS_TOPICS` so the topic catalogue can never drift from the actual generators.
+- Each generator declares its **CAPS index** and typical **cognitive level**, written onto every question it produces — so analytics can slice by curriculum strand and Bloom level.
+
+### Added — Smarter diagrams
+- Each topic generator declares the **one** diagram kind genuinely relevant to it — or `null`. `makeDiagramOfKind()` attaches that diagram or nothing at all. No more random parabola glued to a Statistics question; a question with no relevant diagram simply carries none.
+
+### Added — Quality stats & auto-flagging (`questionQuality.ts`)
+- `GET /api/questions/stats` now returns a **discrimination index** (does the question separate strong from weak students?) and an auto **quality flag**: `broken` (almost nobody right — answer key likely wrong), `trivial` (almost everybody right), `low_discrimination`, `no_attempts`.
+- **`GET /api/questions/quality-report`** — bank-wide health check: counts per flag + the worst-offending questions. Surfaced in a new **📊 Quality report** modal with a one-click **↻ Recompute flags**.
+- New schema fields on `Question`: `status`, `capsCode`, `cognitiveLevel`, `qualityFlag`, `validationErrors`, `reviewedAt/By` — with idempotent migration `20260514130000_question_quality_pipeline` (existing questions migrate to PUBLISHED so live Packs keep working).
+
+### Changed
+- Packs only accept PUBLISHED questions — `POST`/`PUT /api/packs` silently drop unpublished ids and report `skippedUnpublished`. `from-template` validates each generated question and only bundles the clean ones.
+- Auto-built Assignments pull PUBLISHED questions only; any they generate is validated and tagged.
+
+---
+
 ## [2.8.0] — 2026-05-14 — Production fixes: schema drift, PDF uploads, grouped Question Bank
 
 ### Fixed — Critical

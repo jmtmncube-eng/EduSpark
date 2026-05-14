@@ -35,7 +35,7 @@ async function ensureQuestionsForTopic(topic: string, subject: 'MATHEMATICS' | '
         subject, grade, topic,
         difficulty: DIFF_MAP[d.diff] || 'MEDIUM',
         question: d.q, options: d.opts, answer: d.ans, solution: d.sol,
-        visibility: 'ALL', createdById,
+        visibility: 'ALL', status: 'PUBLISHED', createdById,
       },
     });
     generated.push(q);

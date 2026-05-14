@@ -7,7 +7,15 @@
 #   2. Assert that the specific fixes we shipped are actually present in the
 #      source — a regression tripwire so a future edit can't quietly revert them.
 #
-# Exits non-zero if anything fails, so it doubles as a CI / pre-push gate.
+# Environment-aware:
+#   • On a DEV machine (where `npm install` has been run) it does the full
+#     type-check + build.
+#   • On the VPS the host has no node_modules — the app is built INSIDE Docker
+#     images — so the compile/build steps are SKIPPED (not failed) and you get
+#     the source-assertion checks only. For a real build test on the VPS use
+#     `docker compose build`; for runtime health use `scripts/doctor.sh`.
+#
+# Exits non-zero only on a real FAIL, so it doubles as a pre-push gate.
 #
 #   bash scripts/preflight.sh
 #
@@ -17,11 +25,13 @@ cd "$ROOT"
 
 PASS=0
 FAIL=0
+SKIP=0
 LOG="$(mktemp)"
 
-ok()  { printf "  \033[32m✓ PASS\033[0m  %s\n" "$1"; PASS=$((PASS + 1)); }
-bad() { printf "  \033[31m✗ FAIL\033[0m  %s\n" "$1"; FAIL=$((FAIL + 1)); }
-hdr() { printf "\n\033[1m%s\033[0m\n" "$1"; }
+ok()   { printf "  \033[32m✓ PASS\033[0m  %s\n" "$1"; PASS=$((PASS + 1)); }
+bad()  { printf "  \033[31m✗ FAIL\033[0m  %s\n" "$1"; FAIL=$((FAIL + 1)); }
+skip() { printf "  \033[33m• SKIP\033[0m  %s\n" "$1"; SKIP=$((SKIP + 1)); }
+hdr()  { printf "\n\033[1m%s\033[0m\n" "$1"; }
 
 # assert a file contains a literal pattern
 has() { # <description> <pattern> <file>
@@ -35,9 +45,14 @@ lacks() { # <description> <pattern> <file>
 gone() { # <path> <description>
   if [ -e "$1" ]; then bad "$2 — $1 still exists"; else ok "$2"; fi
 }
-# run a build/check command, logging output, tailing it only on failure
-run() { # <description> <dir> <command...>
+# run a build/check command IF its toolchain (node_modules) is installed.
+# If not installed, SKIP it — that host builds inside Docker instead.
+run_if_deps() { # <description> <dir> <command...>
   local desc="$1" dir="$2"; shift 2
+  if [ ! -d "$dir/node_modules" ]; then
+    skip "$desc — $dir/node_modules not installed (build runs inside Docker here)"
+    return
+  fi
   if ( cd "$dir" && "$@" ) >"$LOG" 2>&1; then
     ok "$desc"
   else
@@ -49,18 +64,25 @@ run() { # <description> <dir> <command...>
 
 echo "🛫 EduSpark Preflight — $(date '+%Y-%m-%d %H:%M:%S')"
 
+HOST_TOOLCHAIN=0
+[ -d backend/node_modules ] && [ -d frontend/node_modules ] && HOST_TOOLCHAIN=1
+if [ "$HOST_TOOLCHAIN" -eq 0 ]; then
+  echo "   ℹ No host node_modules — compile/build steps will be skipped (this looks like the VPS)."
+fi
+
 # ── 1. Compiles ────────────────────────────────────────────────────
 hdr "1. Type-check"
-run "backend type-check (tsc --noEmit)"  backend  npx tsc --noEmit
-run "frontend type-check (tsc --noEmit)" frontend npx tsc --noEmit
-run "prisma schema validates"            backend  npx prisma validate
+run_if_deps "backend type-check (tsc --noEmit)"  backend  npx tsc --noEmit
+run_if_deps "frontend type-check (tsc --noEmit)" frontend npx tsc --noEmit
+run_if_deps "prisma schema validates"            backend  npx prisma validate
 
 # ── 2. Builds ──────────────────────────────────────────────────────
 hdr "2. Production build"
-run "backend build (tsc)"        backend  npm run build
-run "frontend build (vite)"      frontend npm run build
+run_if_deps "backend build (tsc)"   backend  npm run build
+run_if_deps "frontend build (vite)" frontend npm run build
 
 # ── 3. Shipped fixes are present (regression tripwire) ─────────────
+# These run everywhere — they only read source files.
 hdr "3. Shipped fixes present"
 
 # v2.9.1 — PDF viewer
@@ -101,11 +123,16 @@ rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────
 hdr "Summary"
-printf "  \033[32m%d passed\033[0m · \033[31m%d failed\033[0m\n" "$PASS" "$FAIL"
-if [ "$FAIL" -eq 0 ]; then
-  echo "  ✅ Preflight clean — safe to push."
-  exit 0
-else
+printf "  \033[32m%d passed\033[0m · \033[33m%d skipped\033[0m · \033[31m%d failed\033[0m\n" "$PASS" "$SKIP" "$FAIL"
+if [ "$FAIL" -ne 0 ]; then
   echo "  ✗ Preflight failed — fix the above before pushing."
   exit 1
 fi
+if [ "$SKIP" -ne 0 ]; then
+  echo "  ✅ All checks that could run here passed."
+  echo "    ($SKIP build step(s) skipped — run preflight on your dev machine for the full"
+  echo "     compile+build gate, or 'docker compose build' here for an in-image build test.)"
+  exit 0
+fi
+echo "  ✅ Preflight clean — safe to push."
+exit 0

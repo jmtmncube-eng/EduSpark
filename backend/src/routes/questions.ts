@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../db/client';
 import { authMiddleware, adminOnly, adminOrTutorOnly } from '../middleware/auth';
-import { expectedSecondsFor } from '../utils/questionGenerators';
+import { expectedSecondsFor, type GenDiff } from '../utils/questionGenerators';
 import { generateForTopic, CAPS_TOPICS } from '../generators';
 import { makeDiagramOfKind } from '../utils/diagramTemplates';
 import { validateQuestion } from '../utils/questionValidation';
 import { computeQualityFlag, type QualityFlag } from '../utils/questionQuality';
 import { audit } from '../utils/audit';
-import { Difficulty, Subject, Visibility, QuestionStatus } from '@prisma/client';
+import { Difficulty, Subject, Visibility, QuestionStatus, Curriculum } from '@prisma/client';
 
 const router = Router();
 
@@ -24,6 +24,37 @@ const visMap: Record<string, Visibility> = {
   all: 'ALL', gr10: 'GR10', gr11: 'GR11', gr12: 'GR12', none: 'NONE',
 };
 const STATUSES: QuestionStatus[] = ['DRAFT', 'REVIEW', 'PUBLISHED', 'RETIRED'];
+
+// Normalise the wizard's curriculum input to the enum.
+function curriculumOf(v: unknown): Curriculum {
+  return String(v).toUpperCase() === 'IEB' ? 'IEB' : 'CAPS';
+}
+
+/**
+ * Turn the wizard's "difficulty mix" selector into a per-question plan.
+ * EASY/MEDIUM/HARD → all that band. MIXED → a realistic spread
+ * (≈30% warm-up · 40% core · 30% stretch) shuffled across the batch.
+ */
+function difficultyPlan(mix: string | undefined, n: number): GenDiff[] {
+  const m = String(mix || 'MIXED').toUpperCase();
+  if (m === 'EASY' || m === 'MEDIUM' || m === 'HARD') {
+    return Array.from({ length: n }, () => m as GenDiff);
+  }
+  const easy = Math.round(n * 0.3);
+  const hard = Math.round(n * 0.3);
+  const medium = n - easy - hard;
+  const plan: GenDiff[] = [
+    ...Array(easy).fill('EASY'),
+    ...Array(medium).fill('MEDIUM'),
+    ...Array(hard).fill('HARD'),
+  ];
+  // shuffle so the batch isn't all-easy-then-all-hard
+  for (let i = plan.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [plan[i], plan[j]] = [plan[j], plan[i]];
+  }
+  return plan;
+}
 
 // ─── Shared: per-question usage + quality stats ──────────────────
 // Returns { id: { packCount, attempts, correctRate, discrimination } }.
@@ -80,7 +111,7 @@ async function computeQuestionStats(ids: string[]) {
 // STUDENT: PUBLISHED questions inside packs unlocked for them
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { subject, visibility, search, grade, topic, status, qualityFlag } = req.query;
+    const { subject, visibility, search, grade, topic, status, qualityFlag, curriculum } = req.query;
     const user = req.user!;
 
     const where: Record<string, unknown> = {};
@@ -88,6 +119,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     if (subject) where.subject = subjectMap[subject as string] || subject;
     if (topic) where.topic = topic as string;
     if (grade) where.grade = Number(grade);
+    if (curriculum === 'CAPS' || curriculum === 'IEB') where.curriculum = curriculum;
 
     if (visibility && user.role === 'ADMIN') where.visibility = visMap[visibility as string] || visibility;
 
@@ -174,17 +206,21 @@ router.get('/topics', authMiddleware, async (req: Request, res: Response) => {
 // via the batch approve action) before they can be bundled into a Pack.
 router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const { subject, grade, topic, count = 5, difficulty } = req.body as {
-      subject: string; grade: number; topic: string; count?: number; difficulty?: string;
+    const { subject, grade, topic, count = 5, difficulty, curriculum } = req.body as {
+      subject: string; grade: number; topic: string; count?: number;
+      difficulty?: string; curriculum?: string;
     };
     const sub = subjectMap[subject as string] || 'MATHEMATICS';
+    const curr = curriculumOf(curriculum);
     const n = Math.min(Math.max(Number(count) || 0, 1), 20);
+    // The difficulty selector is now real: it drives a per-question plan.
+    const plan = difficultyPlan(difficulty, n);
     const created = [];
 
     for (let i = 0; i < n; i++) {
-      const { question: d, meta } = generateForTopic(topic, subject, Number(grade));
-      // Validate every generated question — store any blocking errors so the
-      // reviewer sees exactly what is wrong before approving.
+      const wantDiff = plan[i];
+      // Difficulty- and curriculum-aware; a random variant is picked for variety.
+      const { question: d, meta } = generateForTopic(topic, subject, Number(grade), wantDiff);
       const errors = validateQuestion({
         question: d.q, options: d.opts, answer: d.ans, solution: d.sol, topic, subject,
       }).errors;
@@ -193,14 +229,13 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
           subject: sub as Subject,
           grade: Number(grade),
           topic,
-          difficulty: diffMap[d.diff] || 'EASY',
+          curriculum: curr,
+          difficulty: diffMap[d.diff] || wantDiff,
           question: d.q,
           options: d.opts,
           answer: d.ans,
           solution: d.sol,
           visibility: 'ALL',
-          // Smarter diagrams: the registry says which diagram is genuinely
-          // relevant for this topic — or null, in which case we attach none.
           imageData: makeDiagramOfKind(meta.diagram),
           capsCode: meta.caps,
           cognitiveLevel: meta.cognitiveLevel,
@@ -220,6 +255,7 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
           subject: sub as Subject,
           grade: Number(grade),
           topic,
+          curriculum: curr,
           requestedCount: n,
           difficulty: (difficulty || 'MIXED').toUpperCase(),
           status: 'REVIEW',
@@ -227,7 +263,7 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
         },
       });
       await audit(req, 'questions.generate', 'QuestionBatch', batch.id, {
-        subject, grade: Number(grade), topic, requested: n, produced: created.length,
+        subject, grade: Number(grade), topic, curriculum: curr, requested: n, produced: created.length,
         difficulty: difficulty || 'MIXED',
         flagged: created.filter((q) => q.validationErrors.length > 0).length,
       });
@@ -245,7 +281,7 @@ router.post('/generate', authMiddleware, adminOrTutorOnly, async (req: Request, 
 // REVIEW (tutor), or DRAFT if they have blocking errors.
 router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData, capsCode, cognitiveLevel } = req.body;
+    const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData, capsCode, cognitiveLevel, curriculum } = req.body;
 
     const errors = validateQuestion({ question, options, answer, solution, topic, subject }).errors;
     let status: QuestionStatus;
@@ -257,6 +293,7 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
         subject: subjectMap[subject] as Subject || 'MATHEMATICS',
         grade: Number(grade),
         topic,
+        curriculum: curriculumOf(curriculum),
         difficulty: diffMap[difficulty] || 'EASY',
         question,
         options: options || [],
@@ -290,7 +327,7 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
       return res.status(403).json({ error: 'You can only edit questions you created' });
     }
 
-    const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData, capsCode, cognitiveLevel } = req.body;
+    const { subject, grade, topic, difficulty, question, options, answer, solution, visibility, imageData, capsCode, cognitiveLevel, curriculum } = req.body;
 
     // Re-validate against the merged result so validationErrors stays accurate.
     const merged = {
@@ -322,6 +359,7 @@ router.put('/:id', authMiddleware, adminOrTutorOnly, async (req: Request, res: R
         imageData: imageData !== undefined ? imageData : undefined,
         capsCode: capsCode !== undefined ? (capsCode?.trim() || null) : undefined,
         cognitiveLevel: cognitiveLevel !== undefined ? (cognitiveLevel ? Number(cognitiveLevel) : null) : undefined,
+        curriculum: curriculum === 'CAPS' || curriculum === 'IEB' ? curriculum : undefined,
         validationErrors: errors,
         status,
       },
@@ -441,6 +479,7 @@ router.post('/import', authMiddleware, adminOrTutorOnly, async (req: Request, re
       const tp = get('TOPIC') || 'General';
       const diff = get('DIFF') || 'Medium';
       const vis = get('VIS') || 'all';
+      const curr = curriculumOf(get('CURRICULUM') || get('CURR'));
       const qt = get('Q') || get('QUESTION');
       const ans = get('ANS') || get('ANSWER');
       const sol = (get('SOL') || '').replace(/\\n/g, '\n');
@@ -455,6 +494,7 @@ router.post('/import', authMiddleware, adminOrTutorOnly, async (req: Request, re
             subject: sub as Subject,
             grade: gr,
             topic: tp,
+            curriculum: curr,
             difficulty: diffMap[diff] || 'MEDIUM',
             question: qt,
             options: opts,

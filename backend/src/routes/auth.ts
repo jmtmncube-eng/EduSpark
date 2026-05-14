@@ -102,11 +102,12 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// Student registration (after grade picker)
+// Student registration (after grade + curriculum picker)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, grade } = req.body as { name: string; grade: number };
+    const { name, grade, curriculum } = req.body as { name: string; grade: number; curriculum?: string };
     if (!name?.trim() || !grade) return res.status(400).json({ error: 'Name and grade required' });
+    const curr = String(curriculum).toUpperCase() === 'IEB' ? 'IEB' : 'CAPS';
 
     const exists = await prisma.user.findFirst({
       where: { role: 'STUDENT', name: { equals: name.trim(), mode: 'insensitive' } },
@@ -117,12 +118,12 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const pin = await makeUniquePin(async (p) => !!(await prisma.user.findUnique({ where: { pin: p } })));
     const user = await prisma.user.create({
-      data: { name: name.trim(), role: 'STUDENT', pin, grade: Number(grade), xp: 0 },
+      data: { name: name.trim(), role: 'STUDENT', pin, grade: Number(grade), curriculum: curr, xp: 0 },
     });
 
     const token = signToken({ userId: user.id, role: 'STUDENT' });
     req.user = { userId: user.id, role: 'STUDENT' };
-    await audit(req, 'auth.register', 'User', user.id, { name: user.name, grade: user.grade });
+    await audit(req, 'auth.register', 'User', user.id, { name: user.name, grade: user.grade, curriculum: curr });
     return res.json({ token, user: sanitize(user), isNew: true });
   } catch (err) {
     console.error(err);

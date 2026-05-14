@@ -1,6 +1,25 @@
+// ─── Question generators ──────────────────────────────────────────
+// Every generator is difficulty-aware: it takes a GenDiff and scales the
+// numbers / step-count accordingly, so "Stretch" genuinely produces harder
+// work than "Warm-up". Topics with more than one entry in their array give
+// real variety — the registry picks a random variant each call, so you
+// never get three identical questions in a row.
+
 const Ri = (a: number, b: number) => Math.floor(Math.random() * (b - a + 1)) + a;
 const Rf = (a: number, b: number, d = 1) =>
   parseFloat((Math.random() * (b - a) + a).toFixed(d));
+const pickOne = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+export type GenDiff = 'EASY' | 'MEDIUM' | 'HARD';
+const DIFF_LABEL: Record<GenDiff, string> = { EASY: 'Easy', MEDIUM: 'Medium', HARD: 'Hard' };
+
+// Difficulty-scaled random integer: the same base range, widened as the
+// requested difficulty rises. Keeps EASY clean and small, HARD bigger/messier.
+const SCALE: Record<GenDiff, number> = { EASY: 1, MEDIUM: 1.8, HARD: 3 };
+function di(d: GenDiff, lo: number, hi: number): number {
+  const s = SCALE[d];
+  return Ri(Math.max(1, Math.round(lo * s)), Math.round(hi * s));
+}
 
 export interface GeneratedQuestion {
   q: string;
@@ -10,433 +29,773 @@ export interface GeneratedQuestion {
   diff: string;
 }
 
-export type GeneratorFn = () => GeneratedQuestion;
+export type GeneratorFn = (d: GenDiff) => GeneratedQuestion;
+
+// Build a unique 4-option set: correct answer + 3 distinct distractors.
+function options(correct: string, distractors: string[]): string[] {
+  const seen = new Set([correct]);
+  const out = [correct];
+  for (const x of distractors) {
+    if (out.length >= 4) break;
+    if (!seen.has(x)) { seen.add(x); out.push(x); }
+  }
+  // pad if distractors collided
+  let pad = 1;
+  while (out.length < 4) {
+    const filler = `${correct} (≠)${'*'.repeat(pad)}`;
+    if (!seen.has(filler)) { seen.add(filler); out.push(filler); }
+    pad++;
+  }
+  // shuffle
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 /**
- * Raw per-topic generator functions. Keyed by CAPS topic name.
- * The modular registry in `src/generators/` wraps each of these with
- * metadata (subject, grades, the relevant diagram kind, CAPS code).
+ * Per-topic generator variants. Each topic maps to an array of difficulty-aware
+ * generators; the registry picks one at random for variety.
  */
-export const QG: Record<string, GeneratorFn> = {
-  Algebra: () => {
-    const a = Ri(2, 8), b = Ri(1, 12), c = Ri(b + 1, 24);
-    const ans = ((c - b) / a).toFixed(2);
-    return {
-      q: `Solve: ${a}x + ${b} = ${c}`,
-      opts: [`x=${ans}`, `x=${((c + b) / a).toFixed(2)}`, `x=${(c / a).toFixed(2)}`, `x=${a * b}`],
-      ans: `x=${ans}`,
-      sol: `Formula: To solve a linear equation ax + b = c, isolate x by performing inverse operations on both sides\nStep 1: Subtract ${b} from both sides: ${a}x + ${b} − ${b} = ${c} − ${b}  →  ${a}x = ${c - b}\nStep 2: Divide both sides by ${a}: x = ${c - b} ÷ ${a} = ${ans}\nStep 3: Verify by substituting back: ${a}(${ans}) + ${b} = ${(a * +ans).toFixed(2)} + ${b} = ${(a * +ans + b).toFixed(2)} ✓\nTherefore: x = ${ans}`,
-      diff: 'Easy',
-    };
-  },
-  'Functions & Graphs': () => {
-    const a = Ri(1, 4), b = Ri(-5, 5), c = Ri(-8, 8);
-    return {
-      q: `y-intercept of y = ${a}x² ${b >= 0 ? '+ ' + b : '− ' + Math.abs(b)}x ${c >= 0 ? '+ ' + c : '− ' + Math.abs(c)}?`,
-      opts: [`y=${c}`, `y=${a}`, `y=${b}`, `y=${a + b + c}`],
-      ans: `y=${c}`,
-      sol: `Formula: The y-intercept is the point where the graph crosses the y-axis, i.e. where x = 0\nStep 1: Substitute x = 0 into y = ${a}(0)² + ${b}(0) + ${c}\nStep 2: Evaluate each term: ${a}(0)² = 0, ${b}(0) = 0, constant = ${c}\nStep 3: y = 0 + 0 + ${c} = ${c}\nStep 4: The y-intercept is always the constant term 'c' in a quadratic y = ax² + bx + c because all terms with x vanish when x = 0\nTherefore: y-intercept = ${c}`,
-      diff: 'Easy',
-    };
-  },
-  Trigonometry: () => {
-    const A = [30, 45, 60];
-    const S = ['½', '√2/2', '√3/2'];
-    const C = ['√3/2', '√2/2', '½'];
-    const T = ['1/√3', '1', '√3'];
-    const i = Ri(0, 2), f = Ri(0, 2);
-    const fn = ['sin', 'cos', 'tan'];
-    const V = [S, C, T];
-    const angleExplanations: Record<number, string> = {
-      30: 'In a 30-60-90 triangle, sides are in ratio 1 : √3 : 2',
-      45: 'In a 45-45-90 triangle, sides are in ratio 1 : 1 : √2',
-      60: 'In a 30-60-90 triangle, sides are in ratio 1 : √3 : 2',
-    };
-    const fnExplanations: Record<string, string> = {
-      sin: 'sin = opposite / hypotenuse',
-      cos: 'cos = adjacent / hypotenuse',
-      tan: 'tan = opposite / adjacent',
-    };
-    return {
-      q: `Calculate ${fn[f]}(${A[i]}°)`,
-      opts: [V[f][i], V[(f + 1) % 3][i], V[(f + 2) % 3][i], '2'],
-      ans: V[f][i],
-      sol: `Formula: ${fnExplanations[fn[f]]}\nStep 1: Recall the special angle triangle for ${A[i]}°: ${angleExplanations[A[i]]}\nStep 2: Identify the relevant sides for ${fn[f]}(${A[i]}°) using the SOHCAHTOA mnemonic\nStep 3: Apply the ratio to get the exact value: ${fn[f]}(${A[i]}°) = ${V[f][i]}\nStep 4: This is a standard trigonometric value that should be memorised for special angles (30°, 45°, 60°)\nTherefore: ${fn[f]}(${A[i]}°) = ${V[f][i]}`,
-      diff: 'Easy',
-    };
-  },
-  Statistics: () => {
-    const d = Array.from({ length: Ri(5, 7) }, () => Ri(10, 80)).sort((a, b) => a - b);
-    const m = (d.reduce((s, v) => s + v, 0) / d.length).toFixed(1);
-    return {
-      q: `Mean of {${d.join(', ')}}?`,
-      opts: [`${m}`, `${d[Math.floor(d.length / 2)]}`, `${d[d.length - 1] - d[0]}`, `${(+m + 5).toFixed(1)}`],
-      ans: `${m}`,
-      sol: `Formula: Mean = (Sum of all values) ÷ (Number of values) = Σx / n\nStep 1: List all values in the data set: {${d.join(', ')}}\nStep 2: Add all values together: ${d.join(' + ')} = ${d.reduce((s, v) => s + v, 0)}\nStep 3: Count the number of values: n = ${d.length}\nStep 4: Divide the sum by n: Mean = ${d.reduce((s, v) => s + v, 0)} ÷ ${d.length} = ${m}\nStep 5: The mean represents the 'balance point' or average of the data set\nTherefore: Mean = ${m}`,
-      diff: 'Easy',
-    };
-  },
-  'Finance & Growth': () => {
-    const P = Ri(5, 50) * 1000, r = Rf(5, 15, 1), n = Ri(1, 5);
-    const A = (P * Math.pow(1 + r / 100, n)).toFixed(2);
-    return {
-      q: `R${P.toLocaleString()} at ${r}% compound, ${n} yr(s). Amount?`,
-      opts: [`R${A}`, `R${(P * (1 + (r / 100) * n)).toFixed(2)}`, `R${(P + P * r / 100).toFixed(0)}`, `R${P * 2}`],
-      ans: `R${A}`,
-      sol: `Formula: Compound Interest — A = P(1 + r)ⁿ, where P = principal, r = annual interest rate (as decimal), n = number of years\nStep 1: Identify the values: P = R${P}, r = ${r}% = ${r / 100}, n = ${n} year(s)\nStep 2: Calculate the growth factor: (1 + r) = 1 + ${r / 100} = ${(1 + r / 100).toFixed(4)}\nStep 3: Raise the growth factor to the power of n: (${(1 + r / 100).toFixed(4)})^${n} = ${Math.pow(1 + r / 100, n).toFixed(6)}\nStep 4: Multiply by the principal: A = ${P} × ${Math.pow(1 + r / 100, n).toFixed(6)} = R${A}\nStep 5: Compound interest earns interest on interest, so it grows faster than simple interest\nTherefore: Accumulated amount = R${A}`,
-      diff: 'Medium',
-    };
-  },
-  'Quadratic Equations': () => {
-    const p = Ri(1, 7), q = Ri(1, 7);
-    return {
-      q: `Solve: x² − ${p + q}x + ${p * q} = 0`,
-      opts: [`x=${p} or x=${q}`, `x=${-p} or x=${-q}`, `x=${p + 1} or x=${q - 1}`, `x=${p * q}`],
-      ans: `x=${p} or x=${q}`,
-      sol: `Formula: To factorise a quadratic x² + bx + c = 0, find two numbers that multiply to c and add to b\nStep 1: Identify coefficients: a = 1, b = −${p + q}, c = ${p * q}\nStep 2: Find two numbers that multiply to +${p * q} and add to −${p + q}: those numbers are −${p} and −${q}\nStep 3: Check: (−${p}) × (−${q}) = +${p * q} ✓ and (−${p}) + (−${q}) = −${p + q} ✓\nStep 4: Write in factored form: (x − ${p})(x − ${q}) = 0\nStep 5: Apply the Zero Product Property — if A × B = 0, then A = 0 or B = 0\nStep 6: Solve each factor: x − ${p} = 0 → x = ${p};  x − ${q} = 0 → x = ${q}\nTherefore: x = ${p} or x = ${q}`,
-      diff: 'Medium',
-    };
-  },
-  'Differential Calculus': () => {
-    const a = Ri(1, 5), n = Ri(2, 5), b = Ri(1, 6);
-    return {
-      q: `f'(x) if f(x) = ${a}x^${n} + ${b}x?`,
-      opts: [`${a * n}x^${n - 1} + ${b}`, `${a}x^${n + 1}`, `${a * n}x^${n}`, `${n}x^${n - 1}`],
-      ans: `${a * n}x^${n - 1} + ${b}`,
-      sol: `Formula: Power Rule — d/dx[axⁿ] = a·n·xⁿ⁻¹; and d/dx[bx] = b (derivative of a linear term is its coefficient)\nStep 1: Differentiate the first term ${a}x^${n} using the power rule: bring down the exponent as a coefficient, then reduce the exponent by 1\nStep 2: d/dx[${a}x^${n}] = ${a} × ${n} × x^(${n}−1) = ${a * n}x^${n - 1}\nStep 3: Differentiate the second term ${b}x: the derivative of any term cx is simply c\nStep 4: d/dx[${b}x] = ${b}\nStep 5: Combine the results using the Sum Rule (differentiate term by term)\nTherefore: f'(x) = ${a * n}x^${n - 1} + ${b}`,
-      diff: 'Medium',
-    };
-  },
-  'Sequences & Series': () => {
-    const a = Ri(2, 15), d = Ri(1, 8), n = Ri(5, 12);
-    const Sn = Math.round((n / 2) * (2 * a + (n - 1) * d));
-    return {
-      q: `a=${a}, d=${d}. Find S${n}.`,
-      opts: [`S${n}=${Sn}`, `S${n}=${Sn + d}`, `S${n}=${a + (n - 1) * d}`, `S${n}=${n * a}`],
-      ans: `S${n}=${Sn}`,
-      sol: `Formula: Sum of an Arithmetic Series — Sₙ = n/2 × (2a + (n − 1)d), where a = first term, d = common difference, n = number of terms\nStep 1: Identify the values: a = ${a}, d = ${d}, n = ${n}\nStep 2: Calculate the bracket term (2a + (n − 1)d): 2(${a}) + (${n} − 1)(${d}) = ${2 * a} + ${(n - 1) * d} = ${2 * a + (n - 1) * d}\nStep 3: Multiply by n/2: Sₙ = ${n}/2 × ${2 * a + (n - 1) * d}\nStep 4: Calculate: ${n}/2 = ${n / 2}, then ${n / 2} × ${2 * a + (n - 1) * d} = ${Sn}\nStep 5: The formula works because the series is an arithmetic progression where terms increase by a fixed amount d each time\nTherefore: S${n} = ${Sn}`,
-      diff: 'Medium',
-    };
-  },
-  "Newton's Laws": () => {
-    const m = Ri(2, 25), av = Rf(1, 12, 1);
-    const F = (m * av).toFixed(1);
-    return {
-      q: `${m}kg object, a=${av}m/s². Net force?`,
-      opts: [`F=${F}N`, `F=${(m + av).toFixed(1)}N`, `F=${(m / av).toFixed(1)}N`, `F=${2 * m * av}N`],
-      ans: `F=${F}N`,
-      sol: `Formula: Newton's Second Law of Motion — F = ma, where F = net force (N), m = mass (kg), a = acceleration (m/s²)\nStep 1: Identify the given values: mass m = ${m} kg, acceleration a = ${av} m/s²\nStep 2: Recall that Newton's Second Law states the net force acting on an object equals its mass multiplied by its acceleration\nStep 3: Substitute the values into F = ma: F = ${m} × ${av}\nStep 4: Perform the multiplication: F = ${F} N\nStep 5: The unit of force is the Newton (N), which equals 1 kg·m/s²\nTherefore: Net force F = ${F} N`,
-      diff: 'Easy',
-    };
-  },
-  Momentum: () => {
-    const m = Ri(2, 20), v = Rf(2, 20, 1);
-    const p = (m * v).toFixed(1);
-    return {
-      q: `Momentum: ${m}kg at ${v}m/s?`,
-      opts: [`p=${p}kg·m/s`, `p=${(m + v).toFixed(1)}kg·m/s`, `p=${(m / v).toFixed(1)}kg·m/s`, `p=${2 * m * v}kg·m/s`],
-      ans: `p=${p}kg·m/s`,
-      sol: `Formula: Linear Momentum — p = mv, where p = momentum (kg·m/s), m = mass (kg), v = velocity (m/s)\nStep 1: Identify the given values: mass m = ${m} kg, velocity v = ${v} m/s\nStep 2: Recall that momentum is a vector quantity representing the 'quantity of motion' of an object\nStep 3: Substitute the values into p = mv: p = ${m} × ${v}\nStep 4: Perform the multiplication: p = ${p} kg·m/s\nStep 5: The unit is kg·m/s, which comes directly from multiplying kg × m/s\nTherefore: Momentum p = ${p} kg·m/s`,
-      diff: 'Easy',
-    };
-  },
-  'Energy & Power': () => {
-    const m = Ri(2, 30), v = Rf(2, 15, 1);
-    const KE = (0.5 * m * v * v).toFixed(1);
-    return {
-      q: `KE of ${m}kg at ${v}m/s?`,
-      opts: [`KE=${KE}J`, `KE=${(m * v).toFixed(1)}J`, `KE=${(m * v * v).toFixed(1)}J`, `KE=${(+KE / 2).toFixed(1)}J`],
-      ans: `KE=${KE}J`,
-      sol: `Formula: Kinetic Energy — KE = ½mv², where m = mass (kg), v = speed (m/s), KE = kinetic energy (J)\nStep 1: Identify the given values: mass m = ${m} kg, speed v = ${v} m/s\nStep 2: Recall that kinetic energy is the energy an object possesses due to its motion\nStep 3: Calculate v²: v² = (${v})² = ${(v * v).toFixed(2)} m²/s²\nStep 4: Multiply by mass: m × v² = ${m} × ${(v * v).toFixed(2)} = ${(m * v * v).toFixed(2)}\nStep 5: Multiply by ½: KE = 0.5 × ${(m * v * v).toFixed(2)} = ${KE} J\nStep 6: The unit Joule (J) = kg·m²/s², which is consistent with the formula units\nTherefore: Kinetic Energy KE = ${KE} J`,
-      diff: 'Easy',
-    };
-  },
-  'Electricity & Magnetism': () => {
-    const V = Ri(6, 24), R = Ri(10, 100);
-    const I = (V / R).toFixed(3);
-    return {
-      q: `V=${V}V, R=${R}Ω. Find I.`,
-      opts: [`I=${I}A`, `I=${V * R}A`, `I=${(R / V).toFixed(3)}A`, `I=${V + R}A`],
-      ans: `I=${I}A`,
-      sol: `Formula: Ohm's Law — V = IR, rearranged to I = V/R, where V = voltage (V), I = current (A), R = resistance (Ω)\nStep 1: Identify the given values: voltage V = ${V} V, resistance R = ${R} Ω\nStep 2: Recall Ohm's Law: the current through a conductor is directly proportional to the voltage and inversely proportional to the resistance\nStep 3: Rearrange V = IR to solve for current I: I = V ÷ R\nStep 4: Substitute the values: I = ${V} ÷ ${R}\nStep 5: Perform the division: I = ${I} A\nStep 6: The unit of current is the Ampere (A), representing the flow of charge (Coulombs per second)\nTherefore: Current I = ${I} A`,
-      diff: 'Easy',
-    };
-  },
-  'Waves & Sound': () => {
-    const f = Ri(100, 3000);
-    const l = (340 / f).toFixed(4);
-    return {
-      q: `f=${f}Hz, v=340m/s. Find λ.`,
-      opts: [`λ=${l}m`, `λ=${f * 340}m`, `λ=${(f / 340).toFixed(4)}m`, `λ=${340 + f}m`],
-      ans: `λ=${l}m`,
-      sol: `Formula: Wave Equation — v = fλ, rearranged to λ = v/f, where v = wave speed (m/s), f = frequency (Hz), λ = wavelength (m)\nStep 1: Identify the given values: frequency f = ${f} Hz, wave speed v = 340 m/s (speed of sound in air at room temperature)\nStep 2: Recall the wave equation: speed equals frequency multiplied by wavelength\nStep 3: Rearrange v = fλ to solve for wavelength λ: λ = v ÷ f\nStep 4: Substitute the values: λ = 340 ÷ ${f}\nStep 5: Perform the division: λ = ${l} m\nStep 6: Higher frequency waves have shorter wavelengths — this is the inverse relationship between f and λ\nTherefore: Wavelength λ = ${l} m`,
-      diff: 'Easy',
-    };
-  },
-  'Projectile Motion': () => {
-    const v0 = Ri(10, 40), ang = Ri(30, 60);
-    const r = (ang * Math.PI) / 180;
-    const H = ((v0 * v0 * Math.sin(r) * Math.sin(r)) / (2 * 9.8)).toFixed(2);
-    return {
-      q: `${v0}m/s at ${ang}°. Max height?`,
-      opts: [`H=${H}m`, `H=${(+H * 2).toFixed(2)}m`, `H=${v0}m`, `H=${(+H / 2).toFixed(2)}m`],
-      ans: `H=${H}m`,
-      sol: `Formula: Maximum Height in Projectile Motion — H = (v₀ sinθ)² / (2g), where v₀ = initial speed, θ = launch angle, g = 9.8 m/s²\nStep 1: Identify the given values: initial speed v₀ = ${v0} m/s, launch angle θ = ${ang}°, g = 9.8 m/s²\nStep 2: Calculate the vertical component of initial velocity: v₀y = v₀ sin(θ) = ${v0} × sin(${ang}°) = ${(v0 * Math.sin(r)).toFixed(4)} m/s\nStep 3: At maximum height, the vertical velocity = 0 (the object momentarily stops moving upward)\nStep 4: Calculate v₀y²: (${(v0 * Math.sin(r)).toFixed(4)})² = ${(v0 * v0 * Math.sin(r) * Math.sin(r)).toFixed(4)} m²/s²\nStep 5: Calculate 2g: 2 × 9.8 = 19.6 m/s²\nStep 6: Divide to get H: H = ${(v0 * v0 * Math.sin(r) * Math.sin(r)).toFixed(4)} ÷ 19.6 = ${H} m\nTherefore: Maximum height H = ${H} m`,
-      diff: 'Hard',
-    };
-  },
-  Electrostatics: () => {
-    const q1 = Rf(1, 8, 2) * 1e-6, q2 = Rf(1, 8, 2) * 1e-6, r = Rf(0.1, 1.5, 2);
-    const F = ((9e9 * q1 * q2) / (r * r)).toFixed(3);
-    return {
-      q: `q₁=${(q1 * 1e6).toFixed(2)}μC,q₂=${(q2 * 1e6).toFixed(2)}μC,r=${r}m. Force?`,
-      opts: [`F=${F}N`, `F=${(+F * 2).toFixed(3)}N`, `F=${(+F / 2).toFixed(3)}N`, `F=${r}N`],
-      ans: `F=${F}N`,
-      sol: `Formula: Coulomb's Law — F = kq₁q₂/r², where k = 9×10⁹ N·m²/C², q = charge (C), r = separation (m)\nStep 1: Identify the given values: q₁ = ${(q1 * 1e6).toFixed(2)} μC = ${q1.toExponential(4)} C, q₂ = ${(q2 * 1e6).toFixed(2)} μC = ${q2.toExponential(4)} C, r = ${r} m\nStep 2: Convert μC to Coulombs by multiplying by 10⁻⁶ (this step is critical to get the correct answer)\nStep 3: Calculate the numerator: k × q₁ × q₂ = 9×10⁹ × ${q1.toExponential(2)} × ${q2.toExponential(2)} = ${(9e9 * q1 * q2).toExponential(4)} N·m²\nStep 4: Calculate r²: (${r})² = ${(r * r).toFixed(4)} m²\nStep 5: Divide numerator by r²: F = ${(9e9 * q1 * q2).toExponential(4)} ÷ ${(r * r).toFixed(4)} = ${F} N\nStep 6: The force is attractive if charges are opposite in sign, and repulsive if same sign\nTherefore: Electrostatic force F = ${F} N`,
-      diff: 'Hard',
-    };
-  },
-  'Electric Circuits': () => {
-    const V = Ri(6, 24), R1 = Ri(10, 80), R2 = Ri(10, 80);
-    const Is = (V / (R1 + R2)).toFixed(3);
-    return {
-      q: `R₁=${R1}Ω,R₂=${R2}Ω series,V=${V}V. Current?`,
-      opts: [`I=${Is}A`, `I=${(V / R1).toFixed(3)}A`, `I=${(V / R2).toFixed(3)}A`, `I=${(V / (R1 * R2)).toFixed(5)}A`],
-      ans: `I=${Is}A`,
-      sol: `Formula: Series Circuit — Rₜₒₜₐₗ = R₁ + R₂ + ..., then I = V/Rₜₒₜₐₗ (Ohm's Law)\nStep 1: Identify the circuit configuration: R₁ = ${R1} Ω and R₂ = ${R2} Ω are connected in series, with voltage V = ${V} V\nStep 2: In a series circuit, resistances add directly because the same current flows through all components\nStep 3: Calculate total resistance: Rₜₒₜₐₗ = R₁ + R₂ = ${R1} + ${R2} = ${R1 + R2} Ω\nStep 4: Apply Ohm's Law to find the current: I = V ÷ Rₜₒₜₐₗ\nStep 5: Substitute values: I = ${V} ÷ ${R1 + R2} = ${Is} A\nStep 6: This same current ${Is} A flows through both R₁ and R₂ because they are in series\nTherefore: Current I = ${Is} A`,
-      diff: 'Medium',
-    };
-  },
-  'Momentum & Impulse': () => {
-    const m = Ri(2, 20), v1 = Rf(2, 15, 1), v2 = Rf(2, 15, 1), t = Rf(0.1, 4, 2);
-    const dp = (m * (v2 - v1)).toFixed(2);
-    const Fa = (Math.abs(+dp) / t).toFixed(2);
-    return {
-      q: `${m}kg, v:${v1}→${v2}m/s in ${t}s. Avg force?`,
-      opts: [`F=${Fa}N`, `F=${(m * v2).toFixed(2)}N`, `F=${t}N`, `F=${(m * v1).toFixed(2)}N`],
-      ans: `F=${Fa}N`,
-      sol: `Formula: Impulse-Momentum Theorem — FΔt = Δp = m(v₂ − v₁), rearranged to F = Δp / Δt\nStep 1: Identify the given values: mass m = ${m} kg, initial velocity v₁ = ${v1} m/s, final velocity v₂ = ${v2} m/s, time Δt = ${t} s\nStep 2: Calculate the change in momentum Δp: Δp = m(v₂ − v₁) = ${m} × (${v2} − ${v1}) = ${m} × ${(v2 - v1).toFixed(1)} = ${dp} kg·m/s\nStep 3: The impulse FΔt equals the change in momentum Δp (Newton's Second Law in impulse form)\nStep 4: Rearrange to solve for average force: F = |Δp| ÷ Δt\nStep 5: Substitute values: F = |${dp}| ÷ ${t} = ${Math.abs(+dp).toFixed(2)} ÷ ${t} = ${Fa} N\nStep 6: The magnitude is used because the question asks for the average force magnitude\nTherefore: Average force F = ${Fa} N`,
-      diff: 'Medium',
-    };
-  },
-  'Organic Chemistry': () => {
-    const A: [string, string, number][] = [
-      ['Methane', 'CH₄', 1], ['Ethane', 'C₂H₆', 2], ['Propane', 'C₃H₈', 3], ['Butane', 'C₄H₁₀', 4],
-    ];
-    const a = A[Ri(0, 3)];
-    return {
-      q: `${a[0]}: ${a[2]} carbon(s). Formula?`,
-      opts: [a[1], `C${a[2]}H${2 * a[2]}`, `C${a[2] + 1}H${2 * (a[2] + 1) + 2}`, `C${a[2]}H${2 * a[2] + 4}`],
-      ans: a[1],
-      sol: `Formula: General formula for alkanes (saturated hydrocarbons) — CₙH₂ₙ₊₂\nStep 1: Identify the compound: ${a[0]} is an alkane with n = ${a[2]} carbon atom(s)\nStep 2: Alkanes are saturated hydrocarbons — they contain only single C–C and C–H bonds\nStep 3: Apply the general formula CₙH₂ₙ₊₂: substitute n = ${a[2]}\nStep 4: Calculate hydrogen atoms: 2n + 2 = 2(${a[2]}) + 2 = ${2 * a[2]} + 2 = ${2 * a[2] + 2}\nStep 5: Write the molecular formula with ${a[2]} carbon(s) and ${2 * a[2] + 2} hydrogen(s): ${a[1]}\nStep 6: This pattern holds for all straight-chain alkanes in the homologous series\nTherefore: Molecular formula = ${a[1]}`,
-      diff: 'Easy',
-    };
-  },
-  Electrochemistry: () => ({
-    q: 'Galvanic cell: Zn(E°=−0.76V), Cu(E°=+0.34V). EMF?',
-    opts: ['1.10V', '0.42V', '−0.42V', '1.52V'],
-    ans: '1.10V',
-    sol: `Formula: Standard EMF of a galvanic cell — E°cell = E°cathode − E°anode\nStep 1: Identify the two half-cells: Zinc (Zn) with E° = −0.76 V and Copper (Cu) with E° = +0.34 V\nStep 2: Determine which electrode is the cathode and which is the anode: the electrode with the higher (more positive) standard reduction potential acts as the cathode (where reduction occurs)\nStep 3: Cu has E° = +0.34 V (higher), so Cu is the cathode (reduction: Cu²⁺ + 2e⁻ → Cu)\nStep 4: Zn has E° = −0.76 V (lower), so Zn is the anode (oxidation: Zn → Zn²⁺ + 2e⁻)\nStep 5: Apply the formula: E°cell = E°cathode − E°anode = +0.34 − (−0.76)\nStep 6: Simplify: E°cell = 0.34 + 0.76 = 1.10 V\nStep 7: A positive E°cell confirms the reaction is spontaneous (a galvanic cell produces electrical energy)\nTherefore: EMF = 1.10 V`,
-    diff: 'Hard',
-  }),
-  'Chemical Equilibrium': () => ({
-    q: 'N₂+3H₂⇌2NH₃: [N₂]=0.5,[H₂]=1.5,[NH₃]=3. Kc?',
-    opts: ['Kc=32.0', 'Kc=16.0', 'Kc=8.0', 'Kc=64.0'],
-    ans: 'Kc=32.0',
-    sol: `Formula: Equilibrium Constant Expression — Kc = [products]^stoich / [reactants]^stoich\nStep 1: Write the balanced equation: N₂ + 3H₂ ⇌ 2NH₃\nStep 2: Write the Kc expression using the stoichiometric coefficients as exponents: Kc = [NH₃]² / ([N₂]¹[H₂]³)\nStep 3: Note: products go in the numerator, reactants go in the denominator; only aqueous and gaseous species are included\nStep 4: Substitute equilibrium concentrations: [NH₃] = 3 mol/L, [N₂] = 0.5 mol/L, [H₂] = 1.5 mol/L\nStep 5: Calculate numerator: [NH₃]² = (3)² = 9\nStep 6: Calculate denominator: [N₂] × [H₂]³ = 0.5 × (1.5)³ = 0.5 × 3.375 = 1.6875\nStep 7: Divide: Kc = 9 ÷ 1.6875 ≈ 32.0 (Kc has no units when using the standard concentration convention)\nTherefore: Kc = 32.0`,
-    diff: 'Hard',
-  }),
-  'Intermolecular Forces': () => ({
-    q: 'Highest boiling point (H-bonding)?',
-    opts: ['Water (H₂O)', 'Methane (CH₄)', 'CO₂', 'N₂'],
-    ans: 'Water (H₂O)',
-    sol: `Formula: Boiling point is determined by the strength of intermolecular forces — stronger forces require more energy (higher temperature) to overcome\nStep 1: Identify the type of intermolecular forces in each substance:\n  • H₂O: Hydrogen bonding (strongest type of dipole–dipole interaction)\n  • CH₄: London dispersion forces only (weakest, non-polar molecule)\n  • CO₂: London dispersion forces + weak dipole interactions (linear, non-polar overall)\n  • N₂: London dispersion forces only (very weak, small non-polar molecule)\nStep 2: Hydrogen bonding occurs when H is bonded to a highly electronegative atom (F, O, or N) — in H₂O, the O–H bonds create strong intermolecular attractions\nStep 3: Rank intermolecular forces from strongest to weakest: Hydrogen bonds > Dipole–dipole > London dispersion\nStep 4: The stronger the intermolecular forces, the more energy is needed to separate molecules into the gas phase, resulting in a higher boiling point\nStep 5: Water's boiling point is 100°C; methane boils at −161°C; CO₂ sublimes at −78.5°C; N₂ boils at −196°C\nTherefore: Water (H₂O) has the highest boiling point due to its strong hydrogen bonding`,
-    diff: 'Easy',
-  }),
-  // ─── Extended generators (2026 CAPS / IEB / NSC / Cambridge IGCSE) ───
-  'Euclidean Geometry': () => {
-    const a = Ri(20, 70), b = Ri(20, 70); const c = 180 - a - b;
-    return {
-      q: `Triangle has angles ${a}° and ${b}°. Find the third angle.`,
-      opts: [`${c}°`, `${a + b}°`, `${180 - a}°`, `${a - b}°`],
-      ans: `${c}°`,
-      sol: `Formula: Sum of interior angles of a triangle = 180°\nStep 1: Add the two known angles: ${a}° + ${b}° = ${a + b}°\nStep 2: Subtract from 180°: 180° − ${a + b}° = ${c}°\nTherefore: third angle = ${c}°`,
-      diff: 'Easy',
-    };
-  },
-  'Trigonometric Functions': () => {
-    const A = [30, 60, 90, 120, 150]; const a = A[Ri(0, 4)];
-    const v = Math.sin(a * Math.PI / 180).toFixed(2);
-    return {
-      q: `Evaluate sin(${a}°) to 2 decimal places.`,
-      opts: [v, (1 - +v).toFixed(2), (+v * 2).toFixed(2), `${a / 100}`],
-      ans: v,
-      sol: `Formula: sin θ for special angles\nStep 1: Recognise ${a}° as a reference angle.\nStep 2: Use the unit circle: sin(${a}°) ≈ ${v}\nTherefore: sin(${a}°) = ${v}`,
-      diff: 'Medium',
-    };
-  },
-  'Analytical Geometry': () => {
-    const x1 = Ri(-5, 5), y1 = Ri(-5, 5), x2 = Ri(-5, 5), y2 = Ri(-5, 5);
-    const d = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2).toFixed(2);
-    return {
-      q: `Distance between (${x1},${y1}) and (${x2},${y2})?`,
-      opts: [`d=${d}`, `d=${Math.abs(x2 - x1)}`, `d=${Math.abs(y2 - y1)}`, `d=${x1 + y1}`],
-      ans: `d=${d}`,
-      sol: `Formula: d = √((x₂−x₁)² + (y₂−y₁)²)\nStep 1: Δx = ${x2 - x1}, Δy = ${y2 - y1}\nStep 2: Δx² + Δy² = ${(x2 - x1) ** 2} + ${(y2 - y1) ** 2} = ${(x2 - x1) ** 2 + (y2 - y1) ** 2}\nStep 3: Take square root: d = √${(x2 - x1) ** 2 + (y2 - y1) ** 2} ≈ ${d}\nTherefore: d ≈ ${d}`,
-      diff: 'Medium',
-    };
-  },
-  Finance: () => {
-    const P = Ri(5, 50) * 1000, r = Rf(5, 18, 1), n = Ri(2, 10);
-    const A = (P * (1 + (r / 100) * n)).toFixed(2);
-    return {
-      q: `Simple interest on R${P.toLocaleString()} at ${r}% for ${n} years?`,
-      opts: [`R${A}`, `R${(P * Math.pow(1 + r / 100, n)).toFixed(2)}`, `R${(P * r * n / 100).toFixed(2)}`, `R${P * 2}`],
-      ans: `R${A}`,
-      sol: `Formula: A = P(1 + rn) for simple interest\nStep 1: Factor: 1 + (${r / 100})(${n}) = ${(1 + (r / 100) * n).toFixed(4)}\nStep 2: A = ${P} × ${(1 + (r / 100) * n).toFixed(4)} = R${A}\nTherefore: Amount = R${A}`,
-      diff: 'Easy',
-    };
-  },
-  'Counting & Probability': () => {
-    const n = Ri(3, 6), r = Ri(2, n);
-    const C = factorial(n) / (factorial(r) * factorial(n - r));
-    return {
-      q: `How many ways to choose ${r} items from ${n}?`,
-      opts: [`${C}`, `${n * r}`, `${factorial(n) / factorial(n - r)}`, `${n + r}`],
-      ans: `${C}`,
-      sol: `Formula: C(n,r) = n! / (r!(n−r)!)\nStep 1: n! = ${factorial(n)}, r! = ${factorial(r)}, (n−r)! = ${factorial(n - r)}\nStep 2: C(${n},${r}) = ${factorial(n)} / (${factorial(r)} × ${factorial(n - r)}) = ${C}\nTherefore: ${C} ways.`,
-      diff: 'Medium',
-    };
-  },
-  Inequalities: () => {
-    const a = Ri(2, 6), b = Ri(1, 10), c = Ri(b + 1, 30);
-    const x = ((c - b) / a).toFixed(2);
-    return {
-      q: `Solve: ${a}x + ${b} > ${c}`,
-      opts: [`x > ${x}`, `x < ${x}`, `x ≥ ${x}`, `x = ${x}`],
-      ans: `x > ${x}`,
-      sol: `Formula: Inequalities work like equations except the sign flips on multiplying/dividing by a negative\nStep 1: Subtract ${b}: ${a}x > ${c - b}\nStep 2: Divide by ${a} (positive — sign stays): x > ${x}\nTherefore: x > ${x}`,
-      diff: 'Easy',
-    };
-  },
-  Polynomials: () => {
-    const r = Ri(1, 5);
-    return {
-      q: `Factor: x³ − ${3 * r}x² + ${3 * r * r}x − ${r * r * r}`,
-      opts: [`(x − ${r})³`, `(x + ${r})³`, `(x − ${r})(x² − ${r}x + 1)`, `x(x − ${r})²`],
-      ans: `(x − ${r})³`,
-      sol: `Formula: (x − a)³ = x³ − 3ax² + 3a²x − a³\nStep 1: Match the pattern with a = ${r}\nStep 2: 3a = ${3 * r}, 3a² = ${3 * r * r}, a³ = ${r * r * r} — all match ✓\nTherefore: (x − ${r})³`,
-      diff: 'Hard',
-    };
-  },
-  'Exponential & Logarithms': () => {
-    const b = [2, 3, 5, 10][Ri(0, 3)], e = Ri(2, 5);
-    const v = Math.pow(b, e);
-    return {
-      q: `Solve: log${sub(b)}(${v}) = ?`,
-      opts: [`${e}`, `${b}`, `${v - b}`, `${b * e}`],
-      ans: `${e}`,
-      sol: `Formula: log_b(x) = y  ⇔  b^y = x\nStep 1: Recognise ${v} as ${b}^${e}\nStep 2: Therefore log${sub(b)}(${v}) = ${e}\nTherefore: ${e}`,
-      diff: 'Medium',
-    };
-  },
-  'Regression Analysis': () => {
-    const m = Rf(1.5, 4.5, 2), c = Ri(2, 8), x = Ri(3, 10);
-    const y = (m * x + c).toFixed(2);
-    return {
-      q: `Line of best fit: y = ${m}x + ${c}. Predict y when x = ${x}.`,
-      opts: [`y = ${y}`, `y = ${(m * x).toFixed(2)}`, `y = ${(m + c).toFixed(2)}`, `y = ${(x + c).toFixed(2)}`],
-      ans: `y = ${y}`,
-      sol: `Formula: ŷ = mx + c, where m is slope, c is y-intercept\nStep 1: Substitute x = ${x}: y = ${m}(${x}) + ${c}\nStep 2: Calculate: ${(m * x).toFixed(2)} + ${c} = ${y}\nTherefore: y = ${y}`,
-      diff: 'Easy',
-    };
-  },
-  'Trigonometry Advanced': () => {
-    return {
-      q: `Identify: sin²θ + cos²θ ≡ ?`,
-      opts: ['1', '0', 'tan θ', '2'],
-      ans: '1',
-      sol: `Formula: Pythagorean Identity: sin²θ + cos²θ = 1\nDerived from x² + y² = 1 on the unit circle.\nTherefore: identity equals 1.`,
-      diff: 'Easy',
-    };
-  },
-  'Vectors & Scalars': () => {
-    const ax = Ri(-6, 6), ay = Ri(-6, 6);
-    const mag = Math.sqrt(ax * ax + ay * ay).toFixed(2);
-    return {
-      q: `Magnitude of vector (${ax}, ${ay})?`,
-      opts: [`|a| = ${mag}`, `|a| = ${Math.abs(ax) + Math.abs(ay)}`, `|a| = ${ax + ay}`, `|a| = ${ax * ay}`],
-      ans: `|a| = ${mag}`,
-      sol: `Formula: |a| = √(aₓ² + aᵧ²)\nStep 1: aₓ² = ${ax * ax}, aᵧ² = ${ay * ay}\nStep 2: Sum = ${ax * ax + ay * ay}, √${ax * ax + ay * ay} ≈ ${mag}\nTherefore: |a| ≈ ${mag}`,
-      diff: 'Easy',
-    };
-  },
-  'Vertical Projectile Motion': () => {
-    const v0 = Ri(15, 40), g = 9.8;
-    const tUp = (v0 / g).toFixed(2);
-    return {
-      q: `Ball thrown up at ${v0} m/s. Time to reach max height? (g = 9.8 m/s²)`,
-      opts: [`t = ${tUp} s`, `t = ${(v0 / 2).toFixed(2)} s`, `t = ${(v0 * g).toFixed(2)} s`, `t = ${v0 - g} s`],
-      ans: `t = ${tUp} s`,
-      sol: `Formula: v = u − gt; at max height v = 0\nStep 1: 0 = ${v0} − 9.8t  →  t = ${v0}/9.8\nStep 2: t = ${tUp} s\nTherefore: t = ${tUp} s`,
-      diff: 'Medium',
-    };
-  },
-  Electrodynamics: () => {
-    const N = Ri(50, 500), B = Rf(0.05, 1.5, 2), A = Rf(0.005, 0.05, 4), dt = Rf(0.01, 0.5, 2);
-    const emf = ((N * B * A) / dt).toFixed(2);
-    return {
-      q: `${N} turns, B=${B}T, A=${A}m², Δt=${dt}s. Induced EMF?`,
-      opts: [`ε = ${emf} V`, `ε = ${(N * B).toFixed(2)} V`, `ε = ${(B * A).toFixed(4)} V`, `ε = ${(N / dt).toFixed(2)} V`],
-      ans: `ε = ${emf} V`,
-      sol: `Formula: Faraday's Law: ε = N·ΔΦ/Δt = N·B·A / Δt (full collapse of flux)\nStep 1: N·B·A = ${N} × ${B} × ${A} = ${(N * B * A).toFixed(4)} Wb\nStep 2: Divide by Δt: ${(N * B * A).toFixed(4)} / ${dt} = ${emf} V\nTherefore: ε = ${emf} V`,
-      diff: 'Hard',
-    };
-  },
-  'Optical Phenomena': () => {
-    const f = Rf(4e14, 8e14, 2);
-    const h = 6.63e-34;
-    const E = (h * f).toExponential(2);
-    return {
-      q: `Photon energy at f = ${f.toExponential(2)} Hz? (h = 6.63×10⁻³⁴ J·s)`,
-      opts: [`E = ${E} J`, `E = ${(f / h).toExponential(2)} J`, `E = ${h} J`, `E = ${f} J`],
-      ans: `E = ${E} J`,
-      sol: `Formula: E = hf (Planck's relation)\nStep 1: Multiply h × f: ${h} × ${f.toExponential(2)}\nStep 2: E = ${E} J\nTherefore: E = ${E} J`,
-      diff: 'Medium',
-    };
-  },
-  'Chemistry: Matter': () => {
-    const A: [string, number][] = [['H', 1], ['C', 12], ['O', 16], ['N', 14], ['Na', 23], ['Cl', 35.5]];
-    const a = A[Ri(0, A.length - 1)];
-    return {
-      q: `Atomic mass of ${a[0]}?`,
-      opts: [`${a[1]}`, `${a[1] * 2}`, `${a[1] + 1}`, `${a[1] - 1}`],
-      ans: `${a[1]}`,
-      sol: `Formula: Atomic masses come from the periodic table.\nStep 1: ${a[0]} has atomic mass ≈ ${a[1]} u\nTherefore: ${a[1]}`,
-      diff: 'Easy',
-    };
-  },
+export const QG: Record<string, GeneratorFn[]> = {
+  // ─── Mathematics ────────────────────────────────────────────────
+  Algebra: [
+    (d) => { // ax + b = c
+      const a = di(d, 2, 6), x = di(d, 2, 9), b = di(d, 1, 8), c = a * x + b;
+      return {
+        q: `Solve for x:  ${a}x + ${b} = ${c}`,
+        opts: options(`x = ${x}`, [`x = ${x + 1}`, `x = ${x - 1}`, `x = ${c - b}`]),
+        ans: `x = ${x}`,
+        sol: `Formula: isolate x by inverse operations.\nStep 1: Subtract ${b}: ${a}x = ${c} − ${b} = ${c - b}\nStep 2: Divide by ${a}: x = ${c - b} ÷ ${a} = ${x}\nTherefore: x = ${x}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // a(x + b) = c
+      const a = di(d, 2, 5), x = di(d, 1, 8), b = di(d, 1, 6), c = a * (x + b);
+      return {
+        q: `Solve for x:  ${a}(x + ${b}) = ${c}`,
+        opts: options(`x = ${x}`, [`x = ${x + b}`, `x = ${c / a}`, `x = ${x - 1}`]),
+        ans: `x = ${x}`,
+        sol: `Step 1: Divide both sides by ${a}: x + ${b} = ${c} ÷ ${a} = ${c / a}\nStep 2: Subtract ${b}: x = ${c / a} − ${b} = ${x}\nTherefore: x = ${x}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // ax + b = cx + e
+      const x = di(d, 2, 7), a = di(d, 3, 6), c = Ri(1, a - 1), b = di(d, 1, 6);
+      const e = (a - c) * x + b;
+      return {
+        q: `Solve for x:  ${a}x + ${b} = ${c}x + ${e}`,
+        opts: options(`x = ${x}`, [`x = ${x + 1}`, `x = ${b}`, `x = ${e - b}`]),
+        ans: `x = ${x}`,
+        sol: `Step 1: Group x terms — ${a}x − ${c}x = ${e} − ${b}\nStep 2: ${a - c}x = ${e - b}\nStep 3: x = ${e - b} ÷ ${a - c} = ${x}\nTherefore: x = ${x}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Functions & Graphs': [
+    (d) => { // y-intercept
+      const a = Ri(1, 4), b = di(d, 1, 5) * (Math.random() < .5 ? 1 : -1), c = di(d, 1, 8) * (Math.random() < .5 ? 1 : -1);
+      return {
+        q: `What is the y-intercept of  y = ${a}x² ${b >= 0 ? '+ ' + b : '− ' + -b}x ${c >= 0 ? '+ ' + c : '− ' + -c}?`,
+        opts: options(`y = ${c}`, [`y = ${a}`, `y = ${b}`, `y = ${a + b + c}`]),
+        ans: `y = ${c}`,
+        sol: `Step 1: The y-intercept is where x = 0.\nStep 2: y = ${a}(0)² + ${b}(0) + ${c} = ${c}\nTherefore: y-intercept = ${c} (always the constant term)`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // evaluate f(x)
+      const a = Ri(1, 3), b = di(d, 1, 5), c = di(d, 1, 6), x = di(d, 1, 5);
+      const y = a * x * x + b * x + c;
+      return {
+        q: `Given f(x) = ${a}x² + ${b}x + ${c}, find f(${x}).`,
+        opts: options(`${y}`, [`${y + x}`, `${y - a}`, `${a * x + b + c}`]),
+        ans: `${y}`,
+        sol: `Step 1: Substitute x = ${x}: ${a}(${x})² + ${b}(${x}) + ${c}\nStep 2: ${a}×${x * x} + ${b * x} + ${c} = ${a * x * x} + ${b * x} + ${c}\nTherefore: f(${x}) = ${y}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // axis of symmetry
+      const a = Ri(1, 3), bHalf = di(d, 1, 4), b = 2 * a * bHalf * (Math.random() < .5 ? 1 : -1);
+      const axis = -b / (2 * a);
+      return {
+        q: `Axis of symmetry of  y = ${a}x² ${b >= 0 ? '+ ' + b : '− ' + -b}x + ${Ri(-4, 4)}?`,
+        opts: options(`x = ${axis}`, [`x = ${-axis}`, `x = ${b}`, `x = ${a}`]),
+        ans: `x = ${axis}`,
+        sol: `Formula: axis of symmetry x = −b ÷ (2a)\nStep 1: a = ${a}, b = ${b}\nStep 2: x = −(${b}) ÷ (2×${a}) = ${axis}\nTherefore: x = ${axis}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Trigonometry: [
+    (d) => { // special-angle value
+      const A = [30, 45, 60];
+      const S = ['½', '√2/2', '√3/2'], C = ['√3/2', '√2/2', '½'], T = ['1/√3', '1', '√3'];
+      const i = Ri(0, 2), f = Ri(0, 2);
+      const fn = ['sin', 'cos', 'tan'], V = [S, C, T];
+      return {
+        q: `Calculate  ${fn[f]}(${A[i]}°)`,
+        opts: options(V[f][i], [V[(f + 1) % 3][i], V[(f + 2) % 3][i], '2']),
+        ans: V[f][i],
+        sol: `Step 1: Recall the special-angle triangle for ${A[i]}°.\nStep 2: Apply SOHCAHTOA for ${fn[f]}.\nTherefore: ${fn[f]}(${A[i]}°) = ${V[f][i]}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // SOHCAHTOA find opposite side
+      const ang = pickOne([30, 45, 60]);
+      const adj = di(d, 4, 12);
+      const opp = +(adj * Math.tan(ang * Math.PI / 180)).toFixed(1);
+      return {
+        q: `A right triangle has a ${ang}° angle with adjacent side ${adj}. Find the opposite side (1 d.p.).`,
+        opts: options(`${opp}`, [`${(opp + 2).toFixed(1)}`, `${(adj / 2).toFixed(1)}`, `${(opp - 1.5).toFixed(1)}`]),
+        ans: `${opp}`,
+        sol: `Formula: tan θ = opposite ÷ adjacent\nStep 1: opposite = adjacent × tan(${ang}°) = ${adj} × ${(Math.tan(ang * Math.PI / 180)).toFixed(3)}\nTherefore: opposite ≈ ${opp}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // Pythagoras hypotenuse
+      const a = di(d, 3, 8), b = di(d, 3, 8);
+      const h = +Math.sqrt(a * a + b * b).toFixed(2);
+      return {
+        q: `Right triangle with legs ${a} and ${b}. Find the hypotenuse (2 d.p.).`,
+        opts: options(`${h}`, [`${(a + b)}`, `${(h + 1).toFixed(2)}`, `${(Math.abs(a - b))}`]),
+        ans: `${h}`,
+        sol: `Formula: h² = a² + b²\nStep 1: h² = ${a}² + ${b}² = ${a * a} + ${b * b} = ${a * a + b * b}\nStep 2: h = √${a * a + b * b} ≈ ${h}\nTherefore: hypotenuse ≈ ${h}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Statistics: [
+    (d) => { // mean
+      const n = d === 'HARD' ? Ri(6, 8) : Ri(4, 6);
+      const data = Array.from({ length: n }, () => di(d, 5, 40)).sort((a, b) => a - b);
+      const sum = data.reduce((s, v) => s + v, 0);
+      const m = +(sum / n).toFixed(1);
+      return {
+        q: `Find the mean of {${data.join(', ')}}.`,
+        opts: options(`${m}`, [`${data[Math.floor(n / 2)]}`, `${data[n - 1] - data[0]}`, `${(m + 4).toFixed(1)}`]),
+        ans: `${m}`,
+        sol: `Formula: mean = Σx ÷ n\nStep 1: Σx = ${sum}\nStep 2: n = ${n}\nStep 3: mean = ${sum} ÷ ${n} = ${m}\nTherefore: mean = ${m}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // range
+      const n = Ri(5, 7);
+      const data = Array.from({ length: n }, () => di(d, 5, 50)).sort((a, b) => a - b);
+      const range = data[n - 1] - data[0];
+      return {
+        q: `Find the range of {${data.join(', ')}}.`,
+        opts: options(`${range}`, [`${data[n - 1]}`, `${data[0]}`, `${range + data[0]}`]),
+        ans: `${range}`,
+        sol: `Formula: range = maximum − minimum\nStep 1: max = ${data[n - 1]}, min = ${data[0]}\nStep 2: range = ${data[n - 1]} − ${data[0]} = ${range}\nTherefore: range = ${range}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // median (odd count)
+      const data = Array.from({ length: 5 }, () => di(d, 5, 40)).sort((a, b) => a - b);
+      const med = data[2];
+      return {
+        q: `Find the median of {${data.join(', ')}}.`,
+        opts: options(`${med}`, [`${data[0]}`, `${data[4]}`, `${(data.reduce((s, v) => s + v, 0) / 5).toFixed(1)}`]),
+        ans: `${med}`,
+        sol: `Step 1: Order the data (already ordered): ${data.join(', ')}\nStep 2: With 5 values, the median is the 3rd value.\nTherefore: median = ${med}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Finance & Growth': [
+    (d) => { // compound interest
+      const P = di(d, 4, 30) * 1000, r = Rf(5, 14, 1), n = di(d, 1, 4);
+      const A = +(P * Math.pow(1 + r / 100, n)).toFixed(2);
+      return {
+        q: `R${P.toLocaleString()} invested at ${r}% compound interest for ${n} year(s). Final amount?`,
+        opts: options(`R${A}`, [`R${(P * (1 + r / 100 * n)).toFixed(2)}`, `R${(P + P * r / 100).toFixed(2)}`, `R${P * 2}`]),
+        ans: `R${A}`,
+        sol: `Formula: A = P(1 + r)ⁿ\nStep 1: P = R${P}, r = ${r / 100}, n = ${n}\nStep 2: A = ${P} × (${(1 + r / 100).toFixed(3)})^${n}\nTherefore: A = R${A}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Quadratic Equations': [
+    (d) => { // factorise x² − (p+q)x + pq
+      const p = di(d, 1, 5), q = di(d, 1, 6);
+      return {
+        q: `Solve:  x² − ${p + q}x + ${p * q} = 0`,
+        opts: options(`x = ${p} or x = ${q}`, [`x = ${-p} or x = ${-q}`, `x = ${p + q}`, `x = ${p * q}`]),
+        ans: `x = ${p} or x = ${q}`,
+        sol: `Step 1: Find two numbers multiplying to ${p * q}, adding to ${p + q}: ${p} and ${q}\nStep 2: (x − ${p})(x − ${q}) = 0\nTherefore: x = ${p} or x = ${q}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // difference of squares
+      const k = di(d, 2, 8);
+      return {
+        q: `Solve:  x² − ${k * k} = 0`,
+        opts: options(`x = ${k} or x = ${-k}`, [`x = ${k}`, `x = ${k * k}`, `x = ${-k * k}`]),
+        ans: `x = ${k} or x = ${-k}`,
+        sol: `Step 1: Difference of squares — x² − ${k * k} = (x − ${k})(x + ${k})\nStep 2: Set each factor to 0\nTherefore: x = ${k} or x = ${-k}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // discriminant
+      const a = Ri(1, 3), b = di(d, 2, 8), c = Ri(1, 4);
+      const disc = b * b - 4 * a * c;
+      const nature = disc > 0 ? 'two real roots' : disc === 0 ? 'one real root' : 'no real roots';
+      return {
+        q: `For ${a}x² + ${b}x + ${c} = 0, what does the discriminant tell you?`,
+        opts: options(nature, ['two real roots', 'one real root', 'no real roots'].filter((x) => x !== nature).concat('cannot tell')),
+        ans: nature,
+        sol: `Formula: Δ = b² − 4ac\nStep 1: Δ = ${b}² − 4(${a})(${c}) = ${b * b} − ${4 * a * c} = ${disc}\nStep 2: Δ ${disc > 0 ? '> 0' : disc === 0 ? '= 0' : '< 0'} → ${nature}\nTherefore: ${nature}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Differential Calculus': [
+    (d) => { // derivative of polynomial
+      const a = di(d, 1, 4), n = Ri(2, d === 'HARD' ? 5 : 3), b = di(d, 1, 6);
+      return {
+        q: `Find f'(x) if  f(x) = ${a}x^${n} + ${b}x`,
+        opts: options(`${a * n}x^${n - 1} + ${b}`, [`${a}x^${n + 1}`, `${a * n}x^${n}`, `${n}x^${n - 1} + ${b}`]),
+        ans: `${a * n}x^${n - 1} + ${b}`,
+        sol: `Formula: d/dx[axⁿ] = a·n·xⁿ⁻¹\nStep 1: d/dx[${a}x^${n}] = ${a * n}x^${n - 1}\nStep 2: d/dx[${b}x] = ${b}\nTherefore: f'(x) = ${a * n}x^${n - 1} + ${b}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // gradient at a point
+      const a = Ri(1, 3), b = di(d, 1, 5), x0 = di(d, 1, 4);
+      const grad = 2 * a * x0 + b;
+      return {
+        q: `f(x) = ${a}x² + ${b}x. Find the gradient of the tangent at x = ${x0}.`,
+        opts: options(`${grad}`, [`${grad + a}`, `${a * x0 * x0 + b * x0}`, `${2 * a * x0}`]),
+        ans: `${grad}`,
+        sol: `Step 1: f'(x) = ${2 * a}x + ${b}\nStep 2: f'(${x0}) = ${2 * a}×${x0} + ${b} = ${grad}\nTherefore: gradient = ${grad}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // turning point x-coordinate
+      const a = Ri(1, 3), bHalf = di(d, 1, 4), b = 2 * a * bHalf;
+      const tx = -b / (2 * a);
+      return {
+        q: `Find the x-coordinate of the turning point of  f(x) = ${a}x² + ${b}x + ${Ri(1, 9)}.`,
+        opts: options(`x = ${tx}`, [`x = ${-tx}`, `x = ${b}`, `x = ${a}`]),
+        ans: `x = ${tx}`,
+        sol: `Step 1: f'(x) = ${2 * a}x + ${b}\nStep 2: Set f'(x) = 0 → ${2 * a}x = −${b} → x = ${tx}\nTherefore: turning point at x = ${tx}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Sequences & Series': [
+    (d) => { // arithmetic sum
+      const a = di(d, 2, 10), diff = di(d, 1, 5), n = Ri(5, d === 'HARD' ? 14 : 9);
+      const Sn = Math.round((n / 2) * (2 * a + (n - 1) * diff));
+      return {
+        q: `Arithmetic series: a = ${a}, d = ${diff}. Find S${n}.`,
+        opts: options(`${Sn}`, [`${Sn + diff}`, `${a + (n - 1) * diff}`, `${n * a}`]),
+        ans: `${Sn}`,
+        sol: `Formula: Sₙ = n/2 (2a + (n−1)d)\nStep 1: 2a + (n−1)d = ${2 * a} + ${(n - 1) * diff} = ${2 * a + (n - 1) * diff}\nStep 2: Sₙ = ${n}/2 × ${2 * a + (n - 1) * diff} = ${Sn}\nTherefore: S${n} = ${Sn}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // nth term
+      const a = di(d, 2, 9), diff = di(d, 1, 6), n = Ri(4, 12);
+      const tn = a + (n - 1) * diff;
+      return {
+        q: `Arithmetic sequence: a = ${a}, d = ${diff}. Find the ${n}th term.`,
+        opts: options(`${tn}`, [`${tn + diff}`, `${a * n}`, `${tn - diff}`]),
+        ans: `${tn}`,
+        sol: `Formula: Tₙ = a + (n−1)d\nStep 1: T${n} = ${a} + (${n}−1)×${diff} = ${a} + ${(n - 1) * diff}\nTherefore: T${n} = ${tn}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Euclidean Geometry': [
+    (d) => {
+      const a = di(d, 20, 70), b = Ri(20, 100 - Math.min(a, 79));
+      const c = 180 - a - b;
+      return {
+        q: `A triangle has angles ${a}° and ${b}°. Find the third angle.`,
+        opts: options(`${c}°`, [`${a + b}°`, `${180 - a}°`, `${Math.abs(a - b)}°`]),
+        ans: `${c}°`,
+        sol: `Formula: angles of a triangle sum to 180°\nStep 1: ${a}° + ${b}° = ${a + b}°\nStep 2: 180° − ${a + b}° = ${c}°\nTherefore: third angle = ${c}°`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Trigonometric Functions': [
+    (d) => {
+      const A = [30, 60, 90, 120, 150]; const a = pickOne(A);
+      const v = +Math.sin(a * Math.PI / 180).toFixed(2);
+      return {
+        q: `Evaluate sin(${a}°) to 2 decimal places.`,
+        opts: options(`${v}`, [`${(1 - v).toFixed(2)}`, `${(v * 2 > 1 ? v / 2 : v * 2).toFixed(2)}`, `${(a / 100).toFixed(2)}`]),
+        ans: `${v}`,
+        sol: `Step 1: ${a}° on the unit circle.\nStep 2: sin(${a}°) ≈ ${v}\nTherefore: sin(${a}°) = ${v}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Analytical Geometry': [
+    (d) => { // distance
+      const x1 = di(d, -6, 6), y1 = di(d, -6, 6), x2 = di(d, -6, 6), y2 = di(d, -6, 6);
+      const dist = +Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2).toFixed(2);
+      return {
+        q: `Distance between (${x1}, ${y1}) and (${x2}, ${y2})?`,
+        opts: options(`${dist}`, [`${Math.abs(x2 - x1)}`, `${Math.abs(y2 - y1)}`, `${(dist + 1).toFixed(2)}`]),
+        ans: `${dist}`,
+        sol: `Formula: d = √((x₂−x₁)² + (y₂−y₁)²)\nStep 1: Δx = ${x2 - x1}, Δy = ${y2 - y1}\nStep 2: d = √(${(x2 - x1) ** 2} + ${(y2 - y1) ** 2}) ≈ ${dist}\nTherefore: d ≈ ${dist}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // midpoint
+      const x1 = di(d, -8, 8), y1 = di(d, -8, 8), x2 = di(d, -8, 8), y2 = di(d, -8, 8);
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      return {
+        q: `Midpoint of (${x1}, ${y1}) and (${x2}, ${y2})?`,
+        opts: options(`(${mx}, ${my})`, [`(${x1 + x2}, ${y1 + y2})`, `(${mx + 1}, ${my})`, `(${x2 - x1}, ${y2 - y1})`]),
+        ans: `(${mx}, ${my})`,
+        sol: `Formula: M = ((x₁+x₂)/2, (y₁+y₂)/2)\nStep 1: x: (${x1}+${x2})/2 = ${mx}\nStep 2: y: (${y1}+${y2})/2 = ${my}\nTherefore: midpoint = (${mx}, ${my})`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Finance: [
+    (d) => {
+      const P = di(d, 4, 30) * 1000, r = Rf(5, 16, 1), n = di(d, 2, 6);
+      const A = +(P * (1 + r / 100 * n)).toFixed(2);
+      return {
+        q: `Simple interest: R${P.toLocaleString()} at ${r}% for ${n} years. Final amount?`,
+        opts: options(`R${A}`, [`R${(P * Math.pow(1 + r / 100, n)).toFixed(2)}`, `R${(P * r * n / 100).toFixed(2)}`, `R${P * 2}`]),
+        ans: `R${A}`,
+        sol: `Formula: A = P(1 + r·n)\nStep 1: 1 + ${r / 100}×${n} = ${(1 + r / 100 * n).toFixed(3)}\nStep 2: A = ${P} × ${(1 + r / 100 * n).toFixed(3)} = R${A}\nTherefore: A = R${A}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Counting & Probability': [
+    (d) => {
+      const n = Ri(d === 'HARD' ? 5 : 3, d === 'HARD' ? 8 : 6), r = Ri(2, n - 1);
+      const C = factorial(n) / (factorial(r) * factorial(n - r));
+      return {
+        q: `How many ways to choose ${r} items from ${n}?`,
+        opts: options(`${C}`, [`${n * r}`, `${factorial(n) / factorial(n - r)}`, `${n + r}`]),
+        ans: `${C}`,
+        sol: `Formula: C(n,r) = n! ÷ (r!(n−r)!)\nStep 1: ${n}! ÷ (${r}! × ${n - r}!)\nStep 2: = ${C}\nTherefore: ${C} ways`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Inequalities: [
+    (d) => {
+      const a = di(d, 2, 5), x = di(d, 1, 8), b = di(d, 1, 6), c = a * x + b;
+      return {
+        q: `Solve:  ${a}x + ${b} > ${c}`,
+        opts: options(`x > ${x}`, [`x < ${x}`, `x ≥ ${x}`, `x = ${x}`]),
+        ans: `x > ${x}`,
+        sol: `Step 1: Subtract ${b}: ${a}x > ${c - b}\nStep 2: Divide by ${a} (positive — sign stays): x > ${x}\nTherefore: x > ${x}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Polynomials: [
+    (d) => {
+      const r = di(d, 1, 5);
+      return {
+        q: `Factorise:  x³ − ${3 * r}x² + ${3 * r * r}x − ${r * r * r}`,
+        opts: options(`(x − ${r})³`, [`(x + ${r})³`, `(x − ${r})(x² − ${r}x + 1)`, `x(x − ${r})²`]),
+        ans: `(x − ${r})³`,
+        sol: `Formula: (x − a)³ = x³ − 3ax² + 3a²x − a³\nStep 1: Match a = ${r}: 3a = ${3 * r}, 3a² = ${3 * r * r}, a³ = ${r * r * r} ✓\nTherefore: (x − ${r})³`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Exponential & Logarithms': [
+    (d) => {
+      const b = pickOne([2, 3, 5, 10]), e = Ri(2, d === 'HARD' ? 5 : 3);
+      const v = Math.pow(b, e);
+      return {
+        q: `Evaluate:  log${sub(b)}(${v})`,
+        opts: options(`${e}`, [`${b}`, `${v - b}`, `${b * e}`]),
+        ans: `${e}`,
+        sol: `Formula: log_b(x) = y ⇔ bʸ = x\nStep 1: ${v} = ${b}^${e}\nTherefore: log${sub(b)}(${v}) = ${e}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Regression Analysis': [
+    (d) => {
+      const m = Rf(1.5, 4.5, 2), c = di(d, 2, 8), x = di(d, 3, 10);
+      const y = +(m * x + c).toFixed(2);
+      return {
+        q: `Line of best fit: ŷ = ${m}x + ${c}. Predict y when x = ${x}.`,
+        opts: options(`${y}`, [`${(m * x).toFixed(2)}`, `${(m + c).toFixed(2)}`, `${(x + c).toFixed(2)}`]),
+        ans: `${y}`,
+        sol: `Formula: ŷ = mx + c\nStep 1: ŷ = ${m}×${x} + ${c} = ${(m * x).toFixed(2)} + ${c}\nTherefore: ŷ = ${y}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Trigonometry Advanced': [
+    (d) => {
+      const ids = [
+        { q: 'sin²θ + cos²θ ≡ ?', ans: '1', distract: ['0', 'tan θ', '2'] },
+        { q: 'tan θ ≡ ?', ans: 'sin θ / cos θ', distract: ['cos θ / sin θ', '1 / sin θ', 'sin θ · cos θ'] },
+        { q: '1 + tan²θ ≡ ?', ans: 'sec²θ', distract: ['cosec²θ', 'cos²θ', '2'] },
+      ];
+      const it = pickOne(ids);
+      return {
+        q: `Simplify the identity:  ${it.q}`,
+        opts: options(it.ans, it.distract),
+        ans: it.ans,
+        sol: `This is a standard trigonometric identity.\nTherefore: ${it.q.replace('?', it.ans)}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+
+  // ─── Physical Sciences ──────────────────────────────────────────
+  "Newton's Laws": [
+    (d) => { // F = ma
+      const m = di(d, 2, 20), a = Rf(1, 9, 1);
+      const F = +(m * a).toFixed(1);
+      return {
+        q: `A ${m} kg object accelerates at ${a} m/s². Find the net force.`,
+        opts: options(`${F} N`, [`${(m + a).toFixed(1)} N`, `${(m / a).toFixed(1)} N`, `${(2 * F).toFixed(1)} N`]),
+        ans: `${F} N`,
+        sol: `Formula: F = ma\nStep 1: F = ${m} × ${a}\nTherefore: F = ${F} N`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // find acceleration
+      const m = di(d, 2, 15), a = Ri(2, 8), F = m * a;
+      return {
+        q: `A net force of ${F} N acts on a ${m} kg object. Find its acceleration.`,
+        opts: options(`${a} m/s²`, [`${F} m/s²`, `${(F * m)} m/s²`, `${a + 1} m/s²`]),
+        ans: `${a} m/s²`,
+        sol: `Formula: a = F ÷ m\nStep 1: a = ${F} ÷ ${m} = ${a}\nTherefore: a = ${a} m/s²`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // find mass
+      const m = di(d, 2, 18), a = Ri(2, 7), F = m * a;
+      return {
+        q: `A force of ${F} N gives an object an acceleration of ${a} m/s². Find its mass.`,
+        opts: options(`${m} kg`, [`${F} kg`, `${(F * a)} kg`, `${m + 2} kg`]),
+        ans: `${m} kg`,
+        sol: `Formula: m = F ÷ a\nStep 1: m = ${F} ÷ ${a} = ${m}\nTherefore: m = ${m} kg`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Momentum: [
+    (d) => { // p = mv
+      const m = di(d, 2, 16), v = Rf(2, 16, 1);
+      const p = +(m * v).toFixed(1);
+      return {
+        q: `Find the momentum of a ${m} kg object moving at ${v} m/s.`,
+        opts: options(`${p} kg·m/s`, [`${(m + v).toFixed(1)} kg·m/s`, `${(m / v).toFixed(1)} kg·m/s`, `${(2 * p).toFixed(1)} kg·m/s`]),
+        ans: `${p} kg·m/s`,
+        sol: `Formula: p = mv\nStep 1: p = ${m} × ${v}\nTherefore: p = ${p} kg·m/s`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // find velocity
+      const m = di(d, 2, 12), v = Ri(3, 12), p = m * v;
+      return {
+        q: `An object of mass ${m} kg has momentum ${p} kg·m/s. Find its velocity.`,
+        opts: options(`${v} m/s`, [`${p} m/s`, `${(p * m)} m/s`, `${v + 1} m/s`]),
+        ans: `${v} m/s`,
+        sol: `Formula: v = p ÷ m\nStep 1: v = ${p} ÷ ${m} = ${v}\nTherefore: v = ${v} m/s`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Energy & Power': [
+    (d) => { // KE
+      const m = di(d, 2, 20), v = Rf(2, 12, 1);
+      const KE = +(0.5 * m * v * v).toFixed(1);
+      return {
+        q: `Find the kinetic energy of a ${m} kg object moving at ${v} m/s.`,
+        opts: options(`${KE} J`, [`${(m * v).toFixed(1)} J`, `${(m * v * v).toFixed(1)} J`, `${(KE / 2).toFixed(1)} J`]),
+        ans: `${KE} J`,
+        sol: `Formula: KE = ½mv²\nStep 1: v² = ${(v * v).toFixed(2)}\nStep 2: KE = 0.5 × ${m} × ${(v * v).toFixed(2)} = ${KE}\nTherefore: KE = ${KE} J`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // PE = mgh
+      const m = di(d, 2, 15), h = di(d, 2, 12), g = 9.8;
+      const PE = +(m * g * h).toFixed(1);
+      return {
+        q: `Find the gravitational potential energy of a ${m} kg object ${h} m above the ground (g = 9.8 m/s²).`,
+        opts: options(`${PE} J`, [`${(m * h).toFixed(1)} J`, `${(m + g + h).toFixed(1)} J`, `${(PE / 2).toFixed(1)} J`]),
+        ans: `${PE} J`,
+        sol: `Formula: PE = mgh\nStep 1: PE = ${m} × 9.8 × ${h}\nTherefore: PE = ${PE} J`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // Power = W / t
+      const W = di(d, 50, 400), t = Ri(2, 10);
+      const P = +(W / t).toFixed(1);
+      return {
+        q: `${W} J of work is done in ${t} s. Find the power.`,
+        opts: options(`${P} W`, [`${(W * t)} W`, `${(W + t)} W`, `${(P + 5).toFixed(1)} W`]),
+        ans: `${P} W`,
+        sol: `Formula: P = W ÷ t\nStep 1: P = ${W} ÷ ${t} = ${P}\nTherefore: P = ${P} W`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Electricity & Magnetism': [
+    (d) => { // Ohm's law I = V/R
+      const V = di(d, 6, 24), R = di(d, 10, 80);
+      const I = +(V / R).toFixed(3);
+      return {
+        q: `A ${V} V supply across a ${R} Ω resistor. Find the current.`,
+        opts: options(`${I} A`, [`${(V * R)} A`, `${(R / V).toFixed(3)} A`, `${(V + R)} A`]),
+        ans: `${I} A`,
+        sol: `Formula: I = V ÷ R\nStep 1: I = ${V} ÷ ${R} = ${I}\nTherefore: I = ${I} A`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Waves & Sound': [
+    (d) => { // wavelength
+      const f = di(d, 100, 2000), v = 340;
+      const l = +(v / f).toFixed(4);
+      return {
+        q: `A sound wave has frequency ${f} Hz (v = 340 m/s). Find the wavelength.`,
+        opts: options(`${l} m`, [`${(f * v)} m`, `${(f / v).toFixed(4)} m`, `${(l * 2).toFixed(4)} m`]),
+        ans: `${l} m`,
+        sol: `Formula: λ = v ÷ f\nStep 1: λ = 340 ÷ ${f} = ${l}\nTherefore: λ = ${l} m`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // wave speed v = fλ
+      const f = di(d, 50, 500), l = Rf(0.5, 4, 2);
+      const v = +(f * l).toFixed(1);
+      return {
+        q: `A wave has frequency ${f} Hz and wavelength ${l} m. Find its speed.`,
+        opts: options(`${v} m/s`, [`${(f / l).toFixed(1)} m/s`, `${(f + l).toFixed(1)} m/s`, `${(v / 2).toFixed(1)} m/s`]),
+        ans: `${v} m/s`,
+        sol: `Formula: v = fλ\nStep 1: v = ${f} × ${l} = ${v}\nTherefore: v = ${v} m/s`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Chemistry: Matter': [
+    (d) => {
+      const A: [string, number][] = [['H', 1], ['C', 12], ['O', 16], ['N', 14], ['Na', 23], ['Cl', 35.5], ['Ca', 40], ['S', 32]];
+      const a = pickOne(A);
+      return {
+        q: `What is the approximate atomic mass of ${a[0]}?`,
+        opts: options(`${a[1]}`, [`${a[1] * 2}`, `${a[1] + 1}`, `${Math.max(1, a[1] - 2)}`]),
+        ans: `${a[1]}`,
+        sol: `Step 1: Read ${a[0]} from the periodic table.\nTherefore: atomic mass ≈ ${a[1]} u`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Projectile Motion': [
+    (d) => {
+      const v0 = di(d, 10, 35), ang = pickOne([30, 45, 60]);
+      const r = ang * Math.PI / 180;
+      const H = +((v0 * v0 * Math.sin(r) ** 2) / (2 * 9.8)).toFixed(2);
+      return {
+        q: `A projectile is launched at ${v0} m/s and ${ang}°. Find its maximum height.`,
+        opts: options(`${H} m`, [`${(H * 2).toFixed(2)} m`, `${v0} m`, `${(H / 2).toFixed(2)} m`]),
+        ans: `${H} m`,
+        sol: `Formula: H = (v₀sinθ)² ÷ (2g)\nStep 1: v₀sinθ = ${(v0 * Math.sin(r)).toFixed(2)}\nStep 2: H = ${(v0 * Math.sin(r)).toFixed(2)}² ÷ 19.6 = ${H}\nTherefore: H = ${H} m`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Electrostatics: [
+    (d) => {
+      const q1 = Rf(1, 8, 2) * 1e-6, q2 = Rf(1, 8, 2) * 1e-6, sep = Rf(0.1, 1.5, 2);
+      const F = +((9e9 * q1 * q2) / (sep * sep)).toFixed(3);
+      return {
+        q: `Two charges q₁ = ${(q1 * 1e6).toFixed(2)} μC and q₂ = ${(q2 * 1e6).toFixed(2)} μC are ${sep} m apart. Find the force between them.`,
+        opts: options(`${F} N`, [`${(F * 2).toFixed(3)} N`, `${(F / 2).toFixed(3)} N`, `${sep} N`]),
+        ans: `${F} N`,
+        sol: `Formula: F = kq₁q₂ ÷ r², k = 9×10⁹\nStep 1: numerator = 9×10⁹ × ${q1.toExponential(2)} × ${q2.toExponential(2)}\nStep 2: ÷ ${sep}² = ${F}\nTherefore: F = ${F} N`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Electric Circuits': [
+    (d) => { // series current
+      const V = di(d, 6, 24), R1 = di(d, 10, 60), R2 = di(d, 10, 60);
+      const I = +(V / (R1 + R2)).toFixed(3);
+      return {
+        q: `R₁ = ${R1} Ω and R₂ = ${R2} Ω in series across ${V} V. Find the current.`,
+        opts: options(`${I} A`, [`${(V / R1).toFixed(3)} A`, `${(V / R2).toFixed(3)} A`, `${(V / (R1 * R2)).toFixed(4)} A`]),
+        ans: `${I} A`,
+        sol: `Formula: series — Rₜ = R₁ + R₂, I = V ÷ Rₜ\nStep 1: Rₜ = ${R1} + ${R2} = ${R1 + R2}\nStep 2: I = ${V} ÷ ${R1 + R2} = ${I}\nTherefore: I = ${I} A`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // parallel resistance
+      const R1 = di(d, 4, 20), R2 = di(d, 4, 20);
+      const Rp = +((R1 * R2) / (R1 + R2)).toFixed(2);
+      return {
+        q: `R₁ = ${R1} Ω and R₂ = ${R2} Ω in parallel. Find the total resistance.`,
+        opts: options(`${Rp} Ω`, [`${R1 + R2} Ω`, `${(R1 * R2)} Ω`, `${(Rp + 2).toFixed(2)} Ω`]),
+        ans: `${Rp} Ω`,
+        sol: `Formula: 1/Rₜ = 1/R₁ + 1/R₂  →  Rₜ = R₁R₂ ÷ (R₁+R₂)\nStep 1: Rₜ = (${R1}×${R2}) ÷ (${R1}+${R2}) = ${Rp}\nTherefore: Rₜ = ${Rp} Ω`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+    (d) => { // power P = VI
+      const V = di(d, 6, 24), I = Rf(0.5, 4, 1);
+      const P = +(V * I).toFixed(2);
+      return {
+        q: `A device draws ${I} A at ${V} V. Find its power.`,
+        opts: options(`${P} W`, [`${(V / I).toFixed(2)} W`, `${(V + I).toFixed(2)} W`, `${(P / 2).toFixed(2)} W`]),
+        ans: `${P} W`,
+        sol: `Formula: P = VI\nStep 1: P = ${V} × ${I} = ${P}\nTherefore: P = ${P} W`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Intermolecular Forces': [
+    (d) => {
+      const items = [
+        { q: 'Which substance has the highest boiling point?', ans: 'Water (H₂O) — hydrogen bonding', distract: ['Methane (CH₄)', 'CO₂', 'N₂'] },
+        { q: 'Which has the weakest intermolecular forces?', ans: 'N₂ — London forces only', distract: ['Water (H₂O)', 'Ethanol', 'HF'] },
+      ];
+      const it = pickOne(items);
+      return {
+        q: it.q,
+        opts: options(it.ans, it.distract),
+        ans: it.ans,
+        sol: `Rank intermolecular forces: hydrogen bonds > dipole–dipole > London dispersion.\nTherefore: ${it.ans}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Chemical Equilibrium': [
+    (d) => ({
+      q: 'N₂ + 3H₂ ⇌ 2NH₃ with [N₂]=0.5, [H₂]=1.5, [NH₃]=3. Find Kc.',
+      opts: options('Kc = 32.0', ['Kc = 16.0', 'Kc = 8.0', 'Kc = 64.0']),
+      ans: 'Kc = 32.0',
+      sol: `Formula: Kc = [products] ÷ [reactants], coefficients as powers\nStep 1: Kc = [NH₃]² ÷ ([N₂][H₂]³) = 3² ÷ (0.5 × 1.5³)\nStep 2: = 9 ÷ 1.6875 ≈ 32.0\nTherefore: Kc = 32.0`,
+      diff: DIFF_LABEL[d],
+    }),
+  ],
+  'Vectors & Scalars': [
+    (d) => {
+      const ax = di(d, -7, 7), ay = di(d, -7, 7);
+      const mag = +Math.sqrt(ax * ax + ay * ay).toFixed(2);
+      return {
+        q: `Find the magnitude of the vector (${ax}, ${ay}).`,
+        opts: options(`${mag}`, [`${Math.abs(ax) + Math.abs(ay)}`, `${ax + ay}`, `${(mag + 1).toFixed(2)}`]),
+        ans: `${mag}`,
+        sol: `Formula: |a| = √(aₓ² + aᵧ²)\nStep 1: ${ax}² + ${ay}² = ${ax * ax + ay * ay}\nStep 2: √${ax * ax + ay * ay} ≈ ${mag}\nTherefore: |a| ≈ ${mag}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Momentum & Impulse': [
+    (d) => {
+      const m = di(d, 2, 15), v1 = Rf(2, 12, 1), v2 = Rf(2, 14, 1), t = Rf(0.2, 3, 2);
+      const dp = +(m * (v2 - v1)).toFixed(2);
+      const Fa = +(Math.abs(dp) / t).toFixed(2);
+      return {
+        q: `A ${m} kg object changes velocity from ${v1} to ${v2} m/s in ${t} s. Find the average force.`,
+        opts: options(`${Fa} N`, [`${(m * v2).toFixed(2)} N`, `${t} N`, `${(m * v1).toFixed(2)} N`]),
+        ans: `${Fa} N`,
+        sol: `Formula: F = Δp ÷ Δt, Δp = m(v₂−v₁)\nStep 1: Δp = ${m} × (${v2} − ${v1}) = ${dp}\nStep 2: F = |${dp}| ÷ ${t} = ${Fa}\nTherefore: F = ${Fa} N`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Vertical Projectile Motion': [
+    (d) => {
+      const v0 = di(d, 12, 35), g = 9.8;
+      const tUp = +(v0 / g).toFixed(2);
+      return {
+        q: `A ball is thrown up at ${v0} m/s. How long to reach maximum height? (g = 9.8 m/s²)`,
+        opts: options(`${tUp} s`, [`${(v0 / 2).toFixed(2)} s`, `${(v0 * g).toFixed(2)} s`, `${(tUp + 0.5).toFixed(2)} s`]),
+        ans: `${tUp} s`,
+        sol: `Formula: v = u − gt, at max height v = 0\nStep 1: 0 = ${v0} − 9.8t → t = ${v0} ÷ 9.8\nTherefore: t = ${tUp} s`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Electrodynamics: [
+    (d) => {
+      const N = di(d, 50, 400), B = Rf(0.05, 1.4, 2), A = Rf(0.005, 0.05, 4), dt = Rf(0.02, 0.5, 2);
+      const emf = +((N * B * A) / dt).toFixed(2);
+      return {
+        q: `A ${N}-turn coil, B = ${B} T, A = ${A} m², flux collapses in ${dt} s. Find the induced EMF.`,
+        opts: options(`${emf} V`, [`${(N * B).toFixed(2)} V`, `${(B * A).toFixed(4)} V`, `${(N / dt).toFixed(2)} V`]),
+        ans: `${emf} V`,
+        sol: `Formula: ε = N·B·A ÷ Δt\nStep 1: N·B·A = ${(N * B * A).toFixed(4)}\nStep 2: ÷ ${dt} = ${emf}\nTherefore: ε = ${emf} V`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  'Organic Chemistry': [
+    (d) => {
+      const A: [string, string, number][] = [
+        ['Methane', 'CH₄', 1], ['Ethane', 'C₂H₆', 2], ['Propane', 'C₃H₈', 3], ['Butane', 'C₄H₁₀', 4], ['Pentane', 'C₅H₁₂', 5],
+      ];
+      const a = pickOne(A);
+      return {
+        q: `${a[0]} has ${a[2]} carbon atom(s). What is its molecular formula?`,
+        opts: options(a[1], [`C${a[2]}H${2 * a[2]}`, `C${a[2] + 1}H${2 * (a[2] + 1) + 2}`, `C${a[2]}H${2 * a[2] + 4}`]),
+        ans: a[1],
+        sol: `Formula: alkanes follow CₙH₂ₙ₊₂\nStep 1: n = ${a[2]} → H = 2(${a[2]}) + 2 = ${2 * a[2] + 2}\nTherefore: ${a[1]}`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
+  Electrochemistry: [
+    (d) => ({
+      q: 'Galvanic cell: Zn (E° = −0.76 V), Cu (E° = +0.34 V). Find the cell EMF.',
+      opts: options('1.10 V', ['0.42 V', '−0.42 V', '1.52 V']),
+      ans: '1.10 V',
+      sol: `Formula: E°cell = E°cathode − E°anode\nStep 1: Cu is cathode (+0.34), Zn is anode (−0.76)\nStep 2: E°cell = 0.34 − (−0.76) = 1.10 V\nTherefore: EMF = 1.10 V`,
+      diff: DIFF_LABEL[d],
+    }),
+  ],
+  'Optical Phenomena': [
+    (d) => {
+      const f = Rf(4e14, 8e14, 2), h = 6.63e-34;
+      const E = (h * f).toExponential(2);
+      return {
+        q: `Find the energy of a photon of frequency ${f.toExponential(2)} Hz (h = 6.63×10⁻³⁴ J·s).`,
+        opts: options(`${E} J`, [`${(f / h).toExponential(2)} J`, `${h} J`, `${f} J`]),
+        ans: `${E} J`,
+        sol: `Formula: E = hf\nStep 1: E = 6.63×10⁻³⁴ × ${f.toExponential(2)}\nTherefore: E = ${E} J`,
+        diff: DIFF_LABEL[d],
+      };
+    },
+  ],
 };
 
-// Helpers used by the new generators
 function factorial(n: number): number { return n <= 1 ? 1 : n * factorial(n - 1); }
 function sub(n: number): string {
   return String(n).split('').map((c) => '₀₁₂₃₄₅₆₇₈₉'[+c] || c).join('');
 }
 
-export function generateQuestion(topic: string, subject: string, grade: number): GeneratedQuestion {
-  const fn = QG[topic];
-  if (fn) {
-    const r = fn();
-    if (r) return r;
-  }
-  return subject === 'mathematics' ? QG['Algebra']() : QG["Newton's Laws"]();
+/**
+ * Generate one question for a topic at a given difficulty. Picks a random
+ * variant for variety. Falls back to a sensible default for unknown topics.
+ */
+export function generateQuestion(
+  topic: string,
+  subject: string,
+  _grade: number,
+  difficulty: GenDiff = 'MEDIUM',
+): GeneratedQuestion {
+  const variants = QG[topic];
+  if (variants && variants.length) return pickOne(variants)(difficulty);
+  const fallback = subject === 'mathematics' ? QG['Algebra'] : QG["Newton's Laws"];
+  return pickOne(fallback)(difficulty);
 }
 
 /**
- * Compute a fair per-question time-limit (in seconds) for the live quiz timer.
- * Considers: difficulty level, number of options, question text length, and presence of an image.
- * Caps to a sensible range — never less than 25s, never more than 4 minutes.
+ * Compute a fair per-question time-limit (seconds) for the live quiz timer.
  */
 export function expectedSecondsFor(input: {
   difficulty?: string | null;
@@ -447,19 +806,13 @@ export function expectedSecondsFor(input: {
 }): number {
   const diff = (input.difficulty || 'EASY').toUpperCase();
   const base = diff === 'HARD' ? 120 : diff === 'MEDIUM' ? 75 : 45;
-  // +0.4s per word of question text (read time)
   const words = (input.question || '').trim().split(/\s+/).length;
   const readBonus = Math.min(60, Math.round(words * 0.4));
-  // +5s per option (consider each)
   const optBonus = Math.min(25, ((input.options?.length ?? 0) - 4) * 5);
-  // +20s if the question carries a diagram
   const imgBonus = input.imageData ? 20 : 0;
-  // +0.2s per word in the solution (proxy for complexity)
   const solWords = (input.solution || '').trim().split(/\s+/).length;
   const complexity = Math.min(40, Math.round(solWords * 0.2));
-
-  const total = base + readBonus + optBonus + imgBonus + complexity;
-  return Math.max(25, Math.min(240, total));
+  return Math.max(25, Math.min(240, base + readBonus + optBonus + imgBonus + complexity));
 }
 
 export const CAPS_TOPICS: Record<string, Record<number, string[]>> = {

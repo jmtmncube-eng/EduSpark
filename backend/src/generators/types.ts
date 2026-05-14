@@ -1,7 +1,7 @@
-import type { GeneratedQuestion, GeneratorFn } from '../utils/questionGenerators';
+import type { GeneratedQuestion, GeneratorFn, GenDiff } from '../utils/questionGenerators';
 import type { DiagramKind } from '../utils/diagramTemplates';
 
-export type { GeneratedQuestion, GeneratorFn, DiagramKind };
+export type { GeneratedQuestion, GeneratorFn, GenDiff, DiagramKind };
 
 export type GeneratorSubject = 'mathematics' | 'physical_sciences';
 
@@ -17,6 +17,9 @@ export type GeneratorSubject = 'mathematics' | 'physical_sciences';
  *              slice performance by curriculum strand.
  *   cognitiveLevel — CAPS cognitive level 1-4 the generator typically produces
  *              (1 Knowledge · 2 Routine · 3 Complex · 4 Problem-solving).
+ *   variants — one or more difficulty-aware generator functions. The registry
+ *              picks one at random per call, so a batch on the same topic is
+ *              genuinely varied instead of "same template, different numbers".
  */
 export interface TopicGenerator {
   topic: string;
@@ -25,5 +28,5 @@ export interface TopicGenerator {
   diagram: DiagramKind | null;
   caps: string;
   cognitiveLevel: number;
-  generate: GeneratorFn;
+  variants: GeneratorFn[];
 }

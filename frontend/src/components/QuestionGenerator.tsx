@@ -63,6 +63,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
   const isTutor = user?.role === 'TUTOR';
 
   // Step state
+  const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB'>('CAPS');
   const [subject, setSubject] = useState<Subject | null>(null);
   const tutorGrades = (user?.teachGrades?.length ? user.teachGrades : [10, 11, 12]) as number[];
   const [grade, setGrade] = useState<number>(tutorGrades[0] ?? 10);
@@ -98,8 +99,8 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
     setRecent([]);
     setBatchId(null);
     try {
-      const r = await questionsApi.generate(subject, grade, topic, count, mix);
-      showToast(`Generated ${r.count} ${SUBJECT_THEME[subject].short} question(s)`, 'success');
+      const r = await questionsApi.generate(subject, grade, topic, count, mix, curriculum);
+      showToast(`Generated ${r.count} ${curriculum} ${SUBJECT_THEME[subject].short} question(s)`, 'success');
       setRecent(r.created as Question[]);
       setBatchId(r.batchId);
       onDone?.(r.created as Question[]);
@@ -121,12 +122,36 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
       <div className="flex jb ia mb2" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 16 }}>⚡ Generate Questions</div>
-          <div className="xs ct3">Pick subject → grade → topic → how many. Questions land in your Bank ready to bundle.</div>
+          <div className="xs ct3">Curriculum → subject → grade → topic → how many. Questions land in your Bank ready to review.</div>
         </div>
       </div>
 
-      {/* Step 1 — Subject */}
-      <div className="sm bold mb1">1. Subject</div>
+      {/* Step 1 — Curriculum */}
+      <div className="sm bold mb1">1. Curriculum</div>
+      <div className="flex g1 wrap" style={{ marginBottom: 14 }}>
+        {(['CAPS', 'IEB'] as const).map((c) => {
+          const active = curriculum === c;
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCurriculum(c)}
+              style={{
+                cursor: 'pointer', padding: '9px 18px', borderRadius: 10,
+                background: active ? 'var(--p)' : 'var(--bg)',
+                color: active ? '#fff' : 'var(--t)',
+                border: `2px solid ${active ? 'var(--p)' : 'var(--bd)'}`,
+                fontWeight: 700, fontSize: 13,
+              }}
+            >
+              {c === 'CAPS' ? '🇿🇦 CAPS' : '📘 IEB'}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Step 2 — Subject */}
+      <div className="sm bold mb1">2. Subject</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
         {(Object.keys(SUBJECT_THEME) as Subject[]).map((s) => {
           const t = SUBJECT_THEME[s];
@@ -157,7 +182,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
       {subject && (
         <>
           {/* Step 2 — Grade */}
-          <div className="sm bold mb1">2. Grade</div>
+          <div className="sm bold mb1">3. Grade</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
             {tutorGrades.map((g) => (
               <button
@@ -184,7 +209,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
           </div>
 
           {/* Step 3 — Topic */}
-          <div className="sm bold mb1">3. Topic</div>
+          <div className="sm bold mb1">4. Topic</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6, marginBottom: 14 }}>
             {topics.map((t) => (
               <button
@@ -205,7 +230,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
           </div>
 
           {/* Step 4 — Count */}
-          <div className="sm bold mb1">4. How many?</div>
+          <div className="sm bold mb1">5. How many?</div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
             {[3, 5, 10, 20].map((n) => (
               <button
@@ -225,9 +250,9 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
             ))}
           </div>
 
-          {/* Step 5 — Mix */}
+          {/* Step 6 — Mix */}
           <div className="sm bold mb1">
-            5. Difficulty mix
+            6. Difficulty mix
             <span className="xs ct3" style={{ fontWeight: 400, marginLeft: 6 }}>
               (students see friendly names — see key below)
             </span>
@@ -258,7 +283,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
             })}
           </div>
           <div className="xs ct3 mb2">
-            💡 The mix is a hint — the generator currently outputs whatever fits the topic; future versions will respect strict difficulty filters.
+            💡 The mix is honoured — pick a single band for all-one-difficulty, or Mixed for a realistic ≈30/40/30 spread. The generator scales the numbers and steps to match.
           </div>
 
           {/* Generate button */}
@@ -274,7 +299,7 @@ export default function QuestionGenerator({ onDone }: { onDone?: (created: Quest
           >
             {busy
               ? `⚡ Generating ${count} questions…`
-              : `⚡ Generate ${count} ${theme!.short} question${count === 1 ? '' : 's'} on ${topic}`}
+              : `⚡ Generate ${count} ${curriculum} ${theme!.short} question${count === 1 ? '' : 's'} on ${topic}`}
           </button>
 
           {recent.length > 0 && (

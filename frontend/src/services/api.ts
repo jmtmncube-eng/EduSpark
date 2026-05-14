@@ -90,9 +90,9 @@ export const auth = {
     request<{ token?: string; user?: object; needsGrade?: boolean; name?: string; returning?: boolean }>(
       '/auth/login', { method: 'POST', body: JSON.stringify({ value, role }) }
     ),
-  register: (name: string, grade: number) =>
+  register: (name: string, grade: number, curriculum: 'CAPS' | 'IEB' = 'CAPS') =>
     request<{ token: string; user: object; isNew: boolean }>(
-      '/auth/register', { method: 'POST', body: JSON.stringify({ name, grade }) }
+      '/auth/register', { method: 'POST', body: JSON.stringify({ name, grade, curriculum }) }
     ),
   registerTutor: (name: string, subjects: string[], teachGrades: number[]) =>
     request<{ token: string; user: object; isNew: boolean }>(
@@ -122,9 +122,9 @@ export const questions = {
   },
   topics: (subject: string, grade: number) =>
     request<string[]>(`/questions/topics?subject=${subject}&grade=${grade}`),
-  generate: (subject: string, grade: number, topic: string, count: number, difficulty?: string) =>
+  generate: (subject: string, grade: number, topic: string, count: number, difficulty?: string, curriculum: 'CAPS' | 'IEB' = 'CAPS') =>
     request<{ created: object[]; count: number; batchId: string | null }>(
-      '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count, difficulty }) }
+      '/questions/generate', { method: 'POST', body: JSON.stringify({ subject, grade, topic, count, difficulty, curriculum }) }
     ),
   stats: (ids: string[]) => {
     if (!ids.length) return Promise.resolve({} as Record<string, QuestionStat>);

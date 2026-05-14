@@ -14,6 +14,9 @@ model User {
   role      Role     @default(STUDENT)
   pin       String?  @unique
   grade     Int?
+  // For students: which examination curriculum they follow (CAPS or IEB).
+  // Optional — existing accounts default to CAPS at the application layer.
+  curriculum Curriculum?
   xp        Int      @default(0)
   active    Boolean  @default(true)
   photo     String?  @db.Text
@@ -76,6 +79,10 @@ model Question {
   subject    Subject
   grade      Int
   topic      String
+  // Examination curriculum this question is written for. CAPS & IEB share
+  // almost the same Gr 10-12 topic framework, so most questions serve both,
+  // but the tag lets a school filter / generate curriculum-specific material.
+  curriculum Curriculum @default(CAPS)
   difficulty Difficulty @default(EASY)
   question   String     @db.Text
   options    String[]
@@ -111,6 +118,7 @@ model Question {
 
   @@index([status, subject, grade])
   @@index([qualityFlag])
+  @@index([curriculum, subject, grade])
   @@map("questions")
 }
 
@@ -300,6 +308,14 @@ enum Subject {
   PHYSICAL_SCIENCES
 }
 
+// Examination curriculum. Gr 10-12 Maths & Physical Sciences share the same
+// NSC topic framework — IEB is an assessment body, not a different syllabus —
+// so this is a tag/preference, not a hard content wall.
+enum Curriculum {
+  CAPS
+  IEB
+}
+
 enum Difficulty {
   EASY
   MEDIUM
@@ -453,6 +469,7 @@ model QuestionBatch {
   subject       Subject
   grade         Int
   topic         String
+  curriculum    Curriculum @default(CAPS)
   requestedCount Int     @default(0)
   difficulty    String?  // 'MIXED' / 'EASY' / 'MEDIUM' / 'HARD' — the wizard's mix selector
   note          String?  @db.Text

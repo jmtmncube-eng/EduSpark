@@ -468,14 +468,15 @@ router.get('/templates/list', authMiddleware, adminOrTutorOnly, (_req: Request, 
 // then assembles a Pack from them. Returns the new Pack.
 router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Request, res: Response) => {
   try {
-    const { templateId, subject, grade, topic, title } = req.body as {
-      templateId: string; subject: string; grade: number; topic: string; title?: string;
+    const { templateId, subject, grade, topic, title, curriculum } = req.body as {
+      templateId: string; subject: string; grade: number; topic: string; title?: string; curriculum?: string;
     };
     const tpl = getTemplate(templateId);
     if (!tpl) return res.status(400).json({ error: 'Unknown template' });
     if (!topic?.trim()) return res.status(400).json({ error: 'Topic required' });
 
     const sub = (subjectMap[subject] || 'MATHEMATICS') as Subject;
+    const curr = String(curriculum).toUpperCase() === 'IEB' ? 'IEB' : 'CAPS';
     const diffOrder: ('EASY' | 'MEDIUM' | 'HARD')[] = ['EASY', 'MEDIUM', 'HARD'];
 
     // Generate to the mix. Each question is run through the validation
@@ -487,17 +488,18 @@ router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Requ
     for (const diff of diffOrder) {
       const need = tpl.mix[diff];
       for (let i = 0; i < need; i++) {
-        const { question: d, meta } = generateForTopic(topic, subject, Number(grade));
+        // Generate at the template-slot difficulty so the question genuinely
+        // matches the slot, not just its label.
+        const { question: d, meta } = generateForTopic(topic, subject, Number(grade), diff);
         const errors = validateQuestion({ ...d, question: d.q, options: d.opts, answer: d.ans, solution: d.sol, topic, subject }).errors;
         const clean = errors.length === 0;
         if (!clean) flagged++;
-        // Force this question's difficulty to match the template slot regardless
-        // of what the underlying generator happened to produce.
         const q = await prisma.question.create({
           data: {
             subject: sub,
             grade: Number(grade),
             topic,
+            curriculum: curr,
             difficulty: diff as Difficulty,
             question: d.q,
             options: d.opts,

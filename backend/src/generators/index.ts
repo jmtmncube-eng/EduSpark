@@ -8,9 +8,9 @@
  */
 import { MATHEMATICS_GENERATORS } from './mathematics';
 import { PHYSICS_GENERATORS } from './physics';
-import type { GeneratedQuestion, GeneratorSubject, TopicGenerator } from './types';
+import type { GeneratedQuestion, GeneratorSubject, GenDiff, TopicGenerator } from './types';
 
-export type { TopicGenerator, GeneratorSubject, GeneratedQuestion } from './types';
+export type { TopicGenerator, GeneratorSubject, GeneratedQuestion, GenDiff } from './types';
 
 const ALL: TopicGenerator[] = [...MATHEMATICS_GENERATORS, ...PHYSICS_GENERATORS];
 
@@ -38,14 +38,15 @@ export interface GenerationResult {
 }
 
 /**
- * Generate one question for a topic. Falls back gracefully — if the topic is
- * unknown we pick the first generator of the requested subject so a caller
- * never crashes on a typo'd topic.
+ * Generate one question for a topic at a given difficulty. Picks a random
+ * variant for variety, so a batch on the same topic isn't "same template,
+ * different numbers". Falls back gracefully on an unknown topic.
  */
 export function generateForTopic(
   topic: string,
   subject: string,
   _grade?: number,
+  difficulty: GenDiff = 'MEDIUM',
 ): GenerationResult {
   let meta = REGISTRY.get(topic);
   if (!meta) {
@@ -55,7 +56,8 @@ export function generateForTopic(
         : 'mathematics';
     meta = ALL.find((g) => g.subject === subj) ?? ALL[0];
   }
-  return { question: meta.generate(), meta };
+  const variant = meta.variants[Math.floor(Math.random() * meta.variants.length)];
+  return { question: variant(difficulty), meta };
 }
 
 /**

@@ -27,12 +27,12 @@ const TOPICS: Record<string, Record<number, string[]>> = {
 };
 
 interface QForm {
-  subject: string; grade: string; topic: string; difficulty: string;
+  subject: string; grade: string; topic: string; difficulty: string; curriculum: string;
   question: string; options: string; answer: string; solution: string; imageData: string;
   capsCode: string; cognitiveLevel: string;
 }
 const defaultForm = (): QForm => ({
-  subject: 'mathematics', grade: '10', topic: 'Algebra', difficulty: 'Easy',
+  subject: 'mathematics', grade: '10', topic: 'Algebra', difficulty: 'Easy', curriculum: 'CAPS',
   question: '', options: '', answer: '', solution: '', imageData: '',
   capsCode: '', cognitiveLevel: '',
 });
@@ -50,6 +50,7 @@ export default function AdminQuestions() {
   const [filterGrade, setFilterGrade] = useState(isTutor && user?.teachGrades?.length ? defaultGrade : '');
   const [filterTopic, setFilterTopic] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterCurriculum, setFilterCurriculum] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
@@ -80,6 +81,7 @@ export default function AdminQuestions() {
       if (filterStatus === 'FLAGGED') params.qualityFlag = 'flagged';
       else params.status = filterStatus;
     }
+    if (filterCurriculum) params.curriculum = filterCurriculum;
     try {
       const data = await questionsApi.list(params);
       setQs(data as Question[]);
@@ -94,7 +96,7 @@ export default function AdminQuestions() {
       // questions but the bank is empty" happens. Surface it.
       showToast((e as Error).message || 'Could not load the question bank', 'err');
     }
-  }, [search, filterSub, filterGrade, filterTopic, filterStatus]);
+  }, [search, filterSub, filterGrade, filterTopic, filterStatus, filterCurriculum]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -102,7 +104,7 @@ export default function AdminQuestions() {
   const formTopics = TOPICS[form.subject]?.[Number(form.grade)] || [];
   const gradeOptions = isTutor && user?.teachGrades?.length ? (user.teachGrades as number[]).sort() : [10, 11, 12];
   const baseGrade = isTutor && user?.teachGrades?.length ? defaultGrade : '';
-  const anyFilter = !!(search || filterSub || filterTopic || filterStatus || filterGrade !== baseGrade);
+  const anyFilter = !!(search || filterSub || filterTopic || filterStatus || filterCurriculum || filterGrade !== baseGrade);
 
   async function saveQ() {
     if (!form.topic || !form.question || !form.answer) { showToast('Fill required fields', 'warn'); return; }
@@ -110,6 +112,7 @@ export default function AdminQuestions() {
     const payload = {
       subject: form.subject, grade: Number(form.grade), topic: form.topic,
       difficulty: form.difficulty.toUpperCase(),
+      curriculum: form.curriculum,
       question: form.question, options: opts, answer: form.answer, solution: form.solution,
       visibility: 'ALL', // legacy field — Packs now govern student visibility
       imageData: form.imageData || null,
@@ -172,6 +175,7 @@ export default function AdminQuestions() {
     setForm({
       subject: q.subject.toLowerCase(), grade: String(q.grade), topic: q.topic,
       difficulty: q.difficulty.charAt(0) + q.difficulty.slice(1).toLowerCase(),
+      curriculum: q.curriculum || 'CAPS',
       question: q.question,
       options: q.options.map((o) => (o === q.answer ? '★ ' : '') + o).join('\n'),
       answer: q.answer, solution: q.solution || '', imageData: q.imageData || '',
@@ -279,6 +283,19 @@ export default function AdminQuestions() {
             />
           </div>
           <div className="flex ia g2 wrap">
+            <span className="xs bold ct3" style={{ minWidth: 56 }}>Curriculum</span>
+            <PillSelect
+              ariaLabel="Filter by curriculum"
+              value={filterCurriculum}
+              onChange={setFilterCurriculum}
+              options={[
+                { value: '', label: 'All' },
+                { value: 'CAPS', label: 'CAPS', icon: '🇿🇦' },
+                { value: 'IEB', label: 'IEB', icon: '📘' },
+              ]}
+            />
+          </div>
+          <div className="flex ia g2 wrap">
             <span className="xs bold ct3" style={{ minWidth: 56 }}>Grade</span>
             <PillSelect
               ariaLabel="Filter by grade"
@@ -328,7 +345,7 @@ export default function AdminQuestions() {
             <div>
               <button
                 type="button" className="btn ba btn-sm"
-                onClick={() => { setSearch(''); setFilterSub(''); setFilterGrade(baseGrade); setFilterTopic(''); setFilterStatus(''); }}
+                onClick={() => { setSearch(''); setFilterSub(''); setFilterGrade(baseGrade); setFilterTopic(''); setFilterStatus(''); setFilterCurriculum(''); }}
               >✕ Clear filters</button>
             </div>
           )}
@@ -501,10 +518,15 @@ export default function AdminQuestions() {
                               fontSize: 10.5, fontWeight: 700,
                             }}>{qFlag.icon} {qFlag.label}</span>
                           )}
+                          {q.curriculum && (
+                            <span className="badge btl" title="Examination curriculum">
+                              {q.curriculum === 'IEB' ? '📘 IEB' : '🇿🇦 CAPS'}
+                            </span>
+                          )}
                           {q.cognitiveLevel ? (
                             <span className="badge btl" title="CAPS cognitive level">L{q.cognitiveLevel}</span>
                           ) : null}
-                          {q.capsCode && <span className="xs ct3" title="CAPS curriculum index">{q.capsCode}</span>}
+                          {q.capsCode && <span className="xs ct3" title="Curriculum index">{q.capsCode}</span>}
                           {q.imageData && <span className="badge bcy">🖼 Image</span>}
                           {s && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
@@ -597,7 +619,19 @@ export default function AdminQuestions() {
         <Modal title={editId ? '✏️ Edit Question' : '📝 Add a Question'} onClose={() => { setShowAdd(false); setEditId(''); }} wide>
           <div className="xs ct3 mb2">Answer the prompts below — every choice is one tap.</div>
           <div className="fg">
-            <label className="lbl">1. Which subject?</label>
+            <label className="lbl">1. Which curriculum?</label>
+            <PillSelect
+              ariaLabel="Curriculum"
+              value={form.curriculum}
+              onChange={(v) => setForm({ ...form, curriculum: v })}
+              options={[
+                { value: 'CAPS', label: 'CAPS', icon: '🇿🇦' },
+                { value: 'IEB', label: 'IEB', icon: '📘' },
+              ]}
+            />
+          </div>
+          <div className="fg">
+            <label className="lbl">2. Which subject?</label>
             <PillSelect
               ariaLabel="Subject"
               value={form.subject}
@@ -609,7 +643,7 @@ export default function AdminQuestions() {
             />
           </div>
           <div className="fg">
-            <label className="lbl">2. Which grade?</label>
+            <label className="lbl">3. Which grade?</label>
             <PillSelect
               ariaLabel="Grade"
               value={form.grade}
@@ -618,7 +652,7 @@ export default function AdminQuestions() {
             />
           </div>
           <div className="fg">
-            <label className="lbl">3. Which topic?</label>
+            <label className="lbl">4. Which topic?</label>
             <PillSelect
               ariaLabel="Topic"
               value={form.topic}
@@ -627,7 +661,7 @@ export default function AdminQuestions() {
             />
           </div>
           <div className="fg">
-            <label className="lbl">4. How hard is it?</label>
+            <label className="lbl">5. How hard is it?</label>
             <PillSelect
               ariaLabel="Difficulty"
               value={form.difficulty}
@@ -655,11 +689,11 @@ export default function AdminQuestions() {
             </div>
           </div>
           <div className="fg">
-            <label className="lbl">5. Write the question</label>
+            <label className="lbl">6. Write the question</label>
             <textarea ref={questionRef} className="textarea" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} placeholder="Type the question here" />
             <SnippetToolbar targetRef={questionRef} value={form.question} onChange={(v) => setForm({ ...form, question: v })} />
           </div>
-          <div className="fg"><label className="lbl">6. Add a diagram <span className="xs ct3">(optional)</span></label>
+          <div className="fg"><label className="lbl">7. Add a diagram <span className="xs ct3">(optional)</span></label>
             <div className="file-zone" onClick={() => document.getElementById('q-img-inp')?.click()}>
               <input type="file" id="q-img-inp" accept="image/*" style={{ display: 'none' }} onChange={handleImgUpload} />
               {form.imageData ? <img src={form.imageData} style={{ maxHeight: 150, maxWidth: '100%', borderRadius: 8 }} /> : <span className="sm ct3">📷 Click to attach an image</span>}
@@ -667,17 +701,17 @@ export default function AdminQuestions() {
             {form.imageData && <button className="btn ba btn-sm mt1" onClick={() => setForm({ ...form, imageData: '' })}>✕ Remove image</button>}
           </div>
           <div className="fg">
-            <label className="lbl">7. List the options <span className="xs ct3">(one per line · prefix the correct one with ★)</span></label>
+            <label className="lbl">8. List the options <span className="xs ct3">(one per line · prefix the correct one with ★)</span></label>
             <textarea ref={optionsRef} className="textarea" value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder={'★ x = 5\nx = 3\nx = 7\nx = 10'} style={{ minHeight: 88 }} />
             <SnippetToolbar targetRef={optionsRef} value={form.options} onChange={(v) => setForm({ ...form, options: v })} />
           </div>
           <div className="fg">
-            <label className="lbl">8. Confirm the correct answer <span className="xs ct3">(must match one option exactly)</span></label>
+            <label className="lbl">9. Confirm the correct answer <span className="xs ct3">(must match one option exactly)</span></label>
             <input ref={answerRef} type="text" className="input" value={form.answer} onChange={(e) => setForm({ ...form, answer: e.target.value })} placeholder="e.g. x = 5" />
             <SnippetToolbar targetRef={answerRef} value={form.answer} onChange={(v) => setForm({ ...form, answer: v })} />
           </div>
           <div className="fg">
-            <label className="lbl">9. Explain the solution <span className="xs ct3">(step by step)</span></label>
+            <label className="lbl">10. Explain the solution <span className="xs ct3">(step by step)</span></label>
             <textarea ref={solutionRef} className="textarea" value={form.solution} onChange={(e) => setForm({ ...form, solution: e.target.value })} placeholder={'Step 1: …\nStep 2: …'} style={{ minHeight: 85 }} />
             <SnippetToolbar targetRef={solutionRef} value={form.solution} onChange={(v) => setForm({ ...form, solution: v })} />
           </div>

@@ -143,8 +143,10 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
         where: { subject: sub as Subject, topic, status: 'PUBLISHED' }, take: 5,
       });
       if (existing.length < 2) {
+        // Spread the auto-built set across difficulties so it isn't all warm-ups.
+        const planDiffs: ('EASY' | 'MEDIUM' | 'HARD')[] = ['EASY', 'EASY', 'MEDIUM', 'MEDIUM', 'HARD'];
         for (let i = 0; i < 5; i++) {
-          const { question: d, meta } = generateForTopic(topic, subject, Number(grade));
+          const { question: d, meta } = generateForTopic(topic, subject, Number(grade), planDiffs[i]);
           const errors = validateQuestion({
             question: d.q, options: d.opts, answer: d.ans, solution: d.sol, topic, subject,
           }).errors;
@@ -152,7 +154,7 @@ router.post('/', authMiddleware, adminOrTutorOnly, async (req: Request, res: Res
           const q = await prisma.question.create({
             data: {
               subject: sub as Subject, grade: Number(grade), topic,
-              difficulty: diffMap[d.diff] || 'EASY',
+              difficulty: diffMap[d.diff] || planDiffs[i],
               question: d.q, options: d.opts, answer: d.ans, solution: d.sol,
               visibility: 'ALL',
               imageData: makeDiagramOfKind(meta.diagram),

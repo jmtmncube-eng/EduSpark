@@ -2,6 +2,7 @@ export type Role = 'STUDENT' | 'TUTOR' | 'ADMIN' | 'PARENT';
 export type Subject = 'MATHEMATICS' | 'PHYSICAL_SCIENCES';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export type Visibility = 'ALL' | 'GR10' | 'GR11' | 'GR12' | 'NONE';
+export type Curriculum = 'CAPS' | 'IEB';
 
 export interface User {
   id: string;
@@ -9,6 +10,7 @@ export interface User {
   role: Role;
   pin: string | null;
   grade: number | null;
+  curriculum?: Curriculum | null;
   xp: number;
   active: boolean;
   photo: string | null;
@@ -32,6 +34,7 @@ export interface Question {
   subject: Subject;
   grade: number;
   topic: string;
+  curriculum?: Curriculum;
   difficulty: Difficulty;
   question: string;
   options: string[];

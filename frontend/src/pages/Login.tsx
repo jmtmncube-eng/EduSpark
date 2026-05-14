@@ -69,6 +69,7 @@ export default function Login() {
   const [gradeModal, setGradeModal] = useState(false);
   const [pendingName, setPendingName] = useState('');
   const [grade, setGrade] = useState('10');
+  const [curriculum, setCurriculum] = useState<'CAPS' | 'IEB'>('CAPS');
 
   // Tutor profile state
   const [tutorModal, setTutorModal] = useState(false);
@@ -165,7 +166,7 @@ export default function Login() {
   async function doRegisterStudent() {
     setLoading(true);
     try {
-      const res = await auth.register(pendingName, Number(grade));
+      const res = await auth.register(pendingName, Number(grade), curriculum);
       const r = res as { token: string; user: User };
       login(r.user, r.token);
       setNewPin(r.user.pin || '');
@@ -547,7 +548,20 @@ export default function Login() {
                 { value: '12', label: 'Grade 12' },
               ]}
             />
-            <div className="xs ct3 mt1">Content follows the SA CAPS curriculum for Maths &amp; Physical Sciences.</div>
+          </div>
+
+          <div className="fg">
+            <label className="lbl">Which curriculum do you follow?</label>
+            <PillSelect
+              ariaLabel="Curriculum"
+              value={curriculum}
+              onChange={(v) => setCurriculum(v as 'CAPS' | 'IEB')}
+              options={[
+                { value: 'CAPS', label: 'CAPS', hint: 'National curriculum — most SA schools' },
+                { value: 'IEB', label: 'IEB', hint: 'Independent Examinations Board' },
+              ]}
+            />
+            <div className="xs ct3 mt1">Maths &amp; Physical Sciences, Grades 10–12. You can change this later in your profile.</div>
           </div>
 
           <div className="flex g1 mt2">

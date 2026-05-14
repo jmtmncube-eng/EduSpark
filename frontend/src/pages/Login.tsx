@@ -417,8 +417,6 @@ export default function Login() {
             {[
               { ico: '📐', title: 'Maths & Physics', sub: 'Gr 10–12 · all the topics' },
               { ico: '🎯', title: 'SmartCoach',      sub: 'Personal next-best practice' },
-              { ico: '📦', title: 'Content Packs',   sub: 'Curated by your teachers' },
-              { ico: '📄', title: 'Branded PDFs',    sub: 'Worksheet + Memo exports' },
             ].map((c) => (
               <div key={c.title} style={{
                 background: 'var(--cs)',
@@ -441,7 +439,7 @@ export default function Login() {
             marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 8, flexWrap: 'wrap',
           }}>
-            {['CAPS', 'IEB', 'NSC', 'Cambridge'].map((c) => (
+            {['CAPS', 'IEB'].map((c) => (
               <span key={c} style={{
                 fontSize: 10, fontWeight: 700, padding: '3px 10px',
                 background: 'rgba(20,184,166,.10)', color: 'var(--p)',

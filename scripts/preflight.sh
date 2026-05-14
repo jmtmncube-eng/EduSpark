@@ -192,6 +192,10 @@ has   "Generator grade step offers full 10–12 set"   "const GRADES = [10, 11, 
 has   "Pack template grade picker offers 10–12"      "const GRADES = [10, 11, 12]" frontend/src/components/PackTemplatePicker.tsx
 lacks "Generator grade step not narrowed by tutor"   "tutorGrades"      frontend/src/components/QuestionGenerator.tsx
 
+echo " v2.10.3 — login: trimmed feature cards, CAPS & IEB only"
+lacks "Login curriculum row drops Cambridge"         "Cambridge"        frontend/src/pages/Login.tsx
+lacks "Login curriculum row drops NSC"               "'NSC'"            frontend/src/pages/Login.tsx
+
 rm -f "$LOG"
 
 # ── Summary ────────────────────────────────────────────────────────

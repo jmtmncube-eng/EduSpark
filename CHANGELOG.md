@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.10.3] — 2026-05-14 — Login: trimmed feature cards, CAPS & IEB only
+
+### Changed — Login screen
+- Removed the "Content Packs" and "Branded PDFs" feature cards — the panel now shows the two that matter at sign-in (Maths & Physics, SmartCoach).
+- The curriculum badge row is now **CAPS and IEB only** — dropped "NSC" and "Cambridge" so the platform's curriculum claim is accurate and consistent with the rest of the app.
+
+---
+
 ## [2.10.2] — 2026-05-14 — Visible calendar requests, Grades 10–12 everywhere
 
 ### Changed — Calendar: student requests are now impossible to miss

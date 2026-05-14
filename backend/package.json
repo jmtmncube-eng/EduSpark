@@ -11,7 +11,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-extras": "tsx seed-extras.ts",
-    "db:seed-pdfs": "tsx seed-pdfs.ts",
+    "db:seed-pdfs": "node dist/db/seed-pdfs.js",
     "db:reset": "prisma migrate reset --force && tsx src/db/seed.ts"
   },
   "dependencies": {

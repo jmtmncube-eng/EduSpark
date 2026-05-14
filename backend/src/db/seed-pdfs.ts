@@ -2,23 +2,29 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
-import prisma from './src/db/client';
+import prisma from './client';
 
 /**
  * Mock-PDF seed (idempotent) — drops a handful of real, openable PDF files
- * into `backend/uploads/` and registers them as PdfDocument rows so the
- * Library tab has something to preview, attach to packs, and test the
- * download flow with.
+ * into the backend `uploads/` directory and registers them as PdfDocument
+ * rows so the Library tab has something to preview, attach to packs, and
+ * test the download flow with.
+ *
+ * Lives in src/db so the normal `tsc` build compiles it to
+ * `dist/db/seed-pdfs.js` — which means it runs in the production container
+ * with plain `node` (no tsx needed):
+ *
+ *   docker compose exec backend npm run db:seed-pdfs
+ *   # or directly:
+ *   docker compose exec backend node dist/db/seed-pdfs.js
  *
  * Re-runnable safely: each document is keyed by title — if the row already
  * exists (and its file is on disk) it is skipped.
- *
- *   npx tsx seed-pdfs.ts
  */
 
-// Mirrors UPLOAD_DIR in src/routes/documents.ts. seed-pdfs.ts lives in
-// backend/, so uploads is a direct child.
-const UPLOAD_DIR = path.resolve(__dirname, 'uploads');
+// Mirrors UPLOAD_DIR in src/routes/documents.ts. From dist/db (prod) or
+// src/db (tsx dev) this resolves to <backend>/uploads either way.
+const UPLOAD_DIR = path.resolve(__dirname, '../../uploads');
 
 interface MockDoc {
   title: string;

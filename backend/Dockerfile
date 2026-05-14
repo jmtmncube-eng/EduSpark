@@ -30,7 +30,6 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY prisma ./prisma
 COPY seed-extras.ts ./seed-extras.ts
-COPY seed-pdfs.ts ./seed-pdfs.ts
 
 # Uploads directory — multer writes here. It's a mounted named volume in
 # compose; we run as root so the volume (which Docker may create root-owned)

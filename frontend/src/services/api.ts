@@ -143,6 +143,10 @@ export const questions = {
     request<object>(`/questions/${id}/visibility`, { method: 'PATCH' }),
   delete: (id: string) =>
     request<{ success: boolean }>(`/questions/${id}`, { method: 'DELETE' }),
+  bulkDelete: (ids: string[]) =>
+    request<{ deleted: number; requested: number }>(
+      '/questions/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }
+    ),
   import: (text: string) =>
     request<{ created: object[]; count: number }>(
       '/questions/import', { method: 'POST', body: JSON.stringify({ text }) }

@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [2.8.0] — 2026-05-14 — Production fixes: schema drift, PDF uploads, grouped Question Bank
+
+### Fixed — Critical
+- **Audit log "Server error" + questions not generating** — root cause was production schema drift. `audit_logs`, `question_batches` and `question_batch_items` were created locally with `prisma db push` (which writes no migration file), so `prisma migrate deploy` in production never created them and every `auditLog`/`questionBatch` call threw.
+  - Added hand-written, fully idempotent migration `20260514120000_audit_batches_security` (`IF NOT EXISTS` tables/indexes, FKs guarded by `DO $$ … EXCEPTION WHEN duplicate_object`) covering the audit log, generation batches and the `users.securityQuestion` / `securityAnswerHash` recovery columns.
+  - `backend/Dockerfile` now runs `prisma migrate deploy` **then** `prisma db push` on boot — a permanent belt-and-braces guarantee that the production schema can never silently drift again.
+- **PDF upload handler breaking** —
+  - `documents.ts` now verifies the upload directory is writable at boot (`ensureUploadDir()` with `fs.accessSync(W_OK)`) and again per request.
+  - Multer errors are caught by an `uploadSingle` wrapper → clean `413` for oversize files and `400` for rejected types, instead of an opaque `500`.
+  - `fileFilter` accepts by MIME type **or** `.pdf` extension (some browsers send `octet-stream`).
+  - Upload route confirms the file landed on disk, validates `documentKind`, and cleans up the orphaned file if the DB write fails.
+  - `Dockerfile` drops `USER node` so the mounted `uploads` named volume (which Docker may create root-owned) is always writable.
+
+### Added
+- **Diagrams on every question** — new `makeDiagram(topic, subject)` in `diagramTemplates.ts` *always* returns a diagram data-URI: topic-aware when a template matches, otherwise a sensible subject fallback (Physics → vector/incline/circuit/wave/projectile, Maths → parabola/grid/bar-chart/triangle). Wired into both the generator route (`questions.ts`) and the pack-from-template route (`packs.ts`) — template-generated questions now get diagrams too.
+- **Grouped Question Bank** — questions are now organised into collapsible **Subject · Grade · Topic** groups, each showing a question count and a 🖼 diagram count. Every group has a one-click **🗑 Delete group** action, plus a **☑ Select group** shortcut in multi-select mode. Backed by a new `POST /api/questions/bulk-delete` endpoint (tutors restricted to their own questions, capped at 500 ids, audited).
+- **Mock PDF seed** (`backend/seed-pdfs.ts`, `npm run db:seed-pdfs`) — generates three real, openable PDFs (Gr 10 Algebra practice worksheet + memo, Gr 11 Quadratics class test, Gr 10 Newton's Laws study notes) into `uploads/` and registers them as `PdfDocument` rows. Idempotent and self-healing (regenerates the file if the row exists but the file is missing).
+- **`scripts/doctor.sh` health-check** — one command to catch (almost) every production problem: containers up, Postgres reachable, critical tables exist, security columns present, uploads dir writable, admin/tutor/PDF seed data present, HTTP smoke test, backend log scan for crash-loops/error spam, host disk space. Prints PASS/WARN/FAIL per check and exits non-zero on any failure so it doubles as a post-deploy gate.
+
+### Changed
+- `backend/package.json` gains `db:seed-extras` and `db:seed-pdfs` scripts.
+
+---
+
 ## [2.2.0] — 2026-05-14 — Guided generator, friendly difficulty, PDF-in-tab
 
 ### Added

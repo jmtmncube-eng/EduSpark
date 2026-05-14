@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import multer from 'multer';
+import { Router, Request, Response, NextFunction } from 'express';
+import multer, { MulterError } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import prisma from '../db/client';
@@ -9,12 +9,31 @@ import { audit } from '../utils/audit';
 const router = Router();
 
 const UPLOAD_DIR = path.resolve(__dirname, '../../uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Ensure the upload directory exists AND is writable at boot — surfaces a
+// clear error in the logs instead of a cryptic ENOENT/EACCES at request time.
+function ensureUploadDir(): boolean {
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.accessSync(UPLOAD_DIR, fs.constants.W_OK);
+    return true;
+  } catch (err) {
+    console.error(`[documents] UPLOAD_DIR not writable at ${UPLOAD_DIR}:`, err);
+    return false;
+  }
+}
+ensureUploadDir();
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  destination: (_req, _file, cb) => {
+    if (!ensureUploadDir()) {
+      cb(new Error('Upload storage is not writable on the server'), UPLOAD_DIR);
+      return;
+    }
+    cb(null, UPLOAD_DIR);
+  },
   filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safe = (file.originalname || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
     cb(null, `${Date.now()}-${safe}`);
   },
 });
@@ -23,10 +42,32 @@ const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf') cb(null, true);
+    // Accept by mimetype OR .pdf extension — some browsers send octet-stream
+    const isPdf = file.mimetype === 'application/pdf'
+      || /\.pdf$/i.test(file.originalname || '');
+    if (isPdf) cb(null, true);
     else cb(new Error('Only PDF files are accepted'));
   },
 });
+
+/**
+ * Wraps multer's `single('file')` so its errors return clean 4xx JSON instead
+ * of bubbling to the global handler as an opaque 500.
+ */
+function uploadSingle(req: Request, res: Response, next: NextFunction) {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (!err) return next();
+    if (err instanceof MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'PDF is larger than the 25 MB limit.' });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    const message = err instanceof Error ? err.message : 'Upload failed';
+    // Filter rejections + "not writable" land here
+    return res.status(400).json({ error: message });
+  });
+}
 
 async function extractPdfText(filePath: string): Promise<{ text: string; pages: number }> {
   try {
@@ -78,22 +119,32 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 });
 
 // ─── POST /api/documents/upload ──────────────────────────────────  (ADMIN)
-router.post('/upload', authMiddleware, adminOnly, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/upload', authMiddleware, adminOnly, uploadSingle, async (req: Request, res: Response) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const { title, description, documentKind } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'No file received. Pick a PDF and try again.' });
 
+    // Confirm the file actually landed on disk before we commit a DB row
+    if (!fs.existsSync(req.file.path)) {
+      console.error('[documents] multer reported a file but it is not on disk:', req.file.path);
+      return res.status(500).json({ error: 'Upload could not be saved on the server. Contact the admin.' });
+    }
+
+    const { title, description, documentKind } = req.body as {
+      title?: string; description?: string; documentKind?: string;
+    };
+
+    // pdf-parse is best-effort — never let a bad parse block the upload
     const { text, pages } = await extractPdfText(req.file.path);
 
     const doc = await prisma.pdfDocument.create({
       data: {
-        title: (title || req.file.originalname).trim(),
-        description: description || null,
+        title: (title || req.file.originalname || 'Document').trim().slice(0, 200),
+        description: description?.trim() || null,
         filePath: path.basename(req.file.path),
         fileSize: req.file.size,
         pageCount: pages,
-        extractedText: text.slice(0, 50000), // cap stored excerpt
-        documentKind: documentKind || 'practice',
+        extractedText: (text || '').slice(0, 50000), // cap stored excerpt
+        documentKind: ['practice', 'test', 'notes'].includes(documentKind || '') ? documentKind! : 'practice',
         uploadedById: req.user!.userId,
       },
     });
@@ -103,9 +154,12 @@ router.post('/upload', authMiddleware, adminOnly, upload.single('file'), async (
     });
     return res.status(201).json(doc);
   } catch (err: unknown) {
-    console.error(err);
-    const message = err instanceof Error ? err.message : 'Server error';
-    return res.status(500).json({ error: message });
+    console.error('[documents/upload]', err);
+    // Clean up the orphaned file if the DB write failed
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    }
+    return res.status(500).json({ error: 'Could not save the document. Please try again.' });
   }
 });
 

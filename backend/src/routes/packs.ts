@@ -7,7 +7,7 @@ import { renderPackPdf } from '../utils/pdfRenderer';
 import { audit } from '../utils/audit';
 import { PACK_TEMPLATES, getTemplate } from '../utils/packTemplates';
 import { generateQuestion } from '../utils/questionGenerators';
-import { maybeMakeDiagram } from '../utils/diagramTemplates';
+import { makeDiagram } from '../utils/diagramTemplates';
 import type { Difficulty } from '@prisma/client';
 
 const router = Router();
@@ -469,7 +469,7 @@ router.post('/from-template', authMiddleware, adminOrTutorOnly, async (req: Requ
             answer: d.ans,
             solution: d.sol,
             visibility: 'ALL',
-            imageData: maybeMakeDiagram(topic, 0.5),
+            imageData: makeDiagram(topic, subject),
             createdById: req.user!.userId,
           },
         });

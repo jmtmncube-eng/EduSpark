@@ -43,6 +43,7 @@ export default function AdminQuestions() {
   const [editId, setEditId] = useState('');
   const [importText, setImportText] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const questionRef = useRef<HTMLTextAreaElement>(null);
   const optionsRef = useRef<HTMLTextAreaElement>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -100,6 +101,21 @@ export default function AdminQuestions() {
     showToast('Deleted', 'info'); load();
   }
 
+  async function delGroup(groupKey: string, ids: string[]) {
+    if (!ids.length) return;
+    if (!confirm(`Delete all ${ids.length} question(s) in "${groupKey}"? They will be removed from any Pack they belong to. This cannot be undone.`)) return;
+    try {
+      const r = await questionsApi.bulkDelete(ids);
+      showToast(`Deleted ${r.deleted} question(s)`, 'info');
+      setSelectedIds((prev) => { const s = new Set(prev); ids.forEach((id) => s.delete(id)); return s; });
+      load();
+    } catch (e: unknown) { showToast((e as Error).message, 'err'); }
+  }
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s; });
+  }
+
   function editQ(q: Question) {
     setForm({
       subject: q.subject.toLowerCase(), grade: String(q.grade), topic: q.topic,
@@ -132,6 +148,22 @@ export default function AdminQuestions() {
     const b64 = await compressDiagram(e.target.files[0]);
     setForm((f) => ({ ...f, imageData: b64 }));
   }
+
+  // ─── Group questions by subject · grade · topic ──────────────────
+  // Keeps the bank tidy: every question lives under a collapsible header
+  // showing its count, and each group can be deleted in one action.
+  const groups = (() => {
+    const map = new Map<string, { subject: string; grade: number; topic: string; items: Question[] }>();
+    for (const q of qs) {
+      const key = `${q.subject}__${q.grade}__${q.topic}`;
+      if (!map.has(key)) map.set(key, { subject: q.subject, grade: q.grade, topic: q.topic, items: [] });
+      map.get(key)!.items.push(q);
+    }
+    return Array.from(map.entries())
+      .map(([key, g]) => ({ key, ...g }))
+      .sort((a, b) =>
+        a.subject.localeCompare(b.subject) || a.grade - b.grade || a.topic.localeCompare(b.topic));
+  })();
 
   return (
     <div>
@@ -202,93 +234,141 @@ export default function AdminQuestions() {
         </select>
       </div>
 
-      {/* List */}
+      {/* Grouped list — subject · grade · topic, each collapsible & deletable */}
       {qs.length === 0 ? (
         <div className="empty"><div className="eico">📭</div><h3>No questions yet</h3><p>Generate or add questions above — then bundle them into a Pack.</p></div>
       ) : (
-        qs.map((q) => {
-          const isSel = selectedIds.has(q.id);
-          return (
-            <div className="qcard" key={q.id} style={{
-              border: isSel ? '2px solid var(--p)' : undefined,
-              background: isSel ? 'rgba(20,184,166,.06)' : undefined,
-            }}>
-              <div className="qhd">
-                <div className="flex ia g1 wrap">
+        <>
+          <div className="xs ct3 mb1">
+            {qs.length} question{qs.length === 1 ? '' : 's'} across {groups.length} group{groups.length === 1 ? '' : 's'}
+          </div>
+          {groups.map((g) => {
+            const collapsed = collapsedGroups.has(g.key);
+            const subj = g.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
+            const groupIds = g.items.map((q) => q.id);
+            const groupLabel = `${subj.short} · Gr${g.grade} · ${g.topic}`;
+            const withImg = g.items.filter((q) => q.imageData).length;
+            return (
+              <div key={g.key} style={{ marginBottom: 12 }}>
+                {/* Group header */}
+                <div className="flex ia g1 wrap" style={{
+                  padding: '9px 12px', borderRadius: 10,
+                  background: subj.bg, border: `1px solid ${subj.border}`,
+                }}>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => toggleGroup(g.key)}
+                    title={collapsed ? 'Expand group' : 'Collapse group'}
+                    style={{
+                      width: 28, height: 28, padding: 0, flex: '0 0 auto',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'var(--p)', color: '#fff', border: 'none', borderRadius: 8,
+                      fontSize: 13, fontWeight: 800,
+                    }}
+                  >{collapsed ? '▸' : '▾'}</button>
+                  <span style={{ fontSize: 16 }}>{subj.icon}</span>
+                  <span style={{ fontFamily: 'var(--fh)', fontWeight: 800, fontSize: 13.5, color: subj.fg }}>
+                    {groupLabel}
+                  </span>
+                  <span className="badge btl">{g.items.length} question{g.items.length === 1 ? '' : 's'}</span>
+                  {withImg > 0 && <span className="badge bcy" title="Questions with a diagram">🖼 {withImg}</span>}
+                  <div style={{ flex: 1 }} />
                   {selectMode && (
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => toggleSel(q.id)}
-                      style={{ width: 18, height: 18, accentColor: 'var(--p)' }}
-                    />
+                    <button
+                      className="btn ba btn-sm"
+                      onClick={() => setSelectedIds((prev) => {
+                        const s = new Set(prev);
+                        const allSel = groupIds.every((id) => s.has(id));
+                        groupIds.forEach((id) => allSel ? s.delete(id) : s.add(id));
+                        return s;
+                      })}
+                      title="Select / deselect every question in this group"
+                    >☑ Select group</button>
                   )}
-                  {(() => {
-                    const subj = q.subject === 'MATHEMATICS' ? SUBJECT_THEME.mathematics : SUBJECT_THEME.physical_sciences;
-                    return (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 8px', borderRadius: 99,
-                        background: subj.bg, color: subj.fg, border: `1px solid ${subj.border}`,
-                        fontSize: 10.5, fontWeight: 700,
-                      }}>{subj.icon} {subj.short}</span>
-                    );
-                  })()}
-                  {(() => {
-                    const m = diffMeta(q.difficulty);
-                    return (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 8px', borderRadius: 99,
-                        background: m.bg, color: m.fg, border: `1px solid ${m.borderColor}`,
-                        fontSize: 10.5, fontWeight: 700,
-                      }}>{m.icon} {m.label}</span>
-                    );
-                  })()}
-                  <span className="badge btl">Gr{q.grade}</span>
-                  <span className="xs ct3">{q.topic}</span>
-                  {q.imageData && <span className="badge bcy">🖼 Image</span>}
-                  {(() => {
-                    const s = stats[q.id];
-                    if (!s) return null;
-                    return (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
-                        <span title="Number of packs containing this question">📦 {s.packCount}</span>
-                        <span title="Total student attempts">🎯 {s.attempts}</span>
-                        {s.attempts > 0 && (
-                          <span
-                            title="Average correct rate"
-                            style={{
-                              fontWeight: 700,
-                              color: s.correctRate >= 70 ? '#16a34a' : s.correctRate >= 40 ? '#b45309' : '#b91c1c',
-                            }}
-                          >{s.correctRate}%</span>
-                        )}
-                      </span>
-                    );
-                  })()}
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => delGroup(groupLabel, groupIds)}
+                    title="Delete every question in this group"
+                    style={{ background: '#b91c1c', color: '#fff', border: 'none' }}
+                  >🗑 Delete group</button>
                 </div>
-                <div className="flex g1 wrap">
-                  <button className="btn ba btn-sm" onClick={() => toggleExp(q.id)} title="Show answer & solution">👁</button>
-                  <button className="btn ba btn-sm" onClick={() => editQ(q)} title="Edit">✏️</button>
-                  <button className="btn ba btn-sm" onClick={() => delQ(q.id)} title="Delete">🗑</button>
-                </div>
+
+                {/* Group body */}
+                {!collapsed && g.items.map((q) => {
+                  const isSel = selectedIds.has(q.id);
+                  return (
+                    <div className="qcard" key={q.id} style={{
+                      marginTop: 8, marginLeft: 14,
+                      border: isSel ? '2px solid var(--p)' : undefined,
+                      background: isSel ? 'rgba(20,184,166,.06)' : undefined,
+                    }}>
+                      <div className="qhd">
+                        <div className="flex ia g1 wrap">
+                          {selectMode && (
+                            <input
+                              type="checkbox"
+                              checked={isSel}
+                              onChange={() => toggleSel(q.id)}
+                              style={{ width: 18, height: 18, accentColor: 'var(--p)' }}
+                            />
+                          )}
+                          {(() => {
+                            const m = diffMeta(q.difficulty);
+                            return (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: '2px 8px', borderRadius: 99,
+                                background: m.bg, color: m.fg, border: `1px solid ${m.borderColor}`,
+                                fontSize: 10.5, fontWeight: 700,
+                              }}>{m.icon} {m.label}</span>
+                            );
+                          })()}
+                          {q.imageData && <span className="badge bcy">🖼 Image</span>}
+                          {(() => {
+                            const s = stats[q.id];
+                            if (!s) return null;
+                            return (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--t2)', marginLeft: 4 }}>
+                                <span title="Number of packs containing this question">📦 {s.packCount}</span>
+                                <span title="Total student attempts">🎯 {s.attempts}</span>
+                                {s.attempts > 0 && (
+                                  <span
+                                    title="Average correct rate"
+                                    style={{
+                                      fontWeight: 700,
+                                      color: s.correctRate >= 70 ? '#16a34a' : s.correctRate >= 40 ? '#b45309' : '#b91c1c',
+                                    }}
+                                  >{s.correctRate}%</span>
+                                )}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex g1 wrap">
+                          <button className="btn ba btn-sm" onClick={() => toggleExp(q.id)} title="Show answer & solution">👁</button>
+                          <button className="btn ba btn-sm" onClick={() => editQ(q)} title="Edit">✏️</button>
+                          <button className="btn ba btn-sm" onClick={() => delQ(q.id)} title="Delete">🗑</button>
+                        </div>
+                      </div>
+                      {q.imageData && <div style={{ marginTop: 6 }}><DiagramViewer src={q.imageData} alt="Question diagram" maxThumbHeight={220} /></div>}
+                      <div className="qtxt">{q.question}</div>
+                      <div className="qopts">{q.options.map((o, i) => <span key={i} className="qopt">{String.fromCharCode(65 + i)}. {o}</span>)}</div>
+                      {expanded.has(q.id) && (
+                        <div className="qrev">
+                          <div className="qrev-lbl">✅ Correct Answer</div>
+                          <strong>{q.answer}</strong>
+                          <div style={{ marginTop: 8 }}>{(q.solution || '').split('\n').filter(Boolean).map((s, i) => (
+                            <div key={i} className="qstep"><div className="qsn">{i + 1}</div><div>{s}</div></div>
+                          ))}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              {q.imageData && <div style={{ marginTop: 6 }}><DiagramViewer src={q.imageData} alt="Question diagram" maxThumbHeight={220} /></div>}
-              <div className="qtxt">{q.question}</div>
-              <div className="qopts">{q.options.map((o, i) => <span key={i} className="qopt">{String.fromCharCode(65 + i)}. {o}</span>)}</div>
-              {expanded.has(q.id) && (
-                <div className="qrev">
-                  <div className="qrev-lbl">✅ Correct Answer</div>
-                  <strong>{q.answer}</strong>
-                  <div style={{ marginTop: 8 }}>{(q.solution || '').split('\n').filter(Boolean).map((s, i) => (
-                    <div key={i} className="qstep"><div className="qsn">{i + 1}</div><div>{s}</div></div>
-                  ))}</div>
-                </div>
-              )}
-            </div>
-          );
-        })
+            );
+          })}
+        </>
       )}
 
       {/* Add / Edit Modal */}

@@ -45,19 +45,37 @@ const TOPIC_DIAGRAMS: { match: RegExp; kinds: DiagramKind[] }[] = [
 const ri = (a: number, b: number) => Math.floor(Math.random() * (b - a + 1)) + a;
 const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
+// Subject-level fallbacks so a topic that matches no specific pattern still
+// gets a relevant-looking diagram. Maths → graph/grid, Physics → vector/wave.
+const ALL_KINDS: DiagramKind[] = [
+  'triangle', 'parabola', 'coord-grid', 'bar-chart',
+  'vector', 'incline', 'circuit', 'wave', 'projectile',
+];
+function fallbackKind(subject?: string): DiagramKind {
+  const s = (subject || '').toLowerCase();
+  if (s.includes('phys')) return pick(['vector', 'incline', 'circuit', 'wave', 'projectile']);
+  if (s.includes('math')) return pick(['parabola', 'coord-grid', 'bar-chart', 'triangle']);
+  return pick(ALL_KINDS);
+}
+
 /**
- * 50/50 chance of returning an imageData base64 data URI for a question.
- * Returns null when no diagram is appropriate or the coin-flip skips it.
+ * ALWAYS returns a diagram data-URI. Topic-aware where possible, subject-aware
+ * fallback otherwise. Every generated question in EduSpark carries a visual.
  */
-export function maybeMakeDiagram(topic: string, includeProbability = 0.5): string | null {
-  if (Math.random() > includeProbability) return null;
-
+export function makeDiagram(topic: string, subject?: string): string {
   const match = TOPIC_DIAGRAMS.find((m) => m.match.test(topic));
-  if (!match) return null;
+  const kind = match ? pick(match.kinds) : fallbackKind(subject);
+  return svgToDataUrl(renderSvg(kind));
+}
 
-  const kind = pick(match.kinds);
-  const svg = renderSvg(kind);
-  return svgToDataUrl(svg);
+/**
+ * Legacy probabilistic variant — kept for backwards-compat. When
+ * `includeProbability` is 1 it now ALWAYS returns a diagram (topic-aware or
+ * subject-fallback) instead of null.
+ */
+export function maybeMakeDiagram(topic: string, includeProbability = 1, subject?: string): string | null {
+  if (includeProbability < 1 && Math.random() > includeProbability) return null;
+  return makeDiagram(topic, subject);
 }
 
 function svgToDataUrl(svg: string): string {

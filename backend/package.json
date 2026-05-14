@@ -10,6 +10,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "tsx src/db/seed.ts",
+    "db:seed-extras": "tsx seed-extras.ts",
+    "db:seed-pdfs": "tsx seed-pdfs.ts",
     "db:reset": "prisma migrate reset --force && tsx src/db/seed.ts"
   },
   "dependencies": {

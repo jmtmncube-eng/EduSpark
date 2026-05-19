@@ -1,48 +1,53 @@
 # 🔬 EduSpark
 
-**Maths and Science Learning Platform** — South African CAPS-aligned for Grades 10–12.
+**CAPS & IEB · Mathematics & Physical Sciences · Grades 10–12.**
 
-Built for teachers and learners of Mathematics and Physical Sciences. Fully self-hosted, Docker-ready.
+A self-hosted learning platform for South African high schools — built for teachers and learners of Maths and Physics. Fully Docker-deployable.
+
+Production: [eduspark.athera.co.za](https://eduspark.athera.co.za)
 
 ---
 
 ## ✨ Features
 
-### 👩‍🏫 Admin / Teacher
+### 👨‍💼 Admin
 | Feature | Description |
 |---|---|
-| Question Bank | Generate 20+ CAPS-aligned MCQs per topic, add manually, bulk import, image attachments, show/hide per student |
-| Assignments | Create quiz bundles with supporting documents & images. Assign to all students, by grade, or a specific student only |
-| Max Retakes | Set 1–unlimited retakes per assignment. Progress tracked via average across attempts |
-| Student Management | View profiles, reset PINs, activate/deactivate accounts, view per-student exam readiness report |
-| Parent Access PINs | Generate temporary `PAR-XXXX` PINs for parents — expires after 7 days, read-only child progress view |
-| Analytics — Class | 5 smart KPIs: pass rate, topic mastery, engagement score, improvement trend, difficulty insight |
-| Analytics — Per Student | Select any student to see individual topic breakdown, recent results, mastery table |
-| Calendar | Monthly view with assignment deadlines & notes. Approve/deny student change requests |
-| Student Reports | Per-student exam readiness report — circular meter, topic bars, teacher comment, printable PDF |
+| Question Bank | Generate, add, import, edit and approve CAPS/IEB MCQs. Status pipeline (DRAFT → IN_REVIEW → PUBLISHED). |
+| **One-button generator** | Single `⚡ Generate Questions` button opens a stepped wizard: curriculum → subject → grade → topic → count → difficulty. Multi-variant generators, real difficulty mix, ~50% of questions ship with a topic-relevant diagram. |
+| Packs | Reusable quiz bundles with documents. Templates, share with tutors, students unlock for self-paced practice. |
+| Assignments | Targeted quizzes — all / by grade / a specific student. Max-retake control, supporting documents. |
+| Students | Profiles, PIN reset, activate/deactivate, bulk-assign-to-tutor, triage Sort (lowest average first). |
+| Tutors | Create tutor accounts, set subjects + teaching grades, bulk-assign students. |
+| Analytics | Class-wide KPIs, **separate Maths and Physics topic graphs**, difficulty performance, weekly trend. |
+| Calendar | Monthly view; broadcasts, maintenance notes, **prominent banner for student requests** needing review. |
+| Audit log | Every mutating action recorded — top-actions strip on the dashboard. |
+| Parent PINs | Mint short-lived `PAR-XXXX` PINs — 7-day read-only view of a child's progress. |
+| Worksheet / Memo PDFs | Download a pack as a branded PDF. Embedded Unicode font, diagrams included, memo highlights answers + solutions. |
+
+### 👨‍🏫 Tutor
+- Sees only their assigned students. Owns their question/pack content; shares packs with peers.
+- Mints parent PINs for their own students.
+- Calendar: sessions, class notes, broadcasts, share-with-admin maintenance flags.
 
 ### 🎒 Student
-| Feature | Description |
-|---|---|
-| PIN Login | Unique `SPK-XXXX` PIN per student. No password needed |
-| Dashboard | XP level, streak, stats, assigned quiz cards with retake tracking |
-| Question Bank | Grade-filtered bank with step-by-step solutions. Timed 10-question practice drills (30s/question) |
-| Quiz Engine | Attempt tracking (N / maxAttempts), history of scores, submit for instant marking |
-| Results | Score hero, doughnut chart, full question-by-question review with detailed solutions |
-| Exam Readiness | Circular readiness meter, topic breakdown, teacher comment, parent-shareable |
-| Calendar | Read-only schedule, request changes to events via message to teacher |
-| Progress | XP level bar, 8 achievements, day streak, charts |
+- PIN login (`SPK-XXXX`). No password.
+- Dashboard: XP, streak, assigned quizzes, unlocked packs.
+- Question Bank: grade-filtered, step-by-step solutions, timed practice drills.
+- Quiz engine: attempt tracking, instant marking, full review with explanations.
+- Exam Readiness: per-topic mastery meter, teacher comment, parent-shareable.
+- Calendar: read-only schedule; can request session moves / cancellations.
 
-### 👨‍👩‍👧 Parent
-- Use PIN link: `https://your-domain/parent/PAR-XXXX`
-- No account needed — read-only view of child's progress, topic scores, recent quizzes
-- Link auto-expires after 7 days
+### 👨‍👩‍👧 Parent (ephemeral)
+- Open `https://your-domain/parent/PAR-XXXX` — no account needed.
+- Read-only view of child's progress and recent quizzes.
+- PIN expires after 7 days.
 
 ### 🎮 Gamification
-- **XP** awarded on every quiz: `(score/100) × questions × 10 + bonus`
-- **Levels**: Beginner (0) → Learner (200) → Achiever (500) → Expert (1000+)
-- **Streaks**: consecutive days with quiz activity
-- **Confetti** animation on scores ≥ 80%
+- **XP** on every quiz: `(score/100) × questions × 10 + bonus`
+- **Levels**: Beginner → Learner → Achiever → Expert
+- **Streaks** track consecutive active days
+- **Confetti** at scores ≥ 80%
 
 ---
 
@@ -50,148 +55,125 @@ Built for teachers and learners of Mathematics and Physical Sciences. Fully self
 
 ```
 EduSpark/
-├── backend/           Node.js + Express + TypeScript + Prisma ORM
-│   ├── prisma/        Schema + migrations
+├── backend/          Node.js + Express + TypeScript + Prisma (PostgreSQL)
+│   ├── prisma/        Schema + idempotent migrations
+│   ├── src/
+│   │   ├── routes/      REST endpoints (auth, questions, packs, assignments, analytics, calendar, audit…)
+│   │   ├── generators/  Modular per-topic question generators (mathematics.ts, physics.ts)
+│   │   ├── utils/       PDF renderer (DejaVu Sans + sharp-rasterised diagrams), diagrams, validation
+│   │   ├── db/          Prisma client + seeds (CAPS + IEB)
+│   │   └── __tests__/   vitest suites (190 tests on generators, validation, quality pipeline)
+│   └── Dockerfile        prod (multi-stage) · Dockerfile.dev (hot-reload)
+├── frontend/         React 18 + TypeScript + Vite + Chart.js
 │   └── src/
-│       ├── routes/    REST API endpoints
-│       ├── middleware/ Auth (JWT)
-│       └── db/        Prisma client + seed
-├── frontend/          React 18 + TypeScript + Vite
-│   └── src/
-│       ├── pages/     admin/ + student/ + Login + ParentView
-│       ├── components/ Sidebar, Modal, Toast, Background
-│       ├── services/  api.ts — typed fetch wrapper
-│       └── context/   AuthContext
-├── nginx/             Reverse proxy config (production)
-├── docker-compose.yml           Production stack
-├── docker-compose.dev.yml       Development stack
-└── .env.example
+│       ├── pages/        admin/ · tutor/ · student/ · Login · ParentView
+│       ├── components/   Sidebar, Modal, Toast, PillSelect, QuestionGenerator, PackTemplatePicker…
+│       ├── services/     api.ts — typed fetch wrapper
+│       └── context/      AuthContext (idle auto-logout)
+├── nginx/                  Reverse-proxy config (production)
+├── scripts/preflight.sh    Env-aware safety gate (typecheck + build + 190 tests + 70+ grep assertions)
+├── docker-compose.yml      Production stack (db + backend + nginx-frontend)
+└── docker-compose.dev.yml  Development stack (db + tsx-watched backend + Vite frontend)
 ```
 
-**Database:** PostgreSQL 15  
-**Auth:** JWT (7-day tokens). Students use PIN only.  
-**Ports (dev):** Frontend `3002` · Backend `3001` · Postgres `5433`
+**Database:** PostgreSQL 16  
+**Auth:** JWT (7-day) — students log in with a PIN only.  
+**Dev ports:** Frontend `3001` · Backend `8000` · Postgres `5433`
 
 ---
 
 ## 🚀 Quick Start
 
-### Production (Docker)
+### Development (Docker — recommended)
 
 ```bash
-cp .env.example .env
-# Edit .env — set POSTGRES_PASSWORD and JWT_SECRET to strong values
-
-docker compose up -d --build
-
-# Seed demo data (first run)
-docker compose exec backend node dist/db/seed.js
+docker compose -f docker-compose.dev.yml up -d --build
+# → frontend  http://localhost:3001
+# → backend   http://localhost:8000
+# → postgres  localhost:5433
 ```
 
-App at `http://localhost` (port 80).
+Source folders are bind-mounted, so frontend changes hot-reload via Vite and backend changes hot-reload via `tsx watch`.
 
-### Development
+### Production
+
+See **[DEPLOY.md](DEPLOY.md)** for the full deploy playbook (VPS, env vars, reverse proxy, backups, smoke tests).
 
 ```bash
-# Terminal 1 — Postgres + backend (hot reload)
-docker compose -f docker-compose.dev.yml up
-
-# Terminal 2 — Vite frontend
-cd frontend && npm install && npm run dev
-# → http://localhost:3002
+cp .env.production.example .env       # set JWT_SECRET, POSTGRES_PASSWORD, APP_PORT, CORS_ORIGIN
+docker compose --env-file .env up -d --build
 ```
 
 ---
 
-## 🔐 Demo Accounts (after seeding)
+## 🔐 Seeded Accounts
 
-| Role    | Login value  | Notes                     |
-|---------|-------------|---------------------------|
-| Teacher | Ms. Ndlovu  | Select **Teacher** tab    |
-| Student | SPK-AM1D    | Amahle Dlamini, Grade 10  |
-| Student | SPK-SN2K    | Sipho Nkosi, Grade 11     |
-| Student | SPK-ZM3K    | Zanele Mokoena, Grade 12  |
+After `docker compose exec backend npx tsx src/db/seed.ts`:
 
----
-
-## 🌐 API Reference
-
-| Method | Route | Auth | Description |
-|--------|-------|------|-------------|
-| POST | `/api/auth/login` | — | PIN / name login |
-| POST | `/api/auth/register` | — | Register new student |
-| GET | `/api/questions` | Any | List (grade-filtered for students) |
-| POST | `/api/questions/generate` | Admin | Auto-generate CAPS questions |
-| POST | `/api/questions/import` | Admin | Bulk text import |
-| GET/POST/PUT/DELETE | `/api/assignments` | Admin | Assignment CRUD |
-| POST | `/api/results` | Student | Submit quiz answers |
-| GET | `/api/results/:id` | Any | Full result with solutions |
-| GET | `/api/students` | Admin | Student list |
-| GET | `/api/students/search?q=` | Admin | Student search by name |
-| GET | `/api/analytics/overview` | Admin | Platform-wide 5 KPIs |
-| GET | `/api/analytics/student-report/:id` | Admin | Per-student breakdown |
-| GET | `/api/parent/view/:pin` | — | Public parent report |
-| POST | `/api/parent/pins` | Admin | Create parent PIN |
-| GET | `/api/parent/pins` | Admin | List parent PINs |
-| DELETE | `/api/parent/pins/:id` | Admin | Revoke parent PIN |
-| GET/POST/PUT/DELETE | `/api/calendar/notes` | Admin | Calendar note CRUD |
-| POST | `/api/calendar/requests` | Student | Request calendar change |
-| GET | `/api/calendar/requests` | Admin | List change requests |
+| Role    | Login         | Notes                                  |
+|---------|---------------|----------------------------------------|
+| Admin   | `ADM-ALIS`    | Alistair Sabe                          |
+| Admin   | `ADM-MBON`    | Mbongeni Mncube                        |
+| Admin   | `ADM-GLAD`    | Glad Mpala                             |
+| Tutor   | `TCH-D5VA`    | Moses · Maths + Physics · Grades 10-11 |
+| Tutor   | `TCH-GDBR`    | John · Mathematics · Grades 11-12      |
+| Student | `SPK-AM1D`    | Amahle Dlamini · Grade 10              |
+| Student | `SPK-SN2K`    | Sipho Nkosi · Grade 10                 |
+| Student | `SPK-ZM3K`    | Zanele Mokoena · Grade 10              |
+| Student | `SPK-LM4M`    | Lebo Mokwena · Grade 11                |
 
 ---
 
-## ⚙️ Environment Variables
+## 🌐 API Surface (high level)
 
-| Variable | Default | Notes |
-|---|---|---|
-| `DATABASE_URL` | (set by Docker) | Postgres connection string |
-| `JWT_SECRET` | `change_me` | **Must change in production** |
-| `POSTGRES_PASSWORD` | `change_me` | **Must change in production** |
-| `POSTGRES_USER` | `eduspark` | — |
-| `POSTGRES_DB` | `eduspark` | — |
-| `NODE_ENV` | `production` | — |
-| `PORT` | `8000` | Backend port |
-| `APP_PORT` | `80` | Nginx external port |
+| Group | Routes |
+|---|---|
+| Auth | `POST /api/auth/login`, `POST /api/auth/register` |
+| Questions | `GET/POST/PUT/DELETE /api/questions`, `POST /api/questions/generate`, `POST /api/questions/import`, batch approve/discard |
+| Packs | `GET/POST/PUT/DELETE /api/packs`, templates, share, unlock, `GET /api/packs/:id/pdf?mode=worksheet|memo` |
+| Assignments | `GET/POST/PUT/DELETE /api/assignments` (+ docs) |
+| Results | `POST /api/results`, `GET /api/results/:id` |
+| Students / Tutors | profiles, PIN reset, bulk-assign-to-tutor |
+| Analytics | overview KPIs, per-topic (subject-tagged), per-student report |
+| Calendar | tutor/admin notes, student requests, approve/deny |
+| PDF Library | upload, list, segmented drawers (notes / practice / test), preview, delete |
+| Audit | log + top-actions strip |
+| Parent | mint PINs, public `/parent/:pin` view |
+
+For the full route list, see `backend/src/routes/`.
 
 ---
 
 ## 📦 Database Models
 
-| Model | Purpose |
-|---|---|
-| `User` | Students + admins, PIN-based auth |
-| `Question` | CAPS MCQ, 4 options, visibility control |
-| `Assignment` | Quiz bundle with grade/student targeting, maxAttempts |
-| `AssignmentQuestion` | Ordered join — questions ↔ assignments |
-| `AssignmentDocument` | Text + base64 image attachments |
-| `QuizResult` | Score, XP, attemptNumber, completedAt |
-| `ResultDetail` | Per-question: selected vs correct, solution |
-| `CalendarNote` | Teacher-created events |
-| `CalendarRequest` | Student-submitted change requests |
-| `ParentAccess` | Temporary parent PIN with 7-day expiry |
+`User`, `Question`, `QuestionBatch`, `QuestionBatchItem`, `Assignment`, `AssignmentQuestion`, `AssignmentDocument`, `QuizResult`, `ResultDetail`, `Pack`, `PackQuestion`, `PackDocument`, `PackShare`, `StudentUnlock`, `PdfDocument`, `CalendarNote`, `CalendarRequest`, `TutorRequest`, `ParentAccess`, `Notification`, `AuditLog`, `OnboardingState`.
+
+Enums: `Role` (STUDENT · TUTOR · ADMIN), `Subject`, `Curriculum` (CAPS · IEB), `Difficulty`, `QuestionStatus`, `Visibility`, `ResultType`.
 
 ---
 
 ## 🛠 Development Notes
 
-- Images stored as base64 in DB (`@db.Text`). Compressed to 400px JPEG at 0.65 quality before upload.
-- Student PINs: `SPK-XXXX` — 4 chars from unambiguous alphanumeric set.
-- Parent PINs: `PAR-XXXX` — same format, stored in `parent_access` table, auto-expires.
-- Frontend proxies `/api` → `http://localhost:3001` in dev via `vite.config.ts`.
-- TypeScript strict mode enabled on both frontend and backend.
-- Prisma migrations live in `backend/prisma/migrations/` — run `npx prisma migrate deploy` on fresh deploy.
+- **Strict TypeScript** on both frontend and backend; vitest test files excluded from the production `tsc` build.
+- **No native dropdowns** for content-creation flows — everything uses tappable pills / cards (`PillSelect`).
+- **PDF renderer** embeds DejaVu Sans (via the `dejavu-fonts-ttf` dep) so the minus sign, Greek letters, roots, arrows and sub/superscripts render correctly. Diagrams are rasterised from SVG via `sharp`.
+- **Idle auto-logout** after 2 minutes of inactivity (configurable in `AuthContext`).
+- **Prisma migrations** are hand-written and idempotent (`IF NOT EXISTS`). The production Dockerfile runs `prisma migrate deploy` + `prisma db push --accept-data-loss --skip-generate` on every boot as a belt-and-braces self-heal.
+- **Preflight gate**: `bash scripts/preflight.sh` runs typecheck + frontend build + backend build + vitest + 70+ grep assertions on shipped features. Required before every push.
 
 ---
 
 ## 🤝 Contributing
 
-See [CHANGELOG.md](CHANGELOG.md) for a detailed log of all changes.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release log. Every commit updates the changelog and the relevant preflight assertions before pushing — keep the gate green.
 
-1. Pull latest: `git pull origin main`
-2. Create a branch: `git checkout -b feature/your-feature`
-3. Make changes, update `CHANGELOG.md` under `## [Unreleased]`
-4. Push and open a PR against `main`
+```bash
+git pull origin main
+# work
+bash scripts/preflight.sh                # must be ✅ before push
+git commit -m "…" && git push
+```
 
 ---
 
-*Built for South African learners. CAPS-aligned. Grades 10–12.*
+*Built for South African learners. CAPS & IEB aligned. Grades 10–12.*
